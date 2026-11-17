@@ -255,6 +255,49 @@ header.top-bar {
   color: #000000;
 }
 
+.ball-buy-slot.maxed-slot {
+  opacity: 0.78;
+  cursor: not-allowed;
+}
+
+.ball-buy-slot.maxed-slot .ball-price-box {
+  background: #1f2937;
+  color: #fde047;
+  font-size: 12px;
+}
+
+/* Boss Token HUD Pill */
+.boss-token-hud {
+  height: 54px;
+  min-width: 58px;
+  padding: 2px 8px;
+  background: linear-gradient(180deg, #3b0a18 0%, #1c050c 100%);
+  border: 2px solid #000000;
+  color: #fde047;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-weight: bold;
+  cursor: help;
+}
+
+.boss-token-hud .bt-icon {
+  font-size: 15px;
+}
+
+.boss-token-hud #hud-boss-tokens-text {
+  font-size: 18px;
+  color: #ffffff;
+}
+
+.boss-token-hud .bt-label {
+  font-size: 11px;
+  color: #fbbf24;
+  letter-spacing: 0.5px;
+}
+
 /* Middle Status Indicators */
 .top-center-section {
   display: flex;
@@ -773,10 +816,118 @@ header.top-bar {
   color: #fde047;
   border: 2px solid #000000;
   padding: 5px 14px;
-  font-size: 21px;
+  font-size: 20px;
   font-weight: bold;
   letter-spacing: 0.5px;
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.bb-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.token-exchange-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #2b0b14;
+  border: 2px solid #000000;
+  padding: 3px 8px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+.token-count-pill {
+  color: #fde047;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.token-exchange-btn {
+  background: var(--gray-btn);
+  color: #000000;
+  border: 2px solid #000000;
+  font-family: var(--font-retro);
+  font-size: 16px;
+  font-weight: bold;
+  padding: 2px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, transform 0.05s;
+}
+
+.token-exchange-btn.affordable {
+  background: #f59e0b;
+  color: #000000;
+}
+
+.token-exchange-btn.affordable:hover {
+  background: #fbbf24;
+}
+
+.token-exchange-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.token-exchange-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Floating All-Phases Tooltip for Power-Up Upgrades */
+.bb-phase-tooltip {
+  position: fixed;
+  z-index: 2000;
+  width: 320px;
+  max-width: 90vw;
+  background: #141414;
+  color: #f8fafc;
+  border: 3px solid #f59e0b;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.75);
+  padding: 10px 12px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  font-family: var(--font-retro);
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.bb-phase-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.bb-phase-tooltip-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #fde047;
+  border-bottom: 1px dashed rgba(250, 204, 21, 0.45);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
+
+.bb-phase-row {
+  padding: 3px 5px;
+  margin-bottom: 3px;
+  border-left: 3px solid #475569;
+  color: #cbd5e1;
+}
+
+.bb-phase-row.unlocked {
+  border-left-color: #2cd64e;
+  color: #bbf7d0;
+  background: rgba(44, 214, 78, 0.1);
+}
+
+.bb-phase-row.next-phase {
+  border-left-color: #f59e0b;
+  color: #fef08a;
+  background: rgba(245, 158, 11, 0.14);
 }
 
 .discount-banner {
@@ -918,6 +1069,69 @@ header.top-bar {
   color: #000000;
 }
 
+.ball-upgrade-btn.maxed-upg-btn {
+  opacity: 1;
+  cursor: default;
+}
+
+.ball-upgrade-btn.maxed-upg-btn .btn-cost-bottom {
+  background: #f59e0b;
+  color: #000000;
+}
+
+/* ============================================================ */
+/* MOBILE PORTRAIT ROTATE OVERLAY                               */
+/* ============================================================ */
+.rotate-phone-overlay {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.rotate-phone-card {
+  background: var(--bg-retro);
+  border: 4px solid #000000;
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.85);
+  padding: 28px 22px;
+  max-width: 360px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.rotate-phone-icon {
+  font-size: 64px;
+  line-height: 1;
+  animation: rotatePhoneHint 2.2s ease-in-out infinite;
+}
+
+@keyframes rotatePhoneHint {
+  0%, 20% { transform: rotate(0deg); }
+  50%, 75% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.rotate-phone-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: #000000;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 6px;
+}
+
+.rotate-phone-desc {
+  font-size: 20px;
+  line-height: 1.3;
+  color: #222222;
+}
+
 /* ============================================================ */
 /* OFFLINE PROGRESS TOAST BANNER                                */
 /* ============================================================ */
@@ -952,28 +1166,214 @@ header.top-bar {
   pointer-events: none;
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-  header.top-bar {
-    height: auto;
-    flex-wrap: wrap;
-    padding: 6px;
+/* ============================================================ */
+/* MOBILE PORTRAIT: FORCE ROTATE PROMPT                         */
+/* ============================================================ */
+@media (max-width: 900px) and (orientation: portrait) {
+  .rotate-phone-overlay {
+    display: flex;
   }
-  
+}
+
+/* ============================================================ */
+/* MOBILE LANDSCAPE: IDENTICAL DESKTOP LAYOUT, RESPONSIVE FIT   */
+/* ============================================================ */
+@media (max-width: 980px) and (orientation: landscape), (max-height: 540px) and (orientation: landscape) {
+  html, body {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  #game-container {
+    width: 100vw;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    border-width: 2px;
+    box-shadow: none;
+  }
+
+  header.top-bar {
+    padding: 3px 6px;
+    gap: 3px;
+    border-bottom-width: 2px;
+  }
+
+  .top-bar-row {
+    gap: 5px;
+  }
+
+  .top-bar-row-actions {
+    padding-top: 3px;
+    min-height: 30px;
+  }
+
+  .top-left-section {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
   .ball-buy-slot {
-    width: 44px;
+    width: 48px;
+    height: 44px;
+    padding-top: 2px;
+  }
+
+  .ball-dot {
+    width: 16px;
+    height: 16px;
+  }
+
+  .ball-slot-tag {
+    font-size: 9px;
+  }
+
+  .ball-price-box {
+    height: 14px;
+    font-size: 11px;
+  }
+
+  .boss-token-hud {
+    height: 44px;
+    min-width: 44px;
+    padding: 1px 5px;
+  }
+
+  .boss-token-hud .bt-icon {
+    font-size: 12px;
+  }
+
+  .boss-token-hud #hud-boss-tokens-text {
+    font-size: 14px;
+  }
+
+  .boss-token-hud .bt-label {
+    font-size: 9px;
+  }
+
+  .currency-hud-box {
+    width: 126px;
     height: 44px;
   }
-  
-  .status-box {
-    min-width: 50px;
-    height: 42px;
+
+  .currency-hud-row {
+    height: 18px;
+  }
+
+  .currency-label {
+    width: 22px;
     font-size: 13px;
   }
-  
-  .retro-modal-window {
+
+  .currency-value-bar {
+    font-size: 14px;
+    padding-right: 4px;
+  }
+
+  .retro-icon-btn {
+    width: 28px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .top-center-section {
+    gap: 5px;
+    flex-wrap: nowrap;
+  }
+
+  .status-box {
+    min-width: 48px;
+    height: 30px;
+    padding: 1px 6px;
+    font-size: 12px;
+  }
+
+  .status-sub {
+    font-size: 10px;
+  }
+
+  .status-box-val {
+    font-size: 15px;
+  }
+
+  .retro-btn {
+    height: 30px;
+    padding: 2px 8px;
+    font-size: 14px;
+  }
+
+  .powerups-hud-bar {
+    min-height: 30px;
+    gap: 4px;
+  }
+
+  .powerup-hud-badge {
+    min-width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .powerup-mini-tag {
+    font-size: 9px;
+  }
+
+  .retro-modal-window,
+  .bb-modal-window {
     width: 96%;
-    height: 92%;
-    padding: 10px;
+    height: 94%;
+    padding: 8px 12px;
+  }
+
+  .modal-header-row {
+    margin-bottom: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .modal-title-box {
+    font-size: 18px;
+    padding: 2px 8px;
+  }
+
+  .bb-balance-pill,
+  .token-count-pill,
+  .token-exchange-btn {
+    font-size: 14px;
+    padding: 2px 7px;
+  }
+
+  .bb-upgrades-grid {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 8px;
+  }
+
+  .bb-upgrade-card {
+    padding: 7px 9px;
+    gap: 5px;
+  }
+
+  .bb-card-title {
+    font-size: 16px;
+  }
+
+  .bb-card-desc,
+  .bb-card-next {
+    font-size: 13px;
+  }
+
+  .bb-buy-btn {
+    font-size: 15px;
+    padding: 3px 6px;
+  }
+
+  .close-btn {
+    font-size: 17px;
+    padding: 3px 26px;
+  }
+
+  .offline-toast {
+    top: 12px;
+    font-size: 15px;
+    padding: 5px 12px;
   }
 }

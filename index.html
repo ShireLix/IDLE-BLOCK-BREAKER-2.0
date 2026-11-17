@@ -7,10 +7,21 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=2.0">
+  <link rel="stylesheet" href="css/style.css?v=2.3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
+
+<!-- Mobile Portrait Rotate Prompt -->
+<div id="rotate-phone-overlay" class="rotate-phone-overlay">
+  <div class="rotate-phone-card">
+    <div class="rotate-phone-icon">📱</div>
+    <div class="rotate-phone-title">FORDÍTSD EL A TELEFONODAT!</div>
+    <p class="rotate-phone-desc">
+      Kérlek, fordítsd a készülékedet <strong>fektetett (vízszintes) módba</strong>, hogy a játék ugyanúgy és kényelmesen jelenjen meg, mint számítógépen!
+    </p>
+  </div>
+</div>
 
 <!-- Ambient Floating Background Shapes -->
 <div class="ambient-bg-canvas">
@@ -53,21 +64,27 @@
           <div class="ball-price-box" id="ball-price-heavy">$3K</div>
         </div>
 
-        <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL: 1x sebesség, ütközéskor 2→4→8 labdára osztódik">
-          <div class="ball-dot ball-icon-multiply"></div>
-          <div class="ball-slot-tag">MULT</div>
-          <div class="ball-price-box" id="ball-price-multiply">$12K</div>
-        </div>
-
         <div class="ball-buy-slot" id="ball-slot-ghost" title="GHOSTBALL: 1x sebesség, áthalad a blokkokon és folyamatosan sebez">
           <div class="ball-dot ball-icon-ghost"></div>
           <div class="ball-slot-tag">GHST</div>
           <div class="ball-price-box" id="ball-price-ghost">$45K</div>
         </div>
+
+        <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL (max 15 db): 1x sebesség, ütközéskor 2→4→8 labdára osztódik">
+          <div class="ball-dot ball-icon-multiply"></div>
+          <div class="ball-slot-tag">MULT</div>
+          <div class="ball-price-box" id="ball-price-multiply">$12K</div>
+        </div>
       </div>
 
-      <!-- Right: Currency HUD ($, BB) and Settings/Sound -->
+      <!-- Right: Currency HUD ($, BB, Boss Tokens) and Settings/Sound -->
       <div class="top-right-section">
+        <div class="boss-token-hud" title="Boss Tokenek (minden Boss megölése +1 token; 5 token = 1 BB az Upgrades menüben!)">
+          <span class="bt-icon">👑</span>
+          <span id="hud-boss-tokens-text">0</span>
+          <span class="bt-label">BT</span>
+        </div>
+
         <div class="currency-hud-box">
           <div class="currency-hud-row">
             <span class="currency-label money-lbl">$</span>
@@ -116,11 +133,15 @@
     <div id="offline-toast" class="offline-toast"></div>
   </main>
 
-  <!-- Upgrades Popup Overlay ($ Upgrades: Balls, Click Power, Pierce Speed) -->
+  <!-- Upgrades Popup Overlay ($ Upgrades: Balls, Click Power, Pierce Speed + Boss Token Exchange) -->
   <div id="upgrades-modal" class="overlay-backdrop">
     <div class="retro-modal-window">
       <div class="modal-header-row">
         <div class="modal-title-box">UPGRADES ($)</div>
+        <div class="token-exchange-bar">
+          <span class="token-count-pill">👑 Boss Token: <strong id="upg-boss-tokens">0</strong></span>
+          <button id="btn-exchange-tokens-upg" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+        </div>
         <div id="upgrades-discount-banner" class="discount-banner" style="display: none;"></div>
       </div>
 
@@ -139,7 +160,13 @@
     <div class="retro-modal-window bb-modal-window">
       <div class="modal-header-row">
         <div class="modal-title-box bb-title-box">⚡ POWERUP UPGRADES (BB)</div>
-        <div class="bb-balance-pill">⭐ BB Egyenleg: <span id="bb-modal-balance">0</span> BB</div>
+        <div class="bb-header-right">
+          <div class="token-exchange-bar">
+            <span class="token-count-pill">👑 <strong id="bb-modal-boss-tokens">0</strong> BT</span>
+            <button id="btn-exchange-tokens-bb" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+          </div>
+          <div class="bb-balance-pill">⭐ <span id="bb-modal-balance">0</span> BB</div>
+        </div>
       </div>
 
       <div class="bb-upgrades-grid" id="bb-upgrades-grid">
@@ -151,6 +178,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Floating Tooltip for All 5 Phases of Power-Up Upgrades -->
+  <div id="bb-phase-tooltip" class="bb-phase-tooltip"></div>
 
   <!-- Rebirth Confirmation Modal -->
   <div id="rebirth-modal" class="overlay-backdrop">
@@ -179,8 +209,8 @@
 </div>
 
 <!-- Audio Engine and Core Game Scripts -->
-<script src="js/audio.js?v=2.1"></script>
-<script src="js/game.js?v=2.1"></script>
+<script src="js/audio.js?v=2.4"></script>
+<script src="js/game.js?v=2.4"></script>
 
 </body>
 </html>

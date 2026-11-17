@@ -186,6 +186,9 @@ class IdleBreakoutGame {
     this.money = 0;
     this.level = 1;
     this.bb = 0; // Breakout Badges
+    this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 5 Boss Token = 1 BB
+    this.BOSS_TOKEN_COST = 5;
+    this.MAX_MULTIPLY_BALLS = 15;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
     this.clickPower = 1;
@@ -210,6 +213,10 @@ class IdleBreakoutGame {
     // Gold Boss pending flag
     this.nextBossIsGold = false;
 
+    // Upgrade Caps
+    this.MAX_CLICK_LEVEL = 100;
+    this.MAX_PIERCE_SPEED_LEVEL = 20;
+
     // Base Speed Reference (1x = 4.2) & 6 Distinct Ball Types
     this.BASE_SPEED = 4.2;
     this.ballTypes = {
@@ -225,8 +232,10 @@ class IdleBreakoutGame {
         basePower: 1.0,
         powerStep: 1.0,
         speedLevel: 1,
+        maxSpeedLevel: 50,
         speedBaseCost: 100,
         powerLevel: 1,
+        maxPowerLevel: 50,
         powerBaseCost: 250,
         radius: 7.5
       },
@@ -242,8 +251,10 @@ class IdleBreakoutGame {
         basePower: 0.5,
         powerStep: 0.5,
         speedLevel: 1,
+        maxSpeedLevel: 40,
         speedBaseCost: 300,
         powerLevel: 1,
+        maxPowerLevel: 45,
         powerBaseCost: 500,
         radius: 6.5
       },
@@ -259,8 +270,10 @@ class IdleBreakoutGame {
         basePower: 1.0, // 1 dmg/s base
         powerStep: 1.0,
         speedLevel: 1,
+        maxSpeedLevel: 40,
         speedBaseCost: 1200,
         powerLevel: 1,
+        maxPowerLevel: 50,
         powerBaseCost: 2000,
         radius: 7.5
       },
@@ -276,27 +289,12 @@ class IdleBreakoutGame {
         basePower: 5.0, // 5 dmg/s base
         powerStep: 3.0,
         speedLevel: 1,
+        maxSpeedLevel: 35,
         speedBaseCost: 4000,
         powerLevel: 1,
+        maxPowerLevel: 50,
         powerBaseCost: 7500,
         radius: 10.0
-      },
-      multiply: {
-        id: 'multiply',
-        name: 'MULTIPLY BALL',
-        shortDesc: '1x sebesség, 10→5→2→1 osztódás (10 mp)',
-        color: '#d900b8',
-        count: 0,
-        baseCost: 12000,
-        costMult: 1.25,
-        speedFactor: 1.0,
-        basePower: 10.0,
-        powerStep: 5.0,
-        speedLevel: 1,
-        speedBaseCost: 15000,
-        powerLevel: 1,
-        powerBaseCost: 25000,
-        radius: 9.0
       },
       ghost: {
         id: 'ghost',
@@ -310,10 +308,31 @@ class IdleBreakoutGame {
         basePower: 4.0,
         powerStep: 3.0,
         speedLevel: 1,
+        maxSpeedLevel: 40,
         speedBaseCost: 50000,
         powerLevel: 1,
+        maxPowerLevel: 50,
         powerBaseCost: 80000,
         radius: 8.0
+      },
+      multiply: {
+        id: 'multiply',
+        name: 'MULTIPLY BALL',
+        shortDesc: '1x sebesség, 10→5→2→1 osztódás (max 15 db)',
+        color: '#d900b8',
+        count: 0,
+        baseCost: 12000,
+        costMult: 1.25,
+        speedFactor: 1.0,
+        basePower: 10.0,
+        powerStep: 5.0,
+        speedLevel: 1,
+        maxSpeedLevel: 35,
+        speedBaseCost: 15000,
+        powerLevel: 1,
+        maxPowerLevel: 40,
+        powerBaseCost: 25000,
+        radius: 9.0
       }
     };
 
@@ -374,6 +393,9 @@ class IdleBreakoutGame {
   init() {
     this.setupCanvas();
     window.addEventListener('resize', () => this.handleResize());
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => this.handleResize(), 150);
+    });
 
     // Load saved data
     this.load();
@@ -408,8 +430,8 @@ class IdleBreakoutGame {
   setupCanvas() {
     const wrapper = document.getElementById('arena-wrapper');
     const rect = wrapper.getBoundingClientRect();
-    this.width = Math.max(400, Math.floor(rect.width));
-    this.height = Math.max(360, Math.floor(rect.height));
+    this.width = Math.max(320, Math.floor(rect.width));
+    this.height = Math.max(200, Math.floor(rect.height));
     this.dpr = window.devicePixelRatio || 1;
 
     this.canvas.width = this.width * this.dpr;
@@ -474,12 +496,20 @@ class IdleBreakoutGame {
     }
   }
 
-  // --- Exact Boss HP Lookup (Boss 1-35 = Levels 10-350) ---
+  // --- Exact Boss HP Lookup (Boss 1-35 = Levels 10-350; Level 400+ = 500,000 - 2,000,000 HP) ---
   getBossHpForLevel(lvl) {
     if (BOSS_HP_TABLE[lvl] !== undefined) {
       return BOSS_HP_TABLE[lvl];
     }
-    // Nem módosítjuk önkényesen a táblázaton kívüli körök alap logikáját
+    if (lvl >= 400) {
+      // Lvl 400-tól minden Boss élete szigorúan 500.000 és 2.000.000 között van!
+      const stepsAbove400 = Math.floor((lvl - 400) / 10);
+      return Math.min(2_000_000, 500_000 + stepsAbove400 * 50_000);
+    }
+    if (lvl > 350) {
+      // Lvl 360-390 átmenet (180k -> 420k)
+      return 100_000 + Math.floor((lvl - 350) / 10) * 80_000;
+    }
     return lvl * 40;
   }
 
@@ -534,6 +564,10 @@ class IdleBreakoutGame {
         heavyDps: 0
       });
 
+      // Ha a Boss spawnolásakor bármelyik labda a Boss helyén (vagy túl közel) van,
+      // toljuk ki biztonságosan a legközelebbi oldal mentén +10 px-el a Bosson kívülre!
+      this.ejectBallsOutsideBoss(bossX, bossY, bossW, bossH);
+
       if (!this.suppressAudioAndVisuals) this.updateHUD();
       return;
     }
@@ -572,6 +606,51 @@ class IdleBreakoutGame {
     }
 
     if (!this.suppressAudioAndVisuals) this.updateHUD();
+  }
+
+  // --- Boss Spawn Anti-Overlap: Labdák biztonságos eltolása a Bosson kívülre ---
+  ejectBallsOutsideBoss(bx, by, bw, bh) {
+    const borderWidth = 18;
+    const arenaLeft = borderWidth;
+    const arenaRight = this.width - borderWidth;
+    const arenaTop = borderWidth;
+    const arenaBottom = this.height - borderWidth;
+    const safeGap = 10; // extra pár px biztonsági távolság a Bosstól
+
+    for (const ball of this.balls) {
+      const margin = ball.radius + safeGap;
+      const inX = ball.x > bx - margin && ball.x < bx + bw + margin;
+      const inY = ball.y > by - margin && ball.y < by + bh + margin;
+
+      if (inX && inY) {
+        const distLeft = ball.x - (bx - margin);
+        const distRight = (bx + bw + margin) - ball.x;
+        const distTop = ball.y - (by - margin);
+        const distBottom = (by + bh + margin) - ball.y;
+
+        const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+
+        if (minDist === distLeft) {
+          ball.x = Math.max(arenaLeft + ball.radius + 2, bx - margin);
+          ball.vx = -Math.abs(ball.vx || ball.speed * 0.7);
+        } else if (minDist === distRight) {
+          ball.x = Math.min(arenaRight - ball.radius - 2, bx + bw + margin);
+          ball.vx = Math.abs(ball.vx || ball.speed * 0.7);
+        } else if (minDist === distTop) {
+          ball.y = Math.max(arenaTop + ball.radius + 2, by - margin);
+          ball.vy = -Math.abs(ball.vy || ball.speed * 0.7);
+        } else {
+          ball.y = Math.min(arenaBottom - ball.radius - 2, by + bh + margin);
+          ball.vy = Math.abs(ball.vy || ball.speed * 0.7);
+        }
+      }
+    }
+
+    // Ha Ball Army aktív és a vonala pont a Bosson belülre esne, toljuk a Boss alá!
+    if (this.ballArmyActive && this.ballArmyY > by - 14 && this.ballArmyY < by + bh + 14) {
+      this.ballArmyY = Math.min(arenaBottom - 14, by + bh + 18);
+      this.ballArmyDir = 1;
+    }
   }
 
   // --- Active Modifiers Helpers ---
@@ -680,9 +759,10 @@ class IdleBreakoutGame {
         if (this.isPowerUpActive('2x_money')) bossBonus *= 2;
         bossBonus = Math.round(bossBonus);
         this.money += bossBonus;
+        this.bossTokens += 1; // Minden Boss megölése után +1 Boss Token!
         if (!silent) {
           const prefix = brick.isGoldBoss ? '✨ GOLD BOSS' : '👑 BOSS';
-          this.addFloatingText(`${prefix} BONUS: +$${this.formatNumber(bossBonus)}!`, brick.x + brick.w / 2, brick.y + brick.h / 2 - 20);
+          this.addFloatingText(`${prefix} BONUS: +$${this.formatNumber(bossBonus)} | +1 👑 BT!`, brick.x + brick.w / 2, brick.y + brick.h / 2 - 20);
         }
       } else if (source !== 'piercing_special' && source !== 'shockwave' && source !== 'dot') {
         this.rollPowerUpDrop(brick.x + brick.w / 2, brick.y + brick.h / 2);
@@ -1332,6 +1412,11 @@ class IdleBreakoutGame {
   }
 
   buyBall(typeKey) {
+    // Multiply labdából összesen maximum 15 db vásárolható!
+    if (typeKey === 'multiply' && this.ballTypes.multiply.count >= this.MAX_MULTIPLY_BALLS) {
+      return;
+    }
+
     const cost = this.getBallCost(typeKey);
     if (this.money >= cost && this.getTotalBalls() < this.getMaxBalls()) {
       this.money -= cost;
@@ -1495,10 +1580,11 @@ class IdleBreakoutGame {
   }
 
   upgradeBallSpeed(typeKey) {
+    const bDef = this.ballTypes[typeKey];
+    if (bDef.speedLevel >= bDef.maxSpeedLevel) return;
     const cost = this.getSpeedUpgradeCost(typeKey);
     if (this.money >= cost) {
       this.money -= cost;
-      const bDef = this.ballTypes[typeKey];
       bDef.speedLevel++;
 
       const newSpeed = this.getBallSpeed(typeKey);
@@ -1520,10 +1606,11 @@ class IdleBreakoutGame {
   }
 
   upgradeBallPower(typeKey) {
+    const bDef = this.ballTypes[typeKey];
+    if (bDef.powerLevel >= bDef.maxPowerLevel) return;
     const cost = this.getPowerUpgradeCost(typeKey);
     if (this.money >= cost) {
       this.money -= cost;
-      const bDef = this.ballTypes[typeKey];
       bDef.powerLevel++;
 
       const newPower = this.getBallPower(typeKey);
@@ -1547,6 +1634,7 @@ class IdleBreakoutGame {
   }
 
   upgradeClick() {
+    if (this.clickUpgradeLevel >= this.MAX_CLICK_LEVEL) return;
     const cost = this.getClickUpgradeCost();
     if (this.money >= cost) {
       this.money -= cost;
@@ -1561,6 +1649,7 @@ class IdleBreakoutGame {
 
   upgradePierceSpeed() {
     if (this.bbUpgrades.piercing < 5) return;
+    if (this.pierceSpeedUpgradeLevel >= this.MAX_PIERCE_SPEED_LEVEL) return;
     const cost = this.getPierceSpeedUpgradeCost();
     if (this.money >= cost) {
       this.money -= cost;
@@ -1955,6 +2044,7 @@ class IdleBreakoutGame {
         if (dmgOnLevel >= levelTotalHp) {
           if (isBoss) {
             earned += this.getBossKillBonus(this.level) * this.rebirthMultiplier;
+            this.bossTokens += 1;
           }
           this.level++;
         } else {
@@ -2133,20 +2223,37 @@ class IdleBreakoutGame {
               const ovB = (brick.y + brick.h) - (ball.y - ball.radius);
 
               const minOv = Math.min(ovL, ovR, ovT, ovB);
-              // Safe overlap ejection (handles freshly spawned bricks directly on top of a ball!)
-              const pushCap = Math.min(minOv, ball.radius * 1.8);
-              if (minOv === ovL) {
-                ball.x = Math.max(arenaLeft + ball.radius, ball.x - pushCap);
-                ball.vx = -Math.abs(ball.vx);
-              } else if (minOv === ovR) {
-                ball.x = Math.min(arenaRight - ball.radius, ball.x + pushCap);
-                ball.vx = Math.abs(ball.vx);
-              } else if (minOv === ovT) {
-                ball.y = Math.max(arenaTop + ball.radius, ball.y - pushCap);
-                ball.vy = -Math.abs(ball.vy);
+              if (brick.isBoss) {
+                // Boss esetén mindig 100%-ban a Bosson kívülre lökjük a labdát, hogy soha ne ragadhasson bele!
+                if (minOv === ovL) {
+                  ball.x = Math.max(arenaLeft + ball.radius, brick.x - ball.radius - 2);
+                  ball.vx = -Math.abs(ball.vx);
+                } else if (minOv === ovR) {
+                  ball.x = Math.min(arenaRight - ball.radius, brick.x + brick.w + ball.radius + 2);
+                  ball.vx = Math.abs(ball.vx);
+                } else if (minOv === ovT) {
+                  ball.y = Math.max(arenaTop + ball.radius, brick.y - ball.radius - 2);
+                  ball.vy = -Math.abs(ball.vy);
+                } else {
+                  ball.y = Math.min(arenaBottom - ball.radius, brick.y + brick.h + ball.radius + 2);
+                  ball.vy = Math.abs(ball.vy);
+                }
               } else {
-                ball.y = Math.min(arenaBottom - ball.radius, ball.y + pushCap);
-                ball.vy = Math.abs(ball.vy);
+                // Normál tégláknál finom kilökés átfedés esetén
+                const pushCap = Math.min(minOv, ball.radius * 1.8);
+                if (minOv === ovL) {
+                  ball.x = Math.max(arenaLeft + ball.radius, ball.x - pushCap);
+                  ball.vx = -Math.abs(ball.vx);
+                } else if (minOv === ovR) {
+                  ball.x = Math.min(arenaRight - ball.radius, ball.x + pushCap);
+                  ball.vx = Math.abs(ball.vx);
+                } else if (minOv === ovT) {
+                  ball.y = Math.max(arenaTop + ball.radius, ball.y - pushCap);
+                  ball.vy = -Math.abs(ball.vy);
+                } else {
+                  ball.y = Math.min(arenaBottom - ball.radius, ball.y + pushCap);
+                  ball.vy = Math.abs(ball.vy);
+                }
               }
             }
 
@@ -2611,6 +2718,11 @@ class IdleBreakoutGame {
     const bbDisplay = document.getElementById('hud-bb-text');
     if (bbDisplay) bbDisplay.textContent = this.bb.toLocaleString();
 
+    const btDisplay = document.getElementById('hud-boss-tokens-text');
+    if (btDisplay) btDisplay.textContent = this.bossTokens.toLocaleString();
+
+    this.updateBossTokenExchangeUI();
+
     const levelDisplay = document.getElementById('hud-level-text');
     if (levelDisplay) levelDisplay.textContent = this.level.toString();
 
@@ -2623,11 +2735,19 @@ class IdleBreakoutGame {
       const slot = document.getElementById(`ball-slot-${key}`);
       const priceText = document.getElementById(`ball-price-${key}`);
       if (slot && priceText) {
-        const cost = this.getBallCost(key);
-        priceText.textContent = pirateActive ? 'FREE!' : `$${this.formatNumber(cost)}`;
-        const canAfford = this.money >= cost && this.getTotalBalls() < maxBalls;
-        slot.classList.toggle('affordable', canAfford && !pirateActive);
-        slot.classList.toggle('pirate-free', pirateActive && this.getTotalBalls() < maxBalls);
+        const isMultiplyMaxed = (key === 'multiply' && this.ballTypes.multiply.count >= this.MAX_MULTIPLY_BALLS);
+        if (isMultiplyMaxed) {
+          priceText.textContent = `MAX ${this.MAX_MULTIPLY_BALLS}`;
+          slot.classList.remove('affordable', 'pirate-free');
+          slot.classList.add('maxed-slot');
+        } else {
+          slot.classList.remove('maxed-slot');
+          const cost = this.getBallCost(key);
+          priceText.textContent = pirateActive ? 'FREE!' : `$${this.formatNumber(cost)}`;
+          const canAfford = this.money >= cost && this.getTotalBalls() < maxBalls;
+          slot.classList.toggle('affordable', canAfford && !pirateActive);
+          slot.classList.toggle('pirate-free', pirateActive && this.getTotalBalls() < maxBalls);
+        }
       }
     }
 
@@ -2647,6 +2767,37 @@ class IdleBreakoutGame {
     }
 
     document.title = `LVL ${this.level} | $${this.formatNumber(Math.floor(this.money))} - Idle Breakout`;
+  }
+
+  // --- Boss Token Exchange (5 Boss Token ➔ +1 BB) ---
+  updateBossTokenExchangeUI() {
+    const canExchange = this.bossTokens >= this.BOSS_TOKEN_COST;
+
+    const upgCount = document.getElementById('upg-boss-tokens');
+    if (upgCount) upgCount.textContent = this.bossTokens.toLocaleString();
+
+    const bbCount = document.getElementById('bb-modal-boss-tokens');
+    if (bbCount) bbCount.textContent = this.bossTokens.toLocaleString();
+
+    for (const btnId of ['btn-exchange-tokens-upg', 'btn-exchange-tokens-bb']) {
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        btn.disabled = !canExchange;
+        btn.classList.toggle('affordable', canExchange);
+      }
+    }
+  }
+
+  exchangeBossTokensForBB() {
+    if (this.bossTokens < this.BOSS_TOKEN_COST) return;
+    this.bossTokens -= this.BOSS_TOKEN_COST;
+    this.bb += 1;
+
+    if (window.soundEngine) window.soundEngine.playLevelUp();
+    this.showToast('👑 <strong>5 Boss Token beváltva ➔ <span style="color:#fde047;">+1 BB!</span></strong>', 3000);
+    this.updateHUD();
+    this.refreshOpenModals();
+    this.save();
   }
 
   formatNumber(num) {
@@ -2670,6 +2821,7 @@ class IdleBreakoutGame {
 
   // --- $ Upgrades Menu Rendering (Balls + Click Power + Pierce Ball $ Speed Upgrade) ---
   renderUpgradesMenu() {
+    this.updateBossTokenExchangeUI();
     const container = document.getElementById('upgrades-content-grid');
     if (!container) return;
     container.innerHTML = '';
@@ -2700,27 +2852,37 @@ class IdleBreakoutGame {
       const col = document.createElement('div');
       col.className = 'ball-upgrade-section';
 
+      const spdMaxed = b.speedLevel >= b.maxSpeedLevel;
+      const pwrMaxed = b.powerLevel >= b.maxPowerLevel;
+
       const spdCost = this.getSpeedUpgradeCost(key);
       const pwrCost = this.getPowerUpgradeCost(key);
-      const canAffordSpeed = this.money >= spdCost;
-      const canAffordPower = this.money >= pwrCost;
+      const canAffordSpeed = !spdMaxed && this.money >= spdCost;
+      const canAffordPower = !pwrMaxed && this.money >= pwrCost;
+
+      const spdClass = spdMaxed
+        ? 'maxed-upg-btn'
+        : (pirateActive ? 'pirate-free' : (canAffordSpeed ? 'affordable' : ''));
+      const pwrClass = pwrMaxed
+        ? 'maxed-upg-btn'
+        : (pirateActive ? 'pirate-free' : (canAffordPower ? 'affordable' : ''));
 
       col.innerHTML = `
         <div class="ball-title-label">
-          <span style="font-size: 14px; color: #555;">(x${b.count})</span>
+          <span style="font-size: 14px; color: #555;">(x${b.count}${key === 'multiply' ? '/' + this.MAX_MULTIPLY_BALLS : ''})</span>
           <span>${b.name}</span>
           <span style="font-size: 13px; color: #444;">${b.shortDesc}</span>
           <div class="ball-dot ball-icon-${key}" style="margin-top: 4px;"></div>
         </div>
 
-        <button class="ball-upgrade-btn ${pirateActive ? 'pirate-free' : (canAffordSpeed ? 'affordable' : '')}" id="btn-upg-spd-${key}">
-          <div class="btn-top-info">Speed ${b.speedLevel} >> ${b.speedLevel + 1}</div>
-          <div class="btn-cost-bottom">${pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost)}</div>
+        <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
+          <div class="btn-top-info">${spdMaxed ? `Speed ${b.maxSpeedLevel}/${b.maxSpeedLevel}` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} >> ${b.speedLevel + 1}`}</div>
+          <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
         </button>
 
-        <button class="ball-upgrade-btn ${pirateActive ? 'pirate-free' : (canAffordPower ? 'affordable' : '')}" id="btn-upg-pwr-${key}">
-          <div class="btn-top-info">Power ${b.powerLevel} >> ${b.powerLevel + 1}</div>
-          <div class="btn-cost-bottom">${pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost)}</div>
+        <button class="ball-upgrade-btn ${pwrClass}" id="btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
+          <div class="btn-top-info">${pwrMaxed ? `Power ${b.maxPowerLevel}/${b.maxPowerLevel}` : `Power ${b.powerLevel}/${b.maxPowerLevel} >> ${b.powerLevel + 1}`}</div>
+          <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
         </button>
 
         <button class="delete-ball-btn" id="btn-del-ball-${key}">DELETE x1</button>
@@ -2728,17 +2890,21 @@ class IdleBreakoutGame {
 
       container.appendChild(col);
 
-      col.querySelector(`#btn-upg-spd-${key}`).addEventListener('click', () => this.upgradeBallSpeed(key));
-      col.querySelector(`#btn-upg-pwr-${key}`).addEventListener('click', () => this.upgradeBallPower(key));
+      if (!spdMaxed) col.querySelector(`#btn-upg-spd-${key}`).addEventListener('click', () => this.upgradeBallSpeed(key));
+      if (!pwrMaxed) col.querySelector(`#btn-upg-pwr-${key}`).addEventListener('click', () => this.upgradeBallPower(key));
       col.querySelector(`#btn-del-ball-${key}`).addEventListener('click', () => this.deleteBall(key));
     }
 
     // Pierce Ball Separate $ Speed Upgrade (Unlocked at Pierce Ball BB Level 5: 1M, 5M, 10M...)
     if (this.bbUpgrades.piercing >= 5) {
+      const pierceMaxed = this.pierceSpeedUpgradeLevel >= this.MAX_PIERCE_SPEED_LEVEL;
       const pCost = this.getPierceSpeedUpgradeCost();
-      const canAffordPierce = this.money >= pCost;
+      const canAffordPierce = !pierceMaxed && this.money >= pCost;
       const curMult = this.getPermanentPierceSpeedMult().toFixed(1);
       const nextMult = (this.getPermanentPierceSpeedMult() + 0.5).toFixed(1);
+      const pClass = pierceMaxed
+        ? 'maxed-upg-btn'
+        : (pirateActive ? 'pirate-free' : (canAffordPierce ? 'affordable' : ''));
 
       const pierceCol = document.createElement('div');
       pierceCol.className = 'ball-upgrade-section';
@@ -2749,18 +2915,22 @@ class IdleBreakoutGame {
           <span style="font-size: 13px; color: #444;">Külön áttörő sebesség</span>
         </div>
 
-        <button class="ball-upgrade-btn ${pirateActive ? 'pirate-free' : (canAffordPierce ? 'affordable' : '')}" id="btn-upg-pierce-spd">
-          <div class="btn-top-info">${curMult}x >> ${nextMult}x</div>
-          <div class="btn-cost-bottom">${pirateActive ? 'FREE!' : '$' + this.formatNumber(pCost)}</div>
+        <button class="ball-upgrade-btn ${pClass}" id="btn-upg-pierce-spd" ${pierceMaxed ? 'disabled' : ''}>
+          <div class="btn-top-info">${pierceMaxed ? `${curMult}x (LVL ${this.MAX_PIERCE_SPEED_LEVEL})` : `${curMult}x >> ${nextMult}x`}</div>
+          <div class="btn-cost-bottom">${pierceMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pCost))}</div>
         </button>
       `;
       container.appendChild(pierceCol);
-      pierceCol.querySelector('#btn-upg-pierce-spd').addEventListener('click', () => this.upgradePierceSpeed());
+      if (!pierceMaxed) pierceCol.querySelector('#btn-upg-pierce-spd').addEventListener('click', () => this.upgradePierceSpeed());
     }
 
     // Manual Click Power Upgrade
+    const clickMaxed = this.clickUpgradeLevel >= this.MAX_CLICK_LEVEL;
     const clickCost = this.getClickUpgradeCost();
-    const canAffordClick = this.money >= clickCost;
+    const canAffordClick = !clickMaxed && this.money >= clickCost;
+    const clickClass = clickMaxed
+      ? 'maxed-upg-btn'
+      : (pirateActive ? 'pirate-free' : (canAffordClick ? 'affordable' : ''));
 
     const clickCol = document.createElement('div');
     clickCol.className = 'ball-upgrade-section';
@@ -2771,20 +2941,76 @@ class IdleBreakoutGame {
         <div style="font-size: 20px; margin-top: 4px;">👆</div>
       </div>
 
-      <button class="ball-upgrade-btn ${pirateActive ? 'pirate-free' : (canAffordClick ? 'affordable' : '')}" id="btn-upg-click">
-        <div class="btn-top-info">Click X ${this.clickUpgradeLevel} >> ${this.clickUpgradeLevel + 1}</div>
-        <div class="btn-cost-bottom">${pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost)}</div>
+      <button class="ball-upgrade-btn ${clickClass}" id="btn-upg-click" ${clickMaxed ? 'disabled' : ''}>
+        <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} >> ${this.clickUpgradeLevel + 1}`}</div>
+        <div class="btn-cost-bottom">${clickMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost))}</div>
       </button>
     `;
 
     container.appendChild(clickCol);
-    clickCol.querySelector('#btn-upg-click').addEventListener('click', () => this.upgradeClick());
+    if (!clickMaxed) clickCol.querySelector('#btn-upg-click').addEventListener('click', () => this.upgradeClick());
+  }
+
+  // --- All-Phases Hover Tooltip for Power-Up Upgrades ---
+  showBBPhaseTooltip(item, curLvl, mouseEvent) {
+    const tooltip = document.getElementById('bb-phase-tooltip');
+    if (!tooltip) return;
+
+    let phasesHtml = `<div class="bb-phase-tooltip-title">${item.icon} ${item.name} – Összes Fázis</div>`;
+    phasesHtml += `<div style="font-size:14px; color:#94a3b8; margin-bottom:6px;">${item.baseDesc}</div>`;
+
+    for (let i = 0; i < item.levels.length; i++) {
+      const phaseNum = i + 1;
+      const cost = BB_UPGRADE_COSTS[i];
+      const isUnlocked = curLvl >= phaseNum;
+      const isNext = curLvl + 1 === phaseNum;
+      const cls = isUnlocked ? 'unlocked' : (isNext ? 'next-phase' : '');
+      const prefix = isUnlocked ? '✅ ' : (isNext ? '➔ ' : '🔒 ');
+
+      phasesHtml += `
+        <div class="bb-phase-row ${cls}">
+          <strong>${prefix}Phase ${phaseNum} (${cost} BB):</strong> ${item.levels[i]}
+        </div>
+      `;
+    }
+
+    tooltip.innerHTML = phasesHtml;
+    tooltip.classList.add('visible');
+    this.positionBBPhaseTooltip(mouseEvent);
+  }
+
+  positionBBPhaseTooltip(mouseEvent) {
+    const tooltip = document.getElementById('bb-phase-tooltip');
+    if (!tooltip || !tooltip.classList.contains('visible')) return;
+
+    const pad = 14;
+    const tipRect = tooltip.getBoundingClientRect();
+    let x = mouseEvent.clientX + 16;
+    let y = mouseEvent.clientY + 16;
+
+    if (x + tipRect.width > window.innerWidth - pad) {
+      x = mouseEvent.clientX - tipRect.width - 16;
+    }
+    if (y + tipRect.height > window.innerHeight - pad) {
+      y = window.innerHeight - tipRect.height - pad;
+    }
+    x = Math.max(pad, x);
+    y = Math.max(pad, y);
+
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+  }
+
+  hideBBPhaseTooltip() {
+    const tooltip = document.getElementById('bb-phase-tooltip');
+    if (tooltip) tooltip.classList.remove('visible');
   }
 
   // --- POWERUP UPGRADES (BB) Modal Rendering ---
   renderPowerUpUpgradesModal() {
     const balanceEl = document.getElementById('bb-modal-balance');
     if (balanceEl) balanceEl.textContent = this.bb.toLocaleString();
+    this.updateBossTokenExchangeUI();
 
     const grid = document.getElementById('bb-upgrades-grid');
     if (!grid) return;
@@ -2808,11 +3034,11 @@ class IdleBreakoutGame {
 
       const currentDesc = curLvl === 0
         ? item.baseDesc
-        : `<strong>Aktuális (LVL ${curLvl}):</strong> ${item.levels[curLvl - 1]}`;
+        : `<strong>Aktuális (Phase ${curLvl}):</strong> ${item.levels[curLvl - 1]}`;
 
       const nextHtml = isMax
         ? `<div class="bb-card-next" style="border-left-color:#2cd64e;">✅ Maximális szint elérve!</div>`
-        : `<div class="bb-card-next"><strong>Következő (LVL ${curLvl + 1}):</strong> ${item.levels[curLvl]}</div>`;
+        : `<div class="bb-card-next"><strong>Következő (Phase ${curLvl + 1}):</strong> ${item.levels[curLvl]}</div>`;
 
       const btnClass = isMax
         ? 'bb-buy-btn maxed-btn'
@@ -2832,12 +3058,20 @@ class IdleBreakoutGame {
         <button class="${btnClass}" id="btn-bb-upg-${item.key}" ${(!canAfford || isMax) ? 'disabled' : ''}>${btnText}</button>
       `;
 
+      // Hover események az összes fázis megjelenítéséhez (Phase 1..5)
+      card.addEventListener('mouseenter', (e) => this.showBBPhaseTooltip(item, curLvl, e));
+      card.addEventListener('mousemove', (e) => this.positionBBPhaseTooltip(e));
+      card.addEventListener('mouseleave', () => this.hideBBPhaseTooltip());
+
       grid.appendChild(card);
 
       if (!isMax) {
         const btn = card.querySelector(`#btn-bb-upg-${item.key}`);
         if (btn) {
-          btn.addEventListener('click', () => this.buyBBUpgrade(item.key));
+          btn.addEventListener('click', () => {
+            this.hideBBPhaseTooltip();
+            this.buyBBUpgrade(item.key);
+          });
         }
       }
     }
@@ -2941,9 +3175,18 @@ class IdleBreakoutGame {
 
     if (closeBBUpgradesBtn && bbUpgradesModal) {
       closeBBUpgradesBtn.addEventListener('click', () => {
+        this.hideBBPhaseTooltip();
         bbUpgradesModal.classList.remove('open');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
+    }
+
+    // Boss Token Exchange Buttons (5 Boss Token ➔ +1 BB)
+    for (const btnId of ['btn-exchange-tokens-upg', 'btn-exchange-tokens-bb']) {
+      const exBtn = document.getElementById(btnId);
+      if (exBtn) {
+        exBtn.addEventListener('click', () => this.exchangeBossTokensForBB());
+      }
     }
 
     // Rebirth Modal
@@ -3034,6 +3277,7 @@ class IdleBreakoutGame {
       money: this.money,
       level: this.level,
       bb: this.bb,
+      bossTokens: this.bossTokens,
       rebirthCount: this.rebirthCount,
       clickUpgradeLevel: this.clickUpgradeLevel,
       bbUpgrades: { ...this.bbUpgrades },
@@ -3069,11 +3313,12 @@ class IdleBreakoutGame {
       this.money = data.money ?? 0;
       this.level = data.level ?? 1;
       this.bb = data.bb ?? 0;
+      this.bossTokens = data.bossTokens ?? 0;
       this.rebirthCount = data.rebirthCount ?? 0;
       this.rebirthMultiplier = Math.pow(1.25, this.rebirthCount);
-      this.clickUpgradeLevel = data.clickUpgradeLevel ?? 1;
+      this.clickUpgradeLevel = Math.min(this.MAX_CLICK_LEVEL, data.clickUpgradeLevel ?? 1);
       this.clickPower = this.clickUpgradeLevel;
-      this.pierceSpeedUpgradeLevel = data.pierceSpeedUpgradeLevel ?? 0;
+      this.pierceSpeedUpgradeLevel = Math.min(this.MAX_PIERCE_SPEED_LEVEL, data.pierceSpeedUpgradeLevel ?? 0);
       this.nextBossIsGold = !!data.nextBossIsGold;
 
       if (data.bbUpgrades) {
@@ -3113,16 +3358,23 @@ class IdleBreakoutGame {
           if (targetKey && this.ballTypes[targetKey]) {
             const savedCount = data.balls[rawKey].count ?? 0;
             this.ballTypes[targetKey].count += savedCount;
-            this.ballTypes[targetKey].speedLevel = Math.max(this.ballTypes[targetKey].speedLevel, data.balls[rawKey].speedLevel ?? 1);
-            this.ballTypes[targetKey].powerLevel = Math.max(this.ballTypes[targetKey].powerLevel, data.balls[rawKey].powerLevel ?? 1);
+            this.ballTypes[targetKey].speedLevel = Math.min(
+              this.ballTypes[targetKey].maxSpeedLevel,
+              Math.max(this.ballTypes[targetKey].speedLevel, data.balls[rawKey].speedLevel ?? 1)
+            );
+            this.ballTypes[targetKey].powerLevel = Math.min(
+              this.ballTypes[targetKey].maxPowerLevel,
+              Math.max(this.ballTypes[targetKey].powerLevel, data.balls[rawKey].powerLevel ?? 1)
+            );
           }
         }
 
-        // Enforce ball cap cleanly and spawn owned balls
+        // Enforce ball cap (and max 15 Multiply balls) cleanly and spawn owned balls
         const maxBalls = this.getMaxBalls();
         let spawnedTotal = 0;
         for (const key in this.ballTypes) {
-          const allowed = Math.max(0, Math.min(this.ballTypes[key].count, maxBalls - spawnedTotal));
+          const typeMax = key === 'multiply' ? this.MAX_MULTIPLY_BALLS : maxBalls;
+          const allowed = Math.max(0, Math.min(this.ballTypes[key].count, typeMax, maxBalls - spawnedTotal));
           this.ballTypes[key].count = allowed;
           for (let i = 0; i < allowed; i++) {
             this.spawnBall(key);
