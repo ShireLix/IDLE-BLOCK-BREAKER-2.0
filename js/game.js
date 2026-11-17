@@ -189,6 +189,7 @@ class IdleBreakoutGame {
     this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 5 Boss Token = 1 BB
     this.BOSS_TOKEN_COST = 5;
     this.MAX_MULTIPLY_BALLS = 15;
+    this.MAX_GHOST_BALLS = 40;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
     this.clickPower = 1;
@@ -299,7 +300,7 @@ class IdleBreakoutGame {
       ghost: {
         id: 'ghost',
         name: 'GHOSTBALL',
-        shortDesc: '1x sebesség, áthalad a blokkokon',
+        shortDesc: '1x sebesség, áthalad a blokkokon (max 40 db)',
         color: '#c8f4ff',
         count: 0,
         baseCost: 45000,
@@ -318,20 +319,20 @@ class IdleBreakoutGame {
       multiply: {
         id: 'multiply',
         name: 'MULTIPLY BALL',
-        shortDesc: '1x sebesség, 10→5→2→1 osztódás (max 15 db)',
+        shortDesc: '1x sebesség, 10→5→2→1 osztódás (max 15 / 100-nál 25 db)',
         color: '#d900b8',
         count: 0,
-        baseCost: 12000,
-        costMult: 1.25,
+        baseCost: 65000,
+        costMult: 1.28,
         speedFactor: 1.0,
         basePower: 10.0,
         powerStep: 5.0,
         speedLevel: 1,
         maxSpeedLevel: 35,
-        speedBaseCost: 15000,
+        speedBaseCost: 45000,
         powerLevel: 1,
         maxPowerLevel: 40,
-        powerBaseCost: 25000,
+        powerBaseCost: 65000,
         radius: 9.0
       }
     };
@@ -496,32 +497,48 @@ class IdleBreakoutGame {
     }
   }
 
-  // --- Exact Boss HP Lookup (Boss 1-35 = Levels 10-350; Level 400+ = 500,000 - 2,000,000 HP) ---
+  // --- Boss Schedule & HP Rules ---
+  // Lvl 1-150: 10 szintenként | Lvl 151-400: 25 szintenként | Lvl 401+: 30 szintenként
+  isBossLevel(lvl) {
+    if (lvl <= 0) return false;
+    if (lvl <= 150) return lvl % 10 === 0;
+    if (lvl <= 400) return (lvl - 150) % 25 === 0;
+    return (lvl - 400) % 30 === 0;
+  }
+
+  getBossNumberForLevel(lvl) {
+    if (lvl <= 150) return Math.max(1, Math.floor(lvl / 10));
+    if (lvl <= 400) return 15 + Math.floor((lvl - 150) / 25);
+    return 25 + Math.floor((lvl - 400) / 30);
+  }
+
+  // --- Exact Boss HP Lookup ---
+  // Lvl 10-350: pontos táblázat (köztes 25-ös szintek interpolálva)
+  // Lvl 400: 500,000 | Lvl 400 után (430, 460, 490...): random 1,500,000 - 5,000,000 HP!
   getBossHpForLevel(lvl) {
+    if (lvl > 400) {
+      const randomHp = 1_500_000 + Math.random() * 3_500_000;
+      return Math.round(randomHp / 1000) * 1000;
+    }
     if (BOSS_HP_TABLE[lvl] !== undefined) {
       return BOSS_HP_TABLE[lvl];
     }
-    if (lvl >= 400) {
-      // Lvl 400-tól minden Boss élete szigorúan 500.000 és 2.000.000 között van!
-      const stepsAbove400 = Math.floor((lvl - 400) / 10);
-      return Math.min(2_000_000, 500_000 + stepsAbove400 * 50_000);
-    }
-    if (lvl > 350) {
-      // Lvl 360-390 átmenet (180k -> 420k)
-      return 100_000 + Math.floor((lvl - 350) / 10) * 80_000;
-    }
+    if (lvl === 175) return 65000;
+    if (lvl === 225) return 77500;
+    if (lvl === 275) return 86250;
+    if (lvl === 325) return 95000;
+    if (lvl === 375) return 300000;
+    if (lvl === 400) return 500000;
     return lvl * 40;
   }
 
-  // --- Balanced Boss Money Calculation (Boss 1 legkevesebb -> Boss 35+ legtöbb) ---
+  // --- Balanced Boss Money Calculation (Boss 1 legkevesebb -> magas szintű Bossok legtöbb) ---
   getBossRewardPerDamage(lvl) {
-    // Monoton növekvő skála: lvl 10 -> ~0.39 $/HP, lvl 100 -> ~1.61 $/HP, lvl 350 -> ~5.00 $/HP
     return 0.25 + (lvl / 350) * 4.75;
   }
 
   getBossKillBonus(lvl) {
-    // Monoton növekvő kill bónusz: lvl 10 -> $500 ... lvl 100 -> $22,000 ... lvl 350 -> $250,000+
-    const bossIndex = Math.max(1, Math.floor(lvl / 10));
+    const bossIndex = this.getBossNumberForLevel(lvl);
     return Math.round(500 * Math.pow(bossIndex, 1.75));
   }
 
@@ -532,8 +549,8 @@ class IdleBreakoutGame {
     const arenaW = this.width - perimeterPadding * 2;
     const arenaH = this.height - perimeterPadding * 2;
 
-    // Boss level check: Every 10th level is a Boss Block!
-    if (lvl % 10 === 0) {
+    // Boss level check: <=150 (10-enként), 151..400 (25-enként), >400 (30-anként)
+    if (this.isBossLevel(lvl)) {
       const bossW = arenaW * 0.64;
       const bossH = arenaH * 0.46;
       const bossX = perimeterPadding + (arenaW - bossW) / 2;
@@ -557,7 +574,7 @@ class IdleBreakoutGame {
         maxHp: bossHp,
         isBoss: true,
         isGoldBoss: isGold,
-        bossNumber: Math.floor(lvl / 10),
+        bossNumber: this.getBossNumberForLevel(lvl),
         flash: 0,
         shake: 0,
         poisonDps: 0,
@@ -1383,14 +1400,25 @@ class IdleBreakoutGame {
     return false;
   }
 
-  // --- Rebirth Ball Slot Limits (Alap: 15, 3. Rebirth: 25, 5. Rebirth: 35, 7. Rebirth: 50) ---
+  // --- Rebirth Ball Slot Limits (Alap: 15, 3.: 25, 5.: 35, 7.: 50, 9.: 65, 11.: 80, 13.+: 100 max!) ---
   getMaxBalls(rebirthCount = this.rebirthCount) {
-    if (rebirthCount >= 7) {
-      return 50 + Math.floor((rebirthCount - 7) / 2) * 5;
-    }
+    if (rebirthCount >= 13) return 100;
+    if (rebirthCount >= 11) return 80;
+    if (rebirthCount >= 9) return 65;
+    if (rebirthCount >= 7) return 50;
     if (rebirthCount >= 5) return 35;
     if (rebirthCount >= 3) return 25;
     return 15;
+  }
+
+  getMaxBallTypeLimit(typeKey) {
+    if (typeKey === 'multiply') {
+      return this.getMaxBalls() >= 100 ? 25 : this.MAX_MULTIPLY_BALLS;
+    }
+    if (typeKey === 'ghost') {
+      return this.MAX_GHOST_BALLS;
+    }
+    return null;
   }
 
   // --- Ball Purchase, Spawning & Stats ---
@@ -1412,8 +1440,9 @@ class IdleBreakoutGame {
   }
 
   buyBall(typeKey) {
-    // Multiply labdából összesen maximum 15 db vásárolható!
-    if (typeKey === 'multiply' && this.ballTypes.multiply.count >= this.MAX_MULTIPLY_BALLS) {
+    // Típusonkénti egyedi limit ellenőrzése (Ghost: 40, Multiply: 15 vagy 100-as keretnél 25!)
+    const typeLimit = this.getMaxBallTypeLimit(typeKey);
+    if (typeLimit !== null && this.ballTypes[typeKey].count >= typeLimit) {
       return;
     }
 
@@ -1736,7 +1765,7 @@ class IdleBreakoutGame {
     this.bb += 1;
 
     // Reset run progress completely back to level 1
-    // (BB valuta, BB fejlesztések és a megnövekedett labdaférőhely MEGMARADNAK!)
+    // (BB valuta, Boss Tokenek, BB fejlesztések és a megnövekedett labdaférőhely MEGMARADNAK!)
     this.level = 1;
     this.money = 0;
     this.balls = [];
@@ -1746,6 +1775,12 @@ class IdleBreakoutGame {
     this.bonusOrb = null;
     this.visualRings = [];
     this.bossSparks = [];
+    this.floatingTexts = [];
+    this.shockwaveTimer = 0;
+    this.autoClickerTimer = 0;
+    this.dotTimer = 0;
+    this.isPointerDown = false;
+    this.holdDamageTimer = 0;
     this.pierceSpeedUpgradeLevel = 0;
 
     for (const key in this.ballTypes) {
@@ -1762,6 +1797,8 @@ class IdleBreakoutGame {
     if (window.soundEngine) window.soundEngine.playPrestige();
     this.save();
     this.updateHUD();
+    this.refreshOpenModals();
+    this.showToast(`🔄 <strong>REBIRTH #${this.rebirthCount} SIKERES!</strong> +1 ⭐ BB | Szorzó: ${this.rebirthMultiplier.toFixed(2)}x | Max labda: ${this.getMaxBalls()}`, 5000);
   }
 
   // --- Floating Combat Texts & Toasts ---
@@ -2033,7 +2070,7 @@ class IdleBreakoutGame {
       let earned = 0;
 
       while (remainingDamage > 0) {
-        const isBoss = this.level % 10 === 0;
+        const isBoss = this.isBossLevel(this.level);
         const levelTotalHp = isBoss ? this.getBossHpForLevel(this.level) : (this.level * 85);
         const dmgOnLevel = Math.min(remainingDamage, levelTotalHp);
         const rewardMult = isBoss ? this.getBossRewardPerDamage(this.level) : 1;
@@ -2439,7 +2476,7 @@ class IdleBreakoutGame {
     // 6. Boss Emblem & Title
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const bossNum = b.bossNumber || Math.floor(this.level / 10);
+    const bossNum = b.bossNumber || this.getBossNumberForLevel(this.level);
 
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 26px "VT323", "Courier New", Courier, monospace';
@@ -2735,9 +2772,10 @@ class IdleBreakoutGame {
       const slot = document.getElementById(`ball-slot-${key}`);
       const priceText = document.getElementById(`ball-price-${key}`);
       if (slot && priceText) {
-        const isMultiplyMaxed = (key === 'multiply' && this.ballTypes.multiply.count >= this.MAX_MULTIPLY_BALLS);
-        if (isMultiplyMaxed) {
-          priceText.textContent = `MAX ${this.MAX_MULTIPLY_BALLS}`;
+        const typeLimit = this.getMaxBallTypeLimit(key);
+        const isTypeMaxed = (typeLimit !== null && this.ballTypes[key].count >= typeLimit);
+        if (isTypeMaxed) {
+          priceText.textContent = `MAX ${typeLimit}`;
           slot.classList.remove('affordable', 'pirate-free');
           slot.classList.add('maxed-slot');
         } else {
@@ -2867,9 +2905,10 @@ class IdleBreakoutGame {
         ? 'maxed-upg-btn'
         : (pirateActive ? 'pirate-free' : (canAffordPower ? 'affordable' : ''));
 
+      const typeLimit = this.getMaxBallTypeLimit(key);
       col.innerHTML = `
         <div class="ball-title-label">
-          <span style="font-size: 14px; color: #555;">(x${b.count}${key === 'multiply' ? '/' + this.MAX_MULTIPLY_BALLS : ''})</span>
+          <span style="font-size: 14px; color: #555;">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
           <span>${b.name}</span>
           <span style="font-size: 13px; color: #444;">${b.shortDesc}</span>
           <div class="ball-dot ball-icon-${key}" style="margin-top: 4px;"></div>
@@ -3369,11 +3408,12 @@ class IdleBreakoutGame {
           }
         }
 
-        // Enforce ball cap (and max 15 Multiply balls) cleanly and spawn owned balls
+        // Enforce ball cap (and Ghost=40 / Multiply=15 or 25 caps) cleanly and spawn owned balls
         const maxBalls = this.getMaxBalls();
         let spawnedTotal = 0;
         for (const key in this.ballTypes) {
-          const typeMax = key === 'multiply' ? this.MAX_MULTIPLY_BALLS : maxBalls;
+          const typeLimit = this.getMaxBallTypeLimit(key);
+          const typeMax = typeLimit !== null ? typeLimit : maxBalls;
           const allowed = Math.max(0, Math.min(this.ballTypes[key].count, typeMax, maxBalls - spawnedTotal));
           this.ballTypes[key].count = allowed;
           for (let i = 0; i < allowed; i++) {

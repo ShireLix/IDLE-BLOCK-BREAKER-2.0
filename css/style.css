@@ -764,6 +764,8 @@ header.top-bar {
 .rebirth-dialog-box {
   width: 90%;
   max-width: 480px;
+  max-height: 92%;
+  max-height: 92dvh;
   background: var(--bg-retro);
   border: 3px solid var(--border-color);
   box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.7);
@@ -772,6 +774,7 @@ header.top-bar {
   flex-direction: column;
   gap: 14px;
   text-align: center;
+  overflow: hidden;
 }
 
 .rebirth-dialog-title {
@@ -779,12 +782,17 @@ header.top-bar {
   font-weight: bold;
   border-bottom: 2px solid var(--border-color);
   padding-bottom: 6px;
+  flex-shrink: 0;
 }
 
 .rebirth-desc-text {
   font-size: 19px;
   line-height: 1.35;
   text-align: left;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-right: 4px;
 }
 
 .rebirth-highlight {
@@ -797,6 +805,7 @@ header.top-bar {
   gap: 12px;
   justify-content: center;
   margin-top: 6px;
+  flex-shrink: 0;
 }
 
 /* ============================================================ */
@@ -1375,5 +1384,35 @@ header.top-bar {
     top: 12px;
     font-size: 15px;
     padding: 5px 12px;
+  }
+
+  /* Compact Rebirth Modal for Mobile Landscape (buttons always visible!) */
+  .rebirth-dialog-box {
+    width: 92%;
+    max-width: 560px;
+    max-height: 92%;
+    max-height: 92dvh;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .rebirth-dialog-title {
+    font-size: 20px;
+    padding-bottom: 4px;
+  }
+
+  .rebirth-desc-text {
+    font-size: 15px;
+    line-height: 1.2;
+  }
+
+  .rebirth-actions-row {
+    margin-top: 2px;
+    gap: 10px;
+  }
+
+  .rebirth-actions-row .retro-btn {
+    height: 34px;
+    font-size: 16px;
   }
 }
