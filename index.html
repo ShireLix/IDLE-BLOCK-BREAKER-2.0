@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Idle Breakout - Classic Retro Edition</title>
+  <link rel="stylesheet" href="css/style.css?v=2.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
+</head>
+<body>
+
+<!-- Ambient Floating Background Shapes -->
+<div class="ambient-bg-canvas">
+  <div class="ambient-shape"></div>
+  <div class="ambient-shape"></div>
+  <div class="ambient-shape"></div>
+  <div class="ambient-shape"></div>
+</div>
+
+<div id="game-container">
+
+  <!-- Top Navigation & Information Bar -->
+  <header class="top-bar">
+
+    <!-- Row 1: 6 Ball Buy Slots + Currency HUD + Controls -->
+    <div class="top-bar-row top-bar-row-main">
+      <!-- Left: 6 Distinct Ball Purchase Slots -->
+      <div class="top-left-section">
+        <div class="ball-buy-slot" id="ball-slot-normal" title="NORMAL BALL: 1x sebesség, 1x sebzés">
+          <div class="ball-dot ball-icon-normal"></div>
+          <div class="ball-slot-tag">NORM</div>
+          <div class="ball-price-box" id="ball-price-normal">$25</div>
+        </div>
+
+        <div class="ball-buy-slot" id="ball-slot-speedy" title="SPEEDY BALL: 2x sebesség, 50% sebzés">
+          <div class="ball-dot ball-icon-speedy"></div>
+          <div class="ball-slot-tag">FAST</div>
+          <div class="ball-price-box" id="ball-price-speedy">$150</div>
+        </div>
+
+        <div class="ball-buy-slot" id="ball-slot-poison" title="POISON BALL: 1.5x sebesség, 1 sebzés/mp méreg">
+          <div class="ball-dot ball-icon-poison"></div>
+          <div class="ball-slot-tag">POIS</div>
+          <div class="ball-price-box" id="ball-price-poison">$750</div>
+        </div>
+
+        <div class="ball-buy-slot" id="ball-slot-heavy" title="HEAVY BALL: 0.5x sebesség, 5 sebzés/mp">
+          <div class="ball-dot ball-icon-heavy"></div>
+          <div class="ball-slot-tag">HEAV</div>
+          <div class="ball-price-box" id="ball-price-heavy">$3K</div>
+        </div>
+
+        <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL: 1x sebesség, ütközéskor 2→4→8 labdára osztódik">
+          <div class="ball-dot ball-icon-multiply"></div>
+          <div class="ball-slot-tag">MULT</div>
+          <div class="ball-price-box" id="ball-price-multiply">$12K</div>
+        </div>
+
+        <div class="ball-buy-slot" id="ball-slot-ghost" title="GHOSTBALL: 1x sebesség, áthalad a blokkokon és folyamatosan sebez">
+          <div class="ball-dot ball-icon-ghost"></div>
+          <div class="ball-slot-tag">GHST</div>
+          <div class="ball-price-box" id="ball-price-ghost">$45K</div>
+        </div>
+      </div>
+
+      <!-- Right: Currency HUD ($, BB) and Settings/Sound -->
+      <div class="top-right-section">
+        <div class="currency-hud-box">
+          <div class="currency-hud-row">
+            <span class="currency-label money-lbl">$</span>
+            <span class="currency-value-bar gold-bar" id="hud-money-text">0</span>
+          </div>
+          <div class="currency-hud-row">
+            <span class="currency-label bb-lbl">BB</span>
+            <span class="currency-value-bar bb-bar" id="hud-bb-text">0</span>
+          </div>
+        </div>
+
+        <div class="top-controls-group">
+          <button id="btn-settings" class="retro-icon-btn" title="Teljes Újraindítás (Factory Reset)">⚙️</button>
+          <button id="btn-toggle-sound" class="retro-icon-btn sound-btn" title="Hang ki/be">🔊</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Status, Action Buttons (UPGRADES, POWERUP UPGRADES, REBIRTH) & Active Power-ups -->
+    <div class="top-bar-row top-bar-row-actions">
+      <div class="top-center-section">
+        <div class="status-box">
+          <span id="hud-balls-text">0/15</span>
+          <span class="status-sub">BALLS</span>
+        </div>
+
+        <div class="status-box">
+          <span class="status-sub">LEVEL</span>
+          <span id="hud-level-text" class="status-box-val">1</span>
+        </div>
+
+        <button id="btn-open-upgrades" class="retro-btn">UPGRADES</button>
+        <button id="btn-open-powerup-upgrades" class="retro-btn powerup-upg-btn">⚡ POWERUP UPGRADES</button>
+        <button id="btn-rebirth-trigger" class="retro-btn rebirth-btn">REBIRTH</button>
+      </div>
+
+      <!-- Active Power-ups Bar -->
+      <div id="active-powerups-container" class="powerups-hud-bar"></div>
+    </div>
+
+  </header>
+
+  <!-- Arena Container with Canvas and Perimeter Border Blocks -->
+  <main id="arena-wrapper">
+    <canvas id="game-canvas"></canvas>
+    <div id="offline-toast" class="offline-toast"></div>
+  </main>
+
+  <!-- Upgrades Popup Overlay ($ Upgrades: Balls, Click Power, Pierce Speed) -->
+  <div id="upgrades-modal" class="overlay-backdrop">
+    <div class="retro-modal-window">
+      <div class="modal-header-row">
+        <div class="modal-title-box">UPGRADES ($)</div>
+        <div id="upgrades-discount-banner" class="discount-banner" style="display: none;"></div>
+      </div>
+
+      <div class="upgrades-content-grid" id="upgrades-content-grid">
+        <!-- Dynamically rendered ball upgrades, Pierce Speed & Click X -->
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-close-upgrades" class="close-btn">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Power-Up & Click BB Upgrades Popup Overlay -->
+  <div id="powerup-upgrades-modal" class="overlay-backdrop">
+    <div class="retro-modal-window bb-modal-window">
+      <div class="modal-header-row">
+        <div class="modal-title-box bb-title-box">⚡ POWERUP UPGRADES (BB)</div>
+        <div class="bb-balance-pill">⭐ BB Egyenleg: <span id="bb-modal-balance">0</span> BB</div>
+      </div>
+
+      <div class="bb-upgrades-grid" id="bb-upgrades-grid">
+        <!-- Dynamically rendered BB upgrade cards -->
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-close-powerup-upgrades" class="close-btn">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rebirth Confirmation Modal -->
+  <div id="rebirth-modal" class="overlay-backdrop">
+    <div class="rebirth-dialog-box">
+      <div class="rebirth-dialog-title">REBIRTH (ÚJJÁSZÜLETÉS)</div>
+      <div class="rebirth-desc-text">
+        Elért szinted: <span id="rebirth-current-lvl" class="rebirth-highlight">20</span> (Szükséges minimum: <span id="rebirth-required-lvl" style="font-weight: bold;">20</span>)<br><br>
+        Jutalmak az újjászületésért:<br>
+        ⭐ <strong style="color: #d97706;">+1 BB (Breakout Badge)</strong><br>
+        💰 <strong>Jövedelem szorzó:</strong> <span id="rebirth-current-mult">1.00x</span> ➔ <span id="rebirth-next-mult" class="rebirth-highlight" style="color: #2cd64e;">1.25x</span> (+25% pénz!)<br>
+        🎱 <strong>Max labdaférőhely:</strong> <span id="rebirth-slots-info" style="color: #2563eb; font-weight: bold;">15 ➔ 15</span><br>
+        🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.14% ➔ 0.16%</span><br>
+        ⚡ <strong>Kritikus kattintás:</strong> <span id="rebirth-crit-info" style="color: #38bdf8; font-weight: bold;">5% ➔ 6%</span><br><br>
+        <small style="color: #555; display: block; border-top: 1px dashed #888; padding-top: 6px;">
+          (Újra az 1. szintről kezdesz 0 labdával, de a BB valutád, a BB fejlesztéseid, a pénzszorzód és a labdaférőhelyed megmaradnak!)
+        </small>
+      </div>
+
+      <div class="rebirth-actions-row">
+        <button id="btn-confirm-rebirth" class="retro-btn" style="background: #2cd64e; flex: 1;">ÚJJÁSZÜLETÉS MOST</button>
+        <button id="btn-cancel-rebirth" class="retro-btn" style="background: var(--gray-btn); flex: 1;">MÉGSE</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Audio Engine and Core Game Scripts -->
+<script src="js/audio.js?v=2.1"></script>
+<script src="js/game.js?v=2.1"></script>
+
+</body>
+</html>
