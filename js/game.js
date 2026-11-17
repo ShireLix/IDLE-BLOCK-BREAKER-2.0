@@ -514,11 +514,22 @@ class IdleBreakoutGame {
 
   // --- Exact Boss HP Lookup ---
   // Lvl 10-350: pontos táblázat (köztes 25-ös szintek interpolálva)
-  // Lvl 400: 500,000 | Lvl 400 után (430, 460, 490...): random 1,500,000 - 5,000,000 HP!
+  // Lvl 400: 500,000 | Lvl 400 után (430, 460, 490...):
+  //   - 70% eséllyel 500.000 – 1.000.000 HP
+  //   - 25% eséllyel 1.000.000 – 1.950.000 HP (2 millió alatt)
+  //   - 5% eséllyel (20-ból 1) 5.000.000 HP Mega Boss!
   getBossHpForLevel(lvl) {
     if (lvl > 400) {
-      const randomHp = 1_500_000 + Math.random() * 3_500_000;
-      return Math.round(randomHp / 1000) * 1000;
+      const r = Math.random();
+      if (r < 0.05) {
+        return 5_000_000; // 1 a 20-ból (5%): 5 milliós Boss!
+      }
+      if (r < 0.75) {
+        // 70% esély: 500.000 – 1.000.000 HP
+        return Math.round((500_000 + Math.random() * 500_000) / 1000) * 1000;
+      }
+      // 25% esély: 1.000.000 – 1.950.000 HP (2 millió alatti)
+      return Math.round((1_000_000 + Math.random() * 950_000) / 1000) * 1000;
     }
     if (BOSS_HP_TABLE[lvl] !== undefined) {
       return BOSS_HP_TABLE[lvl];
