@@ -245,6 +245,7 @@ class IdleBreakoutGame {
     this.BOSS_TOKEN_COST = 5;
     this.MAX_MULTIPLY_BALLS = 15;
     this.MAX_GHOST_BALLS = 40;
+    this.MAX_ROCKET_BALLS = 5;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
     this.clickPower = 1;
@@ -401,14 +402,14 @@ class IdleBreakoutGame {
       rocket: {
         id: 'rocket',
         name: 'ROCKET BALL',
-        shortDesc: '1x sebesség, 10 mp-ként rakéta (10 BT: 3 mp homing)',
+        shortDesc: '10 dmg labda | rakéta 100/50/20 (max 5 db)',
         color: '#f97316',
         count: 0,
         baseCost: 90000,
         costMult: 1.28,
         speedFactor: 1.0,
-        basePower: 8.0,
-        powerStep: 4.0,
+        basePower: 10.0,
+        powerStep: 5.0,
         speedLevel: 1,
         maxSpeedLevel: 40,
         speedBaseCost: 60000,
@@ -1274,6 +1275,9 @@ class IdleBreakoutGame {
   applyPoisonToBrick(brick) {
     if (!brick || brick.hp <= 0) return;
     const cfg = this.getPoisonAbilityConfig();
+    const dpsLabel = cfg.interval < 1
+      ? `${cfg.dmg}/${cfg.interval}s (${Math.round(cfg.dps)} dmg/s)`
+      : `${cfg.dmg} dmg/s`;
 
     if (brick.isBoss) {
       // Boss blokkokon a méreg stackelődhet! (max 60 aktív stack a 60 FPS teljesítményért)
@@ -1289,6 +1293,9 @@ class IdleBreakoutGame {
         infinite: cfg.infinite,
         dps: cfg.dps
       });
+      if (!this.suppressAudioAndVisuals && !document.hidden) {
+        this.addFloatingText(`☠️ ${dpsLabel}`, brick.x + brick.w / 2, brick.y + brick.h * 0.25, '#a3e635');
+      }
       return;
     }
 
@@ -1303,6 +1310,9 @@ class IdleBreakoutGame {
         infinite: cfg.infinite,
         dps: cfg.dps
       };
+      if (!this.suppressAudioAndVisuals && !document.hidden) {
+        this.addFloatingText(`☠️ ${dpsLabel}`, brick.x + brick.w / 2, brick.y + 4, '#a3e635');
+      }
     }
   }
 
@@ -1428,14 +1438,17 @@ class IdleBreakoutGame {
     }
 
     const rocketSpeed = 9.5;
+    // Alap labda 10 dmg -> rakéta: 100 közvetlen, 50 mellette lévő blokkok, 20 az amellett lévő blokkok!
+    const powerScale = Math.max(1, ball.power / this.ballTypes.rocket.basePower);
     this.rockets.push({
       x: ball.x,
       y: ball.y,
       vx: Math.cos(angle) * rocketSpeed,
       vy: Math.sin(angle) * rocketSpeed,
       speed: rocketSpeed,
-      power: Math.max(10, ball.power * 3),
-      splashPower: Math.max(4, ball.power),
+      directDmg: Math.round(100 * powerScale),
+      ring1Dmg: Math.round(50 * powerScale),
+      ring2Dmg: Math.round(20 * powerScale),
       homing: isHoming,
       target,
       life: 4.5
@@ -1484,19 +1497,33 @@ class IdleBreakoutGame {
       for (const b of this.bricks) {
         if (b.hp <= 0) continue;
         if (r.x >= b.x - 5 && r.x <= b.x + b.w + 5 && r.y >= b.y - 5 && r.y <= b.y + b.h + 5) {
-          this.damageBrick(b, r.power, 'rocket');
-          // Small rocket splash radius
-          const splashR = 40;
+          const hcx = b.x + b.w / 2;
+          const hcy = b.y + b.h / 2;
+          const cellW = Math.max(24, b.isBoss ? (this.gridCellW || 60) : b.w);
+          const cellH = Math.max(18, b.isBoss ? (this.gridCellH || 34) : b.h);
+
+          // 1. Közvetlenül eltalált blokk: 100 dmg (alap)
+          this.damageBrick(b, r.directDmg, 'rocket');
+
+          // 2. Mellette lévő blokkok (1 gyűrű): 50 dmg | Amellett lévők (2. gyűrű): 20 dmg
           for (const nb of this.bricks) {
             if (nb === b || nb.hp <= 0) continue;
             const ncx = nb.x + nb.w / 2;
             const ncy = nb.y + nb.h / 2;
-            if (Math.hypot(ncx - r.x, ncy - r.y) <= splashR) {
-              this.damageBrick(nb, r.splashPower, 'rocket');
+            const gridDx = Math.abs(ncx - hcx) / cellW;
+            const gridDy = Math.abs(ncy - hcy) / cellH;
+            const ringDist = Math.max(Math.round(gridDx), Math.round(gridDy));
+
+            if (ringDist === 1) {
+              this.damageBrick(nb, r.ring1Dmg, 'rocket');
+            } else if (ringDist === 2) {
+              this.damageBrick(nb, r.ring2Dmg, 'rocket');
             }
           }
+
           if (!this.suppressAudioAndVisuals) {
-            this.visualRings.push({ x: r.x, y: r.y, radius: 5, maxRadius: 42, alpha: 0.95, color: '249, 115, 22', speed: 220 });
+            this.visualRings.push({ x: r.x, y: r.y, radius: 6, maxRadius: cellW * 1.4, alpha: 0.95, color: '239, 68, 68', speed: 240 });
+            this.visualRings.push({ x: r.x, y: r.y, radius: 10, maxRadius: cellW * 2.4, alpha: 0.8, color: '249, 115, 22', speed: 300 });
           }
           exploded = true;
           break;
@@ -1702,6 +1729,9 @@ class IdleBreakoutGame {
     }
     if (typeKey === 'ghost') {
       return this.MAX_GHOST_BALLS;
+    }
+    if (typeKey === 'rocket') {
+      return this.MAX_ROCKET_BALLS;
     }
     return null;
   }
@@ -2130,14 +2160,15 @@ class IdleBreakoutGame {
   }
 
   // --- Floating Combat Texts & Toasts ---
-  addFloatingText(txt, x, y) {
-    if (this.floatingTexts.length > 28) this.floatingTexts.shift();
+  addFloatingText(txt, x, y, color = '#2cd64e') {
+    if (this.floatingTexts.length > 32) this.floatingTexts.shift();
     this.floatingTexts.push({
       text: txt,
       x: x + (Math.random() * 12 - 6),
       y,
       alpha: 1.0,
-      vy: -1.3
+      vy: -1.3,
+      color
     });
   }
 
@@ -2917,9 +2948,21 @@ class IdleBreakoutGame {
         this.ctx.strokeStyle = '#000000';
         this.ctx.strokeRect(b.x, b.y, b.w, b.h);
 
-        this.ctx.font = 'bold 16px "VT323", "Courier New", Courier, monospace';
-        this.ctx.fillStyle = '#000000';
-        this.ctx.fillText(Math.ceil(b.hp).toString(), b.x + b.w / 2, b.y + b.h / 2);
+        if (b.poison) {
+          // Ha mérgezett a blokk: HP feljebb, alatta jól olvasható "x dmg/s" jelzés!
+          this.ctx.font = 'bold 15px "VT323", "Courier New", Courier, monospace';
+          this.ctx.fillStyle = '#000000';
+          this.ctx.fillText(Math.ceil(b.hp).toString(), b.x + b.w / 2, b.y + b.h * 0.38);
+
+          const dpsText = `${Math.round(b.poison.dps)} dmg/s`;
+          this.ctx.font = 'bold 11px "VT323", "Courier New", Courier, monospace';
+          this.ctx.fillStyle = '#064e3b';
+          this.ctx.fillText(dpsText, b.x + b.w / 2, b.y + b.h * 0.77);
+        } else {
+          this.ctx.font = 'bold 16px "VT323", "Courier New", Courier, monospace';
+          this.ctx.fillStyle = '#000000';
+          this.ctx.fillText(Math.ceil(b.hp).toString(), b.x + b.w / 2, b.y + b.h / 2);
+        }
       }
     }
 
@@ -3122,9 +3165,9 @@ class IdleBreakoutGame {
       this.ctx.save();
       this.ctx.globalAlpha = Math.max(0, ft.alpha);
       this.ctx.font = 'bold 18px "VT323", "Courier New", Courier, monospace';
-      this.ctx.fillStyle = '#15803d';
+      this.ctx.fillStyle = '#000000';
       this.ctx.fillText(ft.text, ft.x + 1, ft.y + 1);
-      this.ctx.fillStyle = '#2cd64e';
+      this.ctx.fillStyle = ft.color || '#2cd64e';
       this.ctx.fillText(ft.text, ft.x, ft.y);
       this.ctx.restore();
     }
