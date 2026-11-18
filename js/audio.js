@@ -95,6 +95,13 @@ class SoundEngine {
         duration = 0.04;
         vol = this.volume * 0.28;
         break;
+      case 'rocket':
+        type = 'square';
+        startFreq = 260;
+        endFreq = 85;
+        duration = 0.085;
+        vol = this.volume * 0.45;
+        break;
       case 'poison':
         type = 'sine';
         startFreq = 340;

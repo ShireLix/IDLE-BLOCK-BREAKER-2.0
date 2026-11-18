@@ -159,9 +159,9 @@ header.top-bar {
   flex-wrap: wrap;
 }
 
-/* Ball Buy Buttons (6 Distinct Ball Types) */
+/* Ball Buy Buttons (7 Distinct Ball Types) */
 .ball-buy-slot {
-  width: 62px;
+  width: 58px;
   height: 58px;
   background: var(--bg-retro);
   border: 2px solid var(--border-color);
@@ -222,6 +222,12 @@ header.top-bar {
   background: rgba(200, 244, 255, 0.65);
   border: 2px dashed #0284c7;
   box-shadow: 0 0 6px rgba(56, 189, 248, 0.7);
+}
+
+.ball-icon-rocket {
+  background: radial-gradient(circle at 35% 35%, #fef08a, #f97316 55%, #b91c1c 100%);
+  border: 2px solid #000000;
+  box-shadow: 0 0 7px rgba(249, 115, 22, 0.8);
 }
 
 .ball-slot-tag {
@@ -307,8 +313,9 @@ header.top-bar {
 }
 
 .status-box {
-  background: var(--bg-retro);
+  background: linear-gradient(180deg, #f3e8d2 0%, var(--bg-retro) 100%);
   border: 2px solid var(--border-color);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55), 2px 2px 0 rgba(0, 0, 0, 0.25);
   padding: 2px 9px;
   display: flex;
   flex-direction: column;
@@ -333,8 +340,9 @@ header.top-bar {
 
 /* Retro Action Buttons */
 .retro-btn {
-  background: var(--bg-retro);
+  background: linear-gradient(180deg, #f5ead4 0%, #e4d4b4 100%);
   border: 2px solid var(--border-color);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 2px 2px 0 rgba(0, 0, 0, 0.78);
   color: #000000;
   font-family: var(--font-retro);
   font-size: 17px;
@@ -345,18 +353,19 @@ header.top-bar {
   align-items: center;
   justify-content: center;
   height: 40px;
-  transition: background 0.1s, transform 0.05s, box-shadow 0.1s;
+  transition: background 0.1s, transform 0.06s, box-shadow 0.1s;
   white-space: nowrap;
 }
 
 .retro-btn:hover {
-  background: #fdf5e2;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+  background: linear-gradient(180deg, #fdf5e2 0%, #efe0c0 100%);
+  transform: translateY(-1px);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.75), 3px 3px 0 rgba(0, 0, 0, 0.85);
 }
 
 .retro-btn:active {
   transform: translateY(1px);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.2), 1px 1px 0 rgba(0, 0, 0, 0.8);
 }
 
 .retro-btn.powerup-upg-btn {
@@ -582,6 +591,7 @@ header.top-bar {
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  box-shadow: inset 0 0 24px rgba(100, 80, 45, 0.14);
 }
 
 #game-canvas {
@@ -600,7 +610,9 @@ header.top-bar {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(15, 12, 8, 0.48);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: none;
   justify-content: center;
   align-items: center;
@@ -611,18 +623,57 @@ header.top-bar {
   display: flex;
 }
 
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .retro-modal-window {
   width: 90%;
   max-width: 820px;
   height: 86%;
-  background: var(--bg-retro);
+  background: linear-gradient(180deg, #f1e6cf 0%, var(--bg-retro) 100%);
   border: 3px solid var(--border-color);
-  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), 7px 7px 0px rgba(0, 0, 0, 0.72);
   display: flex;
   flex-direction: column;
   padding: 16px 24px;
   position: relative;
   overflow-y: auto;
+  animation: modalPopIn 0.16s ease-out;
+}
+
+.rebirth-dialog-box {
+  animation: modalPopIn 0.16s ease-out;
+}
+
+/* Clean custom retro scrollbars inside modals */
+.bb-modal-scroll::-webkit-scrollbar,
+.upgrades-content-grid::-webkit-scrollbar,
+.rebirth-desc-text::-webkit-scrollbar,
+.bb-phase-tooltip::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bb-modal-scroll::-webkit-scrollbar-track,
+.upgrades-content-grid::-webkit-scrollbar-track,
+.rebirth-desc-text::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.08);
+  border-left: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.bb-modal-scroll::-webkit-scrollbar-thumb,
+.upgrades-content-grid::-webkit-scrollbar-thumb,
+.rebirth-desc-text::-webkit-scrollbar-thumb,
+.bb-phase-tooltip::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid #000000;
 }
 
 .modal-header-row {
@@ -886,38 +937,90 @@ header.top-bar {
   cursor: not-allowed;
 }
 
-/* Floating All-Phases Tooltip for Power-Up Upgrades */
+.money-balance-pill {
+  background: linear-gradient(180deg, #1ea344 0%, #147a37 100%);
+  color: #ffffff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.55);
+  border: 2px solid #000000;
+  padding: 4px 11px;
+  font-size: 19px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.28), 2px 2px 0 rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+
+[data-currency-tip] {
+  cursor: help;
+}
+
+/* Floating All-Phases & Currency Tooltip (slightly translucent + close X button!) */
 .bb-phase-tooltip {
   position: fixed;
   z-index: 2000;
-  width: 320px;
-  max-width: 90vw;
-  background: #141414;
+  width: 310px;
+  max-width: 88vw;
+  max-height: 78vh;
+  max-height: 78dvh;
+  overflow-y: auto;
+  background: rgba(18, 18, 22, 0.87);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   color: #f8fafc;
-  border: 3px solid #f59e0b;
-  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.75);
-  padding: 10px 12px;
+  border: 2px solid #f59e0b;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.65);
+  padding: 9px 11px;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.12s ease;
   font-family: var(--font-retro);
   font-size: 16px;
-  line-height: 1.3;
+  line-height: 1.28;
 }
 
 .bb-phase-tooltip.visible {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
-.bb-phase-tooltip-title {
-  font-size: 20px;
-  font-weight: bold;
-  color: #fde047;
+.bb-phase-tooltip-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px dashed rgba(250, 204, 21, 0.45);
   padding-bottom: 4px;
   margin-bottom: 6px;
+}
+
+.bb-phase-tooltip-title {
+  font-size: 19px;
+  font-weight: bold;
+  color: #fde047;
+  line-height: 1.15;
+}
+
+.tooltip-close-x {
+  background: rgba(239, 68, 68, 0.9);
+  color: #ffffff;
+  border: 1.5px solid #000000;
+  font-family: var(--font-retro);
+  font-size: 15px;
+  font-weight: bold;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tooltip-close-x:hover {
+  background: #ef4444;
 }
 
 .bb-phase-row {
@@ -930,13 +1033,13 @@ header.top-bar {
 .bb-phase-row.unlocked {
   border-left-color: #2cd64e;
   color: #bbf7d0;
-  background: rgba(44, 214, 78, 0.1);
+  background: rgba(44, 214, 78, 0.12);
 }
 
 .bb-phase-row.next-phase {
   border-left-color: #f59e0b;
   color: #fef08a;
-  background: rgba(245, 158, 11, 0.14);
+  background: rgba(245, 158, 11, 0.16);
 }
 
 .discount-banner {
@@ -956,13 +1059,77 @@ header.top-bar {
   animation: pulse-rebirth 0.9s infinite;
 }
 
+.bb-modal-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bb-section-heading {
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 0.6px;
+  padding: 5px 10px;
+  background: #e2d2b1;
+  border: 2px solid #000000;
+  color: #111111;
+}
+
+.bt-section-heading {
+  background: linear-gradient(90deg, #3b0a18, #581224);
+  color: #fde047;
+  margin-top: 4px;
+}
+
 .bb-upgrades-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 2px;
+  padding: 2px;
+}
+
+.bt-upgrade-card {
+  border-color: #7f1d1d;
+  background: #f8ecd9;
+}
+
+.ball-bt-btn {
+  width: 100%;
+  max-width: 140px;
+  border: 2px solid #000000;
+  background: #2b0b14;
+  color: #fde047;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.05s;
+}
+
+.ball-bt-btn .btn-top-info {
+  color: #fde047;
+}
+
+.ball-bt-btn .btn-cost-bottom {
+  background: var(--gray-btn);
+  color: #000000;
+}
+
+.ball-bt-btn.affordable .btn-cost-bottom {
+  background: #f59e0b;
+  color: #000000;
+}
+
+.ball-bt-btn.maxed-upg-btn .btn-cost-bottom {
+  background: #2cd64e;
+  color: #000000;
+}
+
+.ball-bt-btn:disabled:not(.maxed-upg-btn) {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .bb-upgrade-card {
@@ -1223,7 +1390,7 @@ header.top-bar {
   }
 
   .ball-buy-slot {
-    width: 48px;
+    width: 43px;
     height: 44px;
     padding-top: 2px;
   }
@@ -1344,11 +1511,39 @@ header.top-bar {
     padding: 2px 8px;
   }
 
+  .money-balance-pill,
   .bb-balance-pill,
   .token-count-pill,
   .token-exchange-btn {
     font-size: 14px;
     padding: 2px 7px;
+  }
+
+  /* Compact, slightly translucent phase tooltip on mobile landscape */
+  .bb-phase-tooltip {
+    width: 248px;
+    max-width: 58vw;
+    max-height: 68%;
+    max-height: 68dvh;
+    padding: 6px 8px;
+    font-size: 13px;
+    line-height: 1.18;
+    background: rgba(18, 18, 22, 0.86);
+  }
+
+  .bb-phase-tooltip-title {
+    font-size: 15px;
+  }
+
+  .bb-phase-row {
+    padding: 2px 4px;
+    margin-bottom: 2px;
+  }
+
+  .tooltip-close-x {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
   }
 
   .bb-upgrades-grid {

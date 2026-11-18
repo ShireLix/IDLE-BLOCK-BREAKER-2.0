@@ -173,14 +173,69 @@ const BB_UPGRADE_CATALOG = [
       '4x jutalom (2x gyakorisággal).',
       '3 percenként garantáltan megjelenik egy coin.',
       'A coin automatikusan begyűjtődik kattintás nélkül!',
-      'Minden coin véletlenszerűen 1–3 BB valutát is ad!'
+      'Minden begyűjtött coin fixen +1 BB valutát is ad!'
+    ]
+  }
+];
+
+// Boss Token (BT) alapú Labda Képesség Fejlesztések (Rebirth után is megmaradnak!)
+const BT_ABILITY_CATALOG = [
+  {
+    key: 'poison',
+    icon: '☠️',
+    name: 'Poison Ball – Méreg',
+    baseDesc: 'Alap: azonnali Power sebzés + 1 dmg/mp 10 mp-ig (blokkon nem stackelődik, csak Boss-on).',
+    costs: [3, 10, 50],
+    levels: [
+      '5 dmg/mp méreg 20 másodpercig.',
+      '20 dmg/mp méreg 60 másodpercig.',
+      '25 dmg / 0.3 mp — a blokk teljes megsemmisüléséig aktív marad!'
+    ]
+  },
+  {
+    key: 'ghost',
+    icon: '👻',
+    name: 'Ghostball – Szellembomba',
+    baseDesc: 'Alap: áthalad a blokkokon és sebez (nincs szellembomba).',
+    costs: [3, 20, 50],
+    levels: [
+      'Minden 10. mp-ben ledob egy szellemet (3×3 kráter, 1 mp múlva robban, 50 sebzés).',
+      'Minden 5. mp-ben ledob egy szellemet (5×5 kráter, 1 mp múlva robban, 50 sebzés).',
+      'Minden 1. mp-ben ledob egy szellemet (5×5 kráter, 1 mp múlva robban, 50 sebzés)!'
+    ]
+  },
+  {
+    key: 'multiply',
+    icon: '🟣',
+    name: 'Multiply Ball – Osztódás',
+    baseDesc: 'Alap: 1 nagy (10) ➔ 2 közepes (5) labdára osztódik (5 mp-ig élnek).',
+    costs: [3, 20, 50],
+    levels: [
+      'A 2 közepes tovább osztódik 4 kisebb (2 dmg) labdára (5 mp).',
+      '1 nagy ➔ 2 közepes ➔ 4 kisebb ➔ 8 nagyon kicsi (1 dmg) labda (5 mp).',
+      'A 8 nagyon kicsi még 2-2 felé osztódik: 16 mini (0.5 dmg) labda (5 mp)!'
+    ]
+  },
+  {
+    key: 'rocket',
+    icon: '🚀',
+    name: 'Rocket Ball – Önirányítás',
+    baseDesc: 'Alap: minden 10 mp-ben kilő egy rakétát véletlenszerű irányba.',
+    costs: [10],
+    levels: [
+      'Beméri a labdához legközelebbi blokkot, és 3 mp-enként önirányító rakétát lő rá!'
     ]
   }
 ];
 
 class IdleBreakoutGame {
   constructor() {
-    this.SAVE_KEY = 'idle_breakout_classic_v2';
+    // Új mentési kulcs (v3): a régi v2-es mentések egyszer, most automatikusan törlődnek mindenkinél,
+    // de minden későbbi frissítésnél (amíg v3 marad) a játékosok haladása megmarad!
+    this.SAVE_KEY = 'idle_breakout_classic_v3';
+    try {
+      localStorage.removeItem('idle_breakout_classic_v2');
+    } catch (e) {}
 
     // Core Game State
     this.money = 0;
@@ -206,6 +261,14 @@ class IdleBreakoutGame {
       autoClicker: 0,
       discount: 0,
       quickTimeMoney: 0
+    };
+
+    // Permanent BT Ball Ability Upgrades
+    this.btUpgrades = {
+      poison: 0,   // 0..3 (3, 10, 50 BT)
+      ghost: 0,    // 0..3 (3, 20, 50 BT)
+      multiply: 0, // 0..3 (3, 20, 50 BT)
+      rocket: 0    // 0..1 (10 BT)
     };
 
     // Pierce Ball separate $ speed upgrade (unlocked at bbUpgrades.piercing >= 5)
@@ -259,48 +322,48 @@ class IdleBreakoutGame {
         powerBaseCost: 500,
         radius: 6.5
       },
-      poison: {
-        id: 'poison',
-        name: 'POISON BALL',
-        shortDesc: '1.5x sebesség, 1 sebzés/mp méreg',
-        color: '#22c55e',
+      heavy: {
+        id: 'heavy',
+        name: 'HEAVY BALL',
+        shortDesc: '0.5x sebesség, 20 alap sebzés (nincs BT upg)',
+        color: '#dc2626',
         count: 0,
         baseCost: 750,
         costMult: 1.20,
-        speedFactor: 1.5,
-        basePower: 1.0, // 1 dmg/s base
-        powerStep: 1.0,
+        speedFactor: 0.5,
+        basePower: 20.0, // Már az 1. szinten 20-at sebez!
+        powerStep: 10.0,
         speedLevel: 1,
-        maxSpeedLevel: 40,
+        maxSpeedLevel: 35,
         speedBaseCost: 1200,
         powerLevel: 1,
         maxPowerLevel: 50,
         powerBaseCost: 2000,
-        radius: 7.5
+        radius: 10.0
       },
-      heavy: {
-        id: 'heavy',
-        name: 'HEAVY BALL',
-        shortDesc: '0.5x sebesség, 5 sebzés/mp',
-        color: '#dc2626',
+      poison: {
+        id: 'poison',
+        name: 'POISON BALL',
+        shortDesc: '1.5x sebesség, azonnali sebzés + BT méreg',
+        color: '#22c55e',
         count: 0,
         baseCost: 3000,
         costMult: 1.22,
-        speedFactor: 0.5,
-        basePower: 5.0, // 5 dmg/s base
-        powerStep: 3.0,
+        speedFactor: 1.5,
+        basePower: 1.0, // Csak az azonnali becsapódás sebzése (pl. lvl 23 = 23 dmg)
+        powerStep: 1.0,
         speedLevel: 1,
-        maxSpeedLevel: 35,
+        maxSpeedLevel: 40,
         speedBaseCost: 4000,
         powerLevel: 1,
         maxPowerLevel: 50,
         powerBaseCost: 7500,
-        radius: 10.0
+        radius: 7.5
       },
       ghost: {
         id: 'ghost',
         name: 'GHOSTBALL',
-        shortDesc: '1x sebesség, áthalad a blokkokon (max 40 db)',
+        shortDesc: '1x sebesség, áthalad + BT szellembomba (max 40)',
         color: '#c8f4ff',
         count: 0,
         baseCost: 45000,
@@ -319,7 +382,7 @@ class IdleBreakoutGame {
       multiply: {
         id: 'multiply',
         name: 'MULTIPLY BALL',
-        shortDesc: '1x sebesség, 10→5→2→1 osztódás (max 15 / 100-nál 25 db)',
+        shortDesc: '1x sebesség, osztódik (BT: 2→4→8→16, 5 mp)',
         color: '#d900b8',
         count: 0,
         baseCost: 65000,
@@ -334,6 +397,25 @@ class IdleBreakoutGame {
         maxPowerLevel: 40,
         powerBaseCost: 65000,
         radius: 9.0
+      },
+      rocket: {
+        id: 'rocket',
+        name: 'ROCKET BALL',
+        shortDesc: '1x sebesség, 10 mp-ként rakéta (10 BT: 3 mp homing)',
+        color: '#f97316',
+        count: 0,
+        baseCost: 90000,
+        costMult: 1.28,
+        speedFactor: 1.0,
+        basePower: 8.0,
+        powerStep: 4.0,
+        speedLevel: 1,
+        maxSpeedLevel: 40,
+        speedBaseCost: 60000,
+        powerLevel: 1,
+        maxPowerLevel: 50,
+        powerBaseCost: 90000,
+        radius: 8.5
       }
     };
 
@@ -344,6 +426,10 @@ class IdleBreakoutGame {
     this.floatingTexts = [];
     this.visualRings = []; // Click area ripples, auto-clicker pings, shockwave rings
     this.bossSparks = [];
+    this.ghostBombs = [];  // Ghostball BT bomb entities
+    this.rockets = [];     // Rocket Ball missile projectiles
+    this.gridCellW = 60;
+    this.gridCellH = 34;
 
     // Active Power-ups System
     // Entry shape: { id, icon, name, desc, mode: 'timed'|'rounds'|'until_rebirth', duration, maxDuration, roundsLeft, maxRounds, extra: {} }
@@ -352,12 +438,6 @@ class IdleBreakoutGame {
     // Tickers
     this.shockwaveTimer = 0;
     this.autoClickerTimer = 0;
-    this.dotTimer = 0; // Poison & Heavy 1s DoT ticker
-
-    // Ball Army state
-    this.ballArmyActive = false;
-    this.ballArmyY = 0;
-    this.ballArmyDir = -1;
 
     // Quick Time Money (Coin Orb) Event
     this.bonusOrb = null;
@@ -588,8 +668,8 @@ class IdleBreakoutGame {
         bossNumber: this.getBossNumberForLevel(lvl),
         flash: 0,
         shake: 0,
-        poisonDps: 0,
-        heavyDps: 0
+        poison: null,
+        poisonStacks: [] // Boss blokkokon a méreg stackelődhet!
       });
 
       // Ha a Boss spawnolásakor bármelyik labda a Boss helyén (vagy túl közel) van,
@@ -607,6 +687,8 @@ class IdleBreakoutGame {
 
     const brickW = arenaW / cols;
     const brickH = arenaH / rows;
+    this.gridCellW = brickW;
+    this.gridCellH = brickH;
     const blockHp = lvl;
 
     // Kizárólag a legalsó sor marad üresen (r < rows - 1), a labdák pozícióját nem kerüli ki!
@@ -627,8 +709,8 @@ class IdleBreakoutGame {
           isGoldBoss: false,
           flash: 0,
           shake: 0,
-          poisonDps: 0,
-          heavyDps: 0
+          poison: null,      // Normál blokkon egyszerre csak 1 méreg lehet!
+          poisonStacks: null
         });
       }
     }
@@ -672,12 +754,6 @@ class IdleBreakoutGame {
           ball.vy = Math.abs(ball.vy || ball.speed * 0.7);
         }
       }
-    }
-
-    // Ha Ball Army aktív és a vonala pont a Bosson belülre esne, toljuk a Boss alá!
-    if (this.ballArmyActive && this.ballArmyY > by - 14 && this.ballArmyY < by + bh + 14) {
-      this.ballArmyY = Math.min(arenaBottom - 14, by + bh + 18);
-      this.ballArmyDir = 1;
     }
   }
 
@@ -877,7 +953,6 @@ class IdleBreakoutGame {
       { id: 'speed_boost',  weight: 0.65 },
       { id: 'auto_clicker', weight: 0.65 },
       { id: 'discount',     weight: 0.65 },
-      { id: 'ball_army',    weight: 0.65 },
       { id: 'piercing',     weight: 0.65 },
       { id: 'free_upgrade', weight: 0.65 }
     ].filter(c => {
@@ -997,12 +1072,6 @@ class IdleBreakoutGame {
         break;
       }
 
-      case 'ball_army': {
-        this.startBallArmy(20);
-        this.activatePowerUp('ball_army', '🪖', 'Ball Army', 'A labdák vízszintes falat alkotva egyszerre pattognak fel-le 20 mp-ig!', { mode: 'timed', duration: 20 });
-        break;
-      }
-
       case 'auto_clicker': {
         const lvl = this.bbUpgrades.autoClicker;
         if (lvl >= 5) {
@@ -1113,7 +1182,6 @@ class IdleBreakoutGame {
         if (p.duration <= 0) {
           delete this.activePowerUps[key];
           changed = true;
-          if (key === 'ball_army') this.endBallArmy();
           if (key === 'discount') discountEnded = true;
         }
       }
@@ -1184,53 +1252,259 @@ class IdleBreakoutGame {
     this.damageBrick(target, this.clickPower, 'auto_clicker');
   }
 
-  // --- Ball Army Mechanics (Vízszintes falban, összehangolt fel-le pattogás!) ---
-  startBallArmy(duration = 20) {
-    const armyBalls = this.balls.filter(b => !b.isPiercing);
-    if (armyBalls.length === 0) return;
-
-    this.ballArmyActive = true;
-    const borderWidth = 22;
-    this.ballArmyY = this.height - borderWidth - 26;
-    this.ballArmyDir = -1;
-
-    const usableW = this.width - borderWidth * 2 - 20;
-    const count = armyBalls.length;
-    armyBalls.forEach((b, idx) => {
-      b.x = count === 1
-        ? this.width / 2
-        : borderWidth + 10 + (idx / (count - 1)) * usableW;
-      b.y = this.ballArmyY;
-      b.vx = 0;
-      b.vy = this.ballArmyDir * b.speed;
-    });
+  // --- Poison BT Ability System (Normál blokkon NEM stackelődik, csak Boss-on!) ---
+  getPoisonAbilityConfig() {
+    const lvl = this.btUpgrades.poison || 0;
+    if (lvl >= 3) {
+      // 3. fázis (50 BT): 25 dmg / 0.3 mp, amíg a blokk el nem pusztul!
+      return { dmg: 25, interval: 0.3, duration: Infinity, infinite: true, dps: 25 / 0.3 };
+    }
+    if (lvl === 2) {
+      // 2. fázis (10 BT): 20 dmg / mp, 60 mp-ig
+      return { dmg: 20, interval: 1.0, duration: 60, infinite: false, dps: 20 };
+    }
+    if (lvl === 1) {
+      // 1. fázis (3 BT): 5 dmg / mp, 20 mp-ig
+      return { dmg: 5, interval: 1.0, duration: 20, infinite: false, dps: 5 };
+    }
+    // Alap: 1 dmg / mp, 10 mp-ig
+    return { dmg: 1, interval: 1.0, duration: 10, infinite: false, dps: 1 };
   }
 
-  endBallArmy() {
-    if (!this.ballArmyActive) return;
-    this.ballArmyActive = false;
+  applyPoisonToBrick(brick) {
+    if (!brick || brick.hp <= 0) return;
+    const cfg = this.getPoisonAbilityConfig();
 
-    for (const b of this.balls) {
-      if (b.isPiercing) continue;
-      const angle = (Math.random() < 0.5 ? -1 : 1) * (Math.PI * 0.25 + Math.random() * Math.PI * 0.5);
-      b.vx = Math.cos(angle) * b.speed;
-      b.vy = Math.sin(angle) * b.speed;
+    if (brick.isBoss) {
+      // Boss blokkokon a méreg stackelődhet! (max 60 aktív stack a 60 FPS teljesítményért)
+      if (!brick.poisonStacks) brick.poisonStacks = [];
+      if (brick.poisonStacks.length >= 60) {
+        brick.poisonStacks.shift();
+      }
+      brick.poisonStacks.push({
+        dmg: cfg.dmg,
+        interval: cfg.interval,
+        timer: 0,
+        timeLeft: cfg.duration,
+        infinite: cfg.infinite,
+        dps: cfg.dps
+      });
+      return;
+    }
+
+    // Normál blokkon egyszerre CSAK EGY poison lehet:
+    // Ha még nincs rajta, felkerül; ha már van rajta, csak akkor cserélődik le, ha az új ERŐSEBB!
+    if (!brick.poison || cfg.dps > brick.poison.dps) {
+      brick.poison = {
+        dmg: cfg.dmg,
+        interval: cfg.interval,
+        timer: 0,
+        timeLeft: cfg.duration,
+        infinite: cfg.infinite,
+        dps: cfg.dps
+      };
     }
   }
 
-  // --- Poison & Heavy DoT Ticker (1.0 mp-enként) ---
-  updateBrickDoTs(dt) {
-    this.dotTimer += dt;
-    if (this.dotTimer < 1.0) return;
-    this.dotTimer -= 1.0;
-
+  updateBrickPoisons(dt) {
     for (const b of this.bricks) {
       if (b.hp <= 0) continue;
-      let totalDot = 0;
-      if (b.poisonDps > 0) totalDot += b.poisonDps;
-      if (b.heavyDps > 0) totalDot += b.heavyDps;
-      if (totalDot > 0) {
-        this.damageBrick(b, totalDot, 'dot');
+
+      if (b.isBoss && b.poisonStacks && b.poisonStacks.length > 0) {
+        for (let i = b.poisonStacks.length - 1; i >= 0; i--) {
+          const st = b.poisonStacks[i];
+          if (!st.infinite) {
+            st.timeLeft -= dt;
+          }
+          st.timer += dt;
+          while (st.timer >= st.interval && b.hp > 0) {
+            st.timer -= st.interval;
+            this.damageBrick(b, st.dmg, 'dot');
+          }
+          if (!st.infinite && st.timeLeft <= 0) {
+            b.poisonStacks.splice(i, 1);
+          }
+          if (b.hp <= 0) break;
+        }
+      } else if (b.poison) {
+        const p = b.poison;
+        if (!p.infinite) {
+          p.timeLeft -= dt;
+        }
+        p.timer += dt;
+        while (p.timer >= p.interval && b.hp > 0) {
+          p.timer -= p.interval;
+          this.damageBrick(b, p.dmg, 'dot');
+        }
+        if (!p.infinite && p.timeLeft <= 0) {
+          b.poison = null;
+        }
+      }
+    }
+  }
+
+  // --- Ghostball BT Bomb System (3 BT: 10s 3x3, 20 BT: 5s 5x5, 50 BT: 1s 5x5, 1 mp múlva 50 dmg!) ---
+  getGhostAbilityConfig() {
+    const lvl = this.btUpgrades.ghost || 0;
+    if (lvl >= 3) return { cooldown: 1.0, gridSpan: 5, fuse: 1.0, dmg: 50 };
+    if (lvl === 2) return { cooldown: 5.0, gridSpan: 5, fuse: 1.0, dmg: 50 };
+    if (lvl === 1) return { cooldown: 10.0, gridSpan: 3, fuse: 1.0, dmg: 50 };
+    return null;
+  }
+
+  spawnGhostBomb(x, y, cfg) {
+    if (this.ghostBombs.length >= 45) return; // teljesítmény védelem
+    const halfW = (this.gridCellW || 60) * (cfg.gridSpan / 2);
+    const halfH = (this.gridCellH || 34) * (cfg.gridSpan / 2);
+
+    this.ghostBombs.push({
+      x,
+      y,
+      fuse: cfg.fuse,
+      maxFuse: cfg.fuse,
+      gridSpan: cfg.gridSpan,
+      halfW,
+      halfH,
+      dmg: cfg.dmg
+    });
+  }
+
+  updateGhostBombs(dt) {
+    for (let i = this.ghostBombs.length - 1; i >= 0; i--) {
+      const bomb = this.ghostBombs[i];
+      bomb.fuse -= dt;
+      if (bomb.fuse <= 0) {
+        // Detonate! Minden kráterben (3x3 vagy 5x5) lévő blokk kap 50 sebzést!
+        const left = bomb.x - bomb.halfW;
+        const right = bomb.x + bomb.halfW;
+        const top = bomb.y - bomb.halfH;
+        const bottom = bomb.y + bomb.halfH;
+
+        for (const b of this.bricks) {
+          if (b.hp <= 0) continue;
+          const overlaps = (b.x < right && b.x + b.w > left && b.y < bottom && b.y + b.h > top);
+          if (overlaps) {
+            this.damageBrick(b, bomb.dmg, 'ghost');
+          }
+        }
+
+        if (!this.suppressAudioAndVisuals) {
+          const visR = Math.max(bomb.halfW, bomb.halfH);
+          this.visualRings.push({ x: bomb.x, y: bomb.y, radius: 10, maxRadius: visR, alpha: 0.9, color: '56, 189, 248', speed: visR * 3.5 });
+        }
+        this.ghostBombs.splice(i, 1);
+      }
+    }
+  }
+
+  // --- Rocket Ball Missile System (Alap: 10 mp random | 10 BT: 3 mp legközelebbi blokk homing!) ---
+  findNearestBrickTo(x, y) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const b of this.bricks) {
+      if (b.hp <= 0) continue;
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      const d = Math.hypot(cx - x, cy - y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  spawnRocketFromBall(ball) {
+    if (this.rockets.length >= 80) return;
+    const isHoming = (this.btUpgrades.rocket || 0) >= 1;
+    let angle = Math.random() * Math.PI * 2;
+    let target = null;
+
+    if (isHoming) {
+      target = this.findNearestBrickTo(ball.x, ball.y);
+      if (target) {
+        angle = Math.atan2((target.y + target.h / 2) - ball.y, (target.x + target.w / 2) - ball.x);
+      }
+    }
+
+    const rocketSpeed = 9.5;
+    this.rockets.push({
+      x: ball.x,
+      y: ball.y,
+      vx: Math.cos(angle) * rocketSpeed,
+      vy: Math.sin(angle) * rocketSpeed,
+      speed: rocketSpeed,
+      power: Math.max(10, ball.power * 3),
+      splashPower: Math.max(4, ball.power),
+      homing: isHoming,
+      target,
+      life: 4.5
+    });
+  }
+
+  updateRockets(dt) {
+    const borderWidth = 18;
+    const arenaLeft = borderWidth;
+    const arenaRight = this.width - borderWidth;
+    const arenaTop = borderWidth;
+    const arenaBottom = this.height - borderWidth;
+
+    for (let i = this.rockets.length - 1; i >= 0; i--) {
+      const r = this.rockets[i];
+      r.life -= dt;
+      if (r.life <= 0) {
+        this.rockets.splice(i, 1);
+        continue;
+      }
+
+      if (r.homing) {
+        if (!r.target || r.target.hp <= 0) {
+          r.target = this.findNearestBrickTo(r.x, r.y);
+        }
+        if (r.target) {
+          const tx = r.target.x + r.target.w / 2;
+          const ty = r.target.y + r.target.h / 2;
+          const targetAngle = Math.atan2(ty - r.y, tx - r.x);
+          r.vx = Math.cos(targetAngle) * r.speed;
+          r.vy = Math.sin(targetAngle) * r.speed;
+        }
+      }
+
+      r.x += r.vx * dt * 60;
+      r.y += r.vy * dt * 60;
+
+      // Out of bounds removal
+      if (r.x < arenaLeft || r.x > arenaRight || r.y < arenaTop || r.y > arenaBottom) {
+        this.rockets.splice(i, 1);
+        continue;
+      }
+
+      // Brick hit check
+      let exploded = false;
+      for (const b of this.bricks) {
+        if (b.hp <= 0) continue;
+        if (r.x >= b.x - 5 && r.x <= b.x + b.w + 5 && r.y >= b.y - 5 && r.y <= b.y + b.h + 5) {
+          this.damageBrick(b, r.power, 'rocket');
+          // Small rocket splash radius
+          const splashR = 40;
+          for (const nb of this.bricks) {
+            if (nb === b || nb.hp <= 0) continue;
+            const ncx = nb.x + nb.w / 2;
+            const ncy = nb.y + nb.h / 2;
+            if (Math.hypot(ncx - r.x, ncy - r.y) <= splashR) {
+              this.damageBrick(nb, r.splashPower, 'rocket');
+            }
+          }
+          if (!this.suppressAudioAndVisuals) {
+            this.visualRings.push({ x: r.x, y: r.y, radius: 5, maxRadius: 42, alpha: 0.95, color: '249, 115, 22', speed: 220 });
+          }
+          exploded = true;
+          break;
+        }
+      }
+
+      if (exploded) {
+        this.rockets.splice(i, 1);
       }
     }
   }
@@ -1380,7 +1654,7 @@ class IdleBreakoutGame {
 
     let bbBonusText = '';
     if (qtmLvl >= 5) {
-      const bbGain = 1 + Math.floor(Math.random() * 3); // 1–3 BB véletlenszerűen!
+      const bbGain = 1; // Fix +1 BB minden begyűjtött coin után!
       this.bb += bbGain;
       bbBonusText = ` +${bbGain} BB ⭐`;
     }
@@ -1494,24 +1768,32 @@ class IdleBreakoutGame {
       isSplitChild: false,
       splitTier: 0,
       splitCooldown: 0,
-      ghostHitSet: typeKey === 'ghost' ? new Set() : null
+      ghostHitSet: typeKey === 'ghost' ? new Set() : null,
+      ghostBombTimer: 0,
+      rocketTimer: 0
     });
   }
 
-  // Multiply Ball Split (Main: 10 dmg permanent -> 2x 5 dmg 10s -> 4x 2 dmg 10s -> 8x 1 dmg 10s)
-  spawnMultiplyChildren(parentBall) {
-    const nextTier = (parentBall.splitTier || 0) + 1;
-    if (nextTier > 3) return;
+  // Multiply Ball Split (BT fejleszthető: Alap 2 -> 3 BT: 4 -> 20 BT: 8 -> 50 BT: 16; minden osztódott 5 mp-ig él!)
+  getMultiplyMaxSplitTier() {
+    return 1 + (this.btUpgrades.multiply || 0);
+  }
 
-    // Performance cap: max 120 active multiply mini-balls
+  spawnMultiplyChildren(parentBall) {
+    const maxTier = this.getMultiplyMaxSplitTier();
+    const nextTier = (parentBall.splitTier || 0) + 1;
+    if (nextTier > maxTier) return;
+
+    // Performance cap: max 160 active multiply mini-balls
     const currentChildren = this.balls.filter(b => b.isSplitChild).length;
-    if (currentChildren >= 120) return;
+    if (currentChildren >= 160) return;
 
     const bDef = this.ballTypes.multiply;
-    const powerScale = this.getBallPower('multiply') / bDef.basePower; // scales with Multiply Power upgrade!
-    const tierBaseDamages = [10, 5, 2, 1];
-    const tierRadii = [9.0, 6.8, 5.4, 4.2];
-    const childDmg = tierBaseDamages[nextTier] * powerScale;
+    const powerScale = this.getBallPower('multiply') / bDef.basePower;
+    const tierBaseDamages = [10, 5, 2, 1, 0.5];
+    const tierRadii = [9.0, 6.8, 5.4, 4.3, 3.4];
+    const tierColors = ['#d900b8', '#f038d0', '#ff70e5', '#ffb8f2', '#ffe0fa'];
+    const childDmg = (tierBaseDamages[nextTier] ?? 0.5) * powerScale;
     const childSpeed = this.getBallSpeed('multiply') * (1 + nextTier * 0.06);
 
     const baseAngle = Math.atan2(parentBall.vy, parentBall.vx);
@@ -1521,19 +1803,19 @@ class IdleBreakoutGame {
       const a = baseAngle + off;
       this.balls.push({
         type: 'multiply',
-        color: nextTier === 1 ? '#f038d0' : (nextTier === 2 ? '#ff70e5' : '#ffb8f2'),
+        color: tierColors[nextTier] || '#ffe0fa',
         x: parentBall.x,
         y: parentBall.y,
         vx: Math.cos(a) * childSpeed,
         vy: Math.sin(a) * childSpeed,
-        radius: tierRadii[nextTier],
+        radius: tierRadii[nextTier] || 3.4,
         power: childDmg,
         speed: childSpeed,
         isPiercing: false,
         isSplitChild: true,
         splitTier: nextTier,
         hasSplit: false,
-        timeLeft: 10.0 // 10 másodpercig van a pályán
+        timeLeft: 5.0 // 5 másodperc múlva eltűnnek az osztódások!
       });
     }
   }
@@ -1655,12 +1937,12 @@ class IdleBreakoutGame {
 
       const newPower = this.getBallPower(typeKey);
       const multScale = newPower / bDef.basePower;
-      const tierBaseDamages = [10, 5, 2, 1];
+      const tierBaseDamages = [10, 5, 2, 1, 0.5];
 
       this.balls.forEach(ball => {
         if (ball.type === typeKey && !ball.isPiercing) {
           if (ball.isSplitChild) {
-            ball.power = (tierBaseDamages[ball.splitTier] || 1) * multScale;
+            ball.power = (tierBaseDamages[ball.splitTier] ?? 0.5) * multScale;
           } else {
             ball.power = newPower;
           }
@@ -1759,6 +2041,41 @@ class IdleBreakoutGame {
     }
   }
 
+  // --- BT Ball Ability Upgrade System (Boss Tokenből vásárolható, Rebirth után is megmarad!) ---
+  getBTAbilityCatalogItem(key) {
+    return BT_ABILITY_CATALOG.find(item => item.key === key) || null;
+  }
+
+  isBallBaseMaxed(key) {
+    const b = this.ballTypes[key];
+    if (!b) return false;
+    return b.speedLevel >= b.maxSpeedLevel && b.powerLevel >= b.maxPowerLevel;
+  }
+
+  buyBTAbilityUpgrade(key) {
+    const item = this.getBTAbilityCatalogItem(key);
+    if (!item) return;
+
+    // Csak akkor lehet BT fejlesztést venni a labdára, ha az összes alap fejlesztése (Speed & Power) ki van maxolva!
+    if (!this.isBallBaseMaxed(key)) return;
+
+    const currentLvl = this.btUpgrades[key] || 0;
+    if (currentLvl >= item.costs.length) return; // Max szint!
+
+    const cost = item.costs[currentLvl];
+    if (this.bossTokens < cost) return; // Egyenleg ellenőrzés!
+
+    this.bossTokens -= cost;
+    this.btUpgrades[key] = currentLvl + 1;
+
+    if (window.soundEngine) window.soundEngine.playLevelUp();
+    this.showToast(`👑 <strong>${item.icon} ${item.name}</strong> ➔ <span style="color:#fde047;">Phase ${this.btUpgrades[key]} feloldva!</span>`, 3500);
+    this.updateHUD();
+    this.renderPowerUpUpgradesModal();
+    this.renderUpgradesMenu();
+    this.save();
+  }
+
   // --- Rebirth System ---
   getRequiredRebirthLevel() {
     return (this.rebirthCount + 1) * 20;
@@ -1776,20 +2093,20 @@ class IdleBreakoutGame {
     this.bb += 1;
 
     // Reset run progress completely back to level 1
-    // (BB valuta, Boss Tokenek, BB fejlesztések és a megnövekedett labdaférőhely MEGMARADNAK!)
+    // (BB valuta, Boss Tokenek, BB/BT fejlesztések és a megnövekedett labdaférőhely MEGMARADNAK!)
     this.level = 1;
     this.money = 0;
     this.balls = [];
     this.activePowerUps = {};
-    this.ballArmyActive = false;
     this.nextBossIsGold = false;
     this.bonusOrb = null;
     this.visualRings = [];
     this.bossSparks = [];
+    this.ghostBombs = [];
+    this.rockets = [];
     this.floatingTexts = [];
     this.shockwaveTimer = 0;
     this.autoClickerTimer = 0;
-    this.dotTimer = 0;
     this.isPointerDown = false;
     this.holdDamageTimer = 0;
     this.pierceSpeedUpgradeLevel = 0;
@@ -1968,8 +2285,10 @@ class IdleBreakoutGame {
       }
     }
 
-    // 4. Update Brick DoTs (Poison & Heavy 1s ticks)
-    this.updateBrickDoTs(dt);
+    // 4. Update Brick Poisons, Ghost Bombs & Flying Rockets
+    this.updateBrickPoisons(dt);
+    this.updateGhostBombs(dt);
+    this.updateRockets(dt);
 
     // 5. Update Balls
     this.updateBalls(dt);
@@ -2143,24 +2462,13 @@ class IdleBreakoutGame {
     const arenaBottom = this.height - borderWidth;
 
     const speedMult = this.getSpeedBoostMultiplier();
-
-    // Update synchronized Ball Army Y movement if active
-    if (this.ballArmyActive) {
-      const armySpeed = this.BASE_SPEED * 1.25 * speedMult;
-      this.ballArmyY += this.ballArmyDir * armySpeed * dt * 60;
-      if (this.ballArmyY - 10 <= arenaTop) {
-        this.ballArmyY = arenaTop + 10;
-        this.ballArmyDir = 1;
-      } else if (this.ballArmyY + 10 >= arenaBottom) {
-        this.ballArmyY = arenaBottom - 10;
-        this.ballArmyDir = -1;
-      }
-    }
+    const ghostCfg = this.getGhostAbilityConfig();
+    const rocketCooldown = (this.btUpgrades.rocket || 0) >= 1 ? 3.0 : 10.0;
 
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
 
-      // Temporary ball lifespans (Pierce Ball temporary & Multiply split children = 10s)
+      // Temporary ball lifespans (Pierce Ball temporary & Multiply split children = 5s)
       if ((ball.isPiercing && !ball.isPermanentPierce) || ball.isSplitChild) {
         ball.timeLeft -= dt;
         if (ball.timeLeft <= 0) {
@@ -2172,31 +2480,23 @@ class IdleBreakoutGame {
       if (ball.splitCooldown > 0) {
         ball.splitCooldown = Math.max(0, ball.splitCooldown - dt);
       }
-      if (ball.armyHitCooldown > 0) {
-        ball.armyHitCooldown = Math.max(0, ball.armyHitCooldown - dt);
+
+      // Ghostball BT szellembomba időzítő (10 mp / 5 mp / 1 mp)
+      if (ball.type === 'ghost' && ghostCfg) {
+        ball.ghostBombTimer = (ball.ghostBombTimer || 0) + dt;
+        if (ball.ghostBombTimer >= ghostCfg.cooldown) {
+          ball.ghostBombTimer -= ghostCfg.cooldown;
+          this.spawnGhostBomb(ball.x, ball.y, ghostCfg);
+        }
       }
 
-      // Ball Army Mode: Non-piercing balls move together in a flat horizontal line up & down!
-      if (this.ballArmyActive && !ball.isPiercing) {
-        ball.y = this.ballArmyY;
-        ball.vx = 0;
-        ball.vy = this.ballArmyDir * ball.speed;
-
-        if ((ball.armyHitCooldown || 0) <= 0) {
-          for (const brick of this.bricks) {
-            if (brick.hp <= 0) continue;
-            const cx = Math.max(brick.x, Math.min(ball.x, brick.x + brick.w));
-            const cy = Math.max(brick.y, Math.min(ball.y, brick.y + brick.h));
-            const dx = ball.x - cx;
-            const dy = ball.y - cy;
-            if (dx * dx + dy * dy < ball.radius * ball.radius) {
-              ball.armyHitCooldown = 0.12;
-              this.handleBallBrickImpact(ball, brick);
-              break;
-            }
-          }
+      // Rocket Ball rakétakilövő időzítő (Alap: 10 mp random | 10 BT: 3 mp önirányító!)
+      if (ball.type === 'rocket') {
+        ball.rocketTimer = (ball.rocketTimer || 0) + dt;
+        if (ball.rocketTimer >= rocketCooldown) {
+          ball.rocketTimer -= rocketCooldown;
+          this.spawnRocketFromBall(ball);
         }
-        continue;
       }
 
       const effectiveSpeed = ball.speed * speedMult;
@@ -2324,23 +2624,26 @@ class IdleBreakoutGame {
 
   handleBallBrickImpact(ball, brick) {
     if (ball.type === 'poison') {
-      // Applies Poison DoT (1 dmg/s base, scales with Poison Power upgrades)
-      brick.poisonDps = Math.max(brick.poisonDps || 0, ball.power);
+      // A $ Power fejlesztés CSAK az azonnali sebzésre vonatkozik (pl. lvl 23 = 23 dmg),
+      // a méreg (dmg/s + időtartam) pedig a BT fejlesztésből jön!
       this.damageBrick(brick, ball.power, 'poison');
+      if (brick.hp > 0) {
+        this.applyPoisonToBrick(brick);
+      }
     } else if (ball.type === 'heavy') {
-      // Heavy Ball: 5 dmg/s base + heavy crush impact
-      brick.heavyDps = Math.max(brick.heavyDps || 0, ball.power);
+      // Heavy Ball: lassú, de az 1. szinttől 20+ azonnali sebzés (nincs BT upgrade)
       this.damageBrick(brick, ball.power, 'heavy');
     } else if (ball.type === 'multiply') {
       this.damageBrick(brick, ball.power, 'multiply');
+      const maxTier = this.getMultiplyMaxSplitTier();
       if (!ball.isSplitChild) {
-        // Main Multiply Ball never disappears; splits on hit with short cooldown
+        // Fő Multiply labda soha nem tűnik el; osztódás rövid cooldownnal
         if ((ball.splitCooldown || 0) <= 0) {
           ball.splitCooldown = 1.4;
           this.spawnMultiplyChildren(ball);
         }
-      } else if (!ball.hasSplit && ball.splitTier < 3) {
-        // Split children split once on brick hit (2 -> 4 -> 8)
+      } else if (!ball.hasSplit && ball.splitTier < maxTier) {
+        // Az osztódott labdák a BT szinttől függően osztódnak tovább (2 -> 4 -> 8 -> 16)
         ball.hasSplit = true;
         this.spawnMultiplyChildren(ball);
       }
@@ -2528,14 +2831,12 @@ class IdleBreakoutGame {
     ctx.fillStyle = '#ffffff';
     ctx.fillText(`${Math.ceil(hpRatio * 100)}%`, x + w / 2, barY + barH / 2 + 1);
 
-    // DoT badges on Boss if poisoned/heavy-crushed
-    if (b.poisonDps > 0 || b.heavyDps > 0) {
-      const dotBadges = [];
-      if (b.poisonDps > 0) dotBadges.push(`☠️ -${Math.round(b.poisonDps)}/s`);
-      if (b.heavyDps > 0) dotBadges.push(`🔥 -${Math.round(b.heavyDps)}/s`);
+    // Poison stack badge on Boss (Boss blokkon a méreg stackelődik!)
+    if (b.poisonStacks && b.poisonStacks.length > 0) {
+      const totalDps = b.poisonStacks.reduce((sum, st) => sum + (st.dps || 0), 0);
       ctx.font = 'bold 16px "VT323", "Courier New", Courier, monospace';
       ctx.fillStyle = '#86efac';
-      ctx.fillText(dotBadges.join('   '), x + w / 2, y + h * 0.87);
+      ctx.fillText(`☠️ MÉREG x${b.poisonStacks.length} (-${Math.round(totalDps)}/s)`, x + w / 2, y + h * 0.87);
     }
 
     ctx.restore();
@@ -2598,14 +2899,18 @@ class IdleBreakoutGame {
         this.ctx.fillStyle = b.flash > 0 ? '#ffffff' : this.getBlockColor(b.hp);
         this.ctx.fillRect(b.x, b.y, b.w, b.h);
 
-        // Poison / Heavy DoT subtle corner tint
-        if (b.poisonDps > 0) {
-          this.ctx.fillStyle = 'rgba(34, 197, 94, 0.35)';
-          this.ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, 5);
+        // Finom retro 3D fényél és alsó árnyék a téglákon
+        if (b.flash <= 0) {
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+          this.ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, 3);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+          this.ctx.fillRect(b.x + 2, b.y + b.h - 5, b.w - 4, 3);
         }
-        if (b.heavyDps > 0) {
-          this.ctx.fillStyle = 'rgba(220, 38, 38, 0.35)';
-          this.ctx.fillRect(b.x + 2, b.y + b.h - 7, b.w - 4, 5);
+
+        // Poison subtle top tint (normál blokkon max 1 méreg)
+        if (b.poison) {
+          this.ctx.fillStyle = b.poison.infinite ? 'rgba(16, 185, 129, 0.6)' : 'rgba(34, 197, 94, 0.45)';
+          this.ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, 5);
         }
 
         this.ctx.lineWidth = 2;
@@ -2618,6 +2923,36 @@ class IdleBreakoutGame {
       }
     }
 
+    // 3.4 Draw Ghost Bombs (3x3 / 5x5 crater preview + pulsing spectral ghost!)
+    for (const bomb of this.ghostBombs) {
+      const progress = 1 - Math.max(0, bomb.fuse / Math.max(0.01, bomb.maxFuse));
+      this.ctx.save();
+
+      // Crater zone preview
+      this.ctx.fillStyle = `rgba(56, 189, 248, ${(0.08 + progress * 0.16).toFixed(2)})`;
+      this.ctx.fillRect(bomb.x - bomb.halfW, bomb.y - bomb.halfH, bomb.halfW * 2, bomb.halfH * 2);
+      this.ctx.strokeStyle = `rgba(14, 165, 233, ${(0.45 + progress * 0.5).toFixed(2)})`;
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([5, 4]);
+      this.ctx.strokeRect(bomb.x - bomb.halfW, bomb.y - bomb.halfH, bomb.halfW * 2, bomb.halfH * 2);
+      this.ctx.setLineDash([]);
+
+      // Countdown circle & Ghost icon
+      const orbR = 11 + progress * 5;
+      this.ctx.beginPath();
+      this.ctx.arc(bomb.x, bomb.y, orbR, 0, Math.PI * 2);
+      this.ctx.fillStyle = 'rgba(224, 242, 254, 0.88)';
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#0284c7';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+
+      this.ctx.font = 'bold 15px "VT323", "Courier New", Courier, monospace';
+      this.ctx.fillStyle = '#0369a1';
+      this.ctx.fillText('👻', bomb.x, bomb.y + 1);
+      this.ctx.restore();
+    }
+
     // 3.5 Boss Impact Sparks
     for (const sp of this.bossSparks) {
       this.ctx.save();
@@ -2627,20 +2962,38 @@ class IdleBreakoutGame {
       this.ctx.restore();
     }
 
-    // 4. Draw Balls (All 6 types visually distinct + Pierce Ball)
-    if (this.ballArmyActive) {
-      // Visual laser line connecting the Ball Army wall
+    // 3.6 Flying Rockets (Rocket Ball projectiles)
+    for (const r of this.rockets) {
+      const ang = Math.atan2(r.vy, r.vx);
       this.ctx.save();
-      this.ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
-      this.ctx.lineWidth = 3;
-      this.ctx.setLineDash([6, 4]);
+      this.ctx.translate(r.x, r.y);
+      this.ctx.rotate(ang);
+
+      // Flame exhaust
       this.ctx.beginPath();
-      this.ctx.moveTo(22, this.ballArmyY);
-      this.ctx.lineTo(this.width - 22, this.ballArmyY);
+      this.ctx.moveTo(-14, 0);
+      this.ctx.lineTo(-6, -4);
+      this.ctx.lineTo(-6, 4);
+      this.ctx.closePath();
+      this.ctx.fillStyle = '#fde047';
+      this.ctx.fill();
+
+      // Missile body
+      this.ctx.beginPath();
+      this.ctx.moveTo(9, 0);
+      this.ctx.lineTo(-6, -4.5);
+      this.ctx.lineTo(-6, 4.5);
+      this.ctx.closePath();
+      this.ctx.fillStyle = r.homing ? '#ef4444' : '#f97316';
+      this.ctx.fill();
+      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeStyle = '#000000';
       this.ctx.stroke();
+
       this.ctx.restore();
     }
 
+    // 4. Draw Balls (All 7 types visually distinct + Pierce Ball)
     for (const ball of this.balls) {
       this.ctx.save();
       if (ball.isPiercing) {
@@ -2703,6 +3056,25 @@ class IdleBreakoutGame {
           this.ctx.lineWidth = 1.5;
           this.ctx.stroke();
         }
+      } else if (ball.type === 'rocket') {
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius + 2.5, 0, Math.PI * 2);
+        this.ctx.strokeStyle = (this.btUpgrades.rocket || 0) >= 1 ? 'rgba(239, 68, 68, 0.85)' : 'rgba(249, 115, 22, 0.65)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#f97316';
+        this.ctx.fill();
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius * 0.42, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#fef08a';
+        this.ctx.fill();
       } else {
         this.ctx.beginPath();
         this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
@@ -2760,11 +3132,20 @@ class IdleBreakoutGame {
 
   // --- HUD Updates ---
   updateHUD() {
+    const formattedMoney = Math.floor(this.money).toLocaleString();
     const moneyDisplay = document.getElementById('hud-money-text');
-    if (moneyDisplay) moneyDisplay.textContent = Math.floor(this.money).toLocaleString();
+    if (moneyDisplay) moneyDisplay.textContent = formattedMoney;
+
+    // Folyamatos élő pénzkijelzés mindkét shopban is!
+    const upgMoney = document.getElementById('upg-modal-money');
+    if (upgMoney) upgMoney.textContent = formattedMoney;
+    const bbMoney = document.getElementById('bb-modal-money');
+    if (bbMoney) bbMoney.textContent = formattedMoney;
 
     const bbDisplay = document.getElementById('hud-bb-text');
     if (bbDisplay) bbDisplay.textContent = this.bb.toLocaleString();
+    const bbModalBal = document.getElementById('bb-modal-balance');
+    if (bbModalBal) bbModalBal.textContent = this.bb.toLocaleString();
 
     const btDisplay = document.getElementById('hud-boss-tokens-text');
     if (btDisplay) btDisplay.textContent = this.bossTokens.toLocaleString();
@@ -2871,6 +3252,8 @@ class IdleBreakoutGame {
   // --- $ Upgrades Menu Rendering (Balls + Click Power + Pierce Ball $ Speed Upgrade) ---
   renderUpgradesMenu() {
     this.updateBossTokenExchangeUI();
+    const upgMoney = document.getElementById('upg-modal-money');
+    if (upgMoney) upgMoney.textContent = Math.floor(this.money).toLocaleString();
     const container = document.getElementById('upgrades-content-grid');
     if (!container) return;
     container.innerHTML = '';
@@ -2917,6 +3300,29 @@ class IdleBreakoutGame {
         : (pirateActive ? 'pirate-free' : (canAffordPower ? 'affordable' : ''));
 
       const typeLimit = this.getMaxBallTypeLimit(key);
+      const btItem = this.getBTAbilityCatalogItem(key);
+      const baseMaxed = spdMaxed && pwrMaxed;
+      let btBtnHtml = '';
+      if (btItem) {
+        const btLvl = this.btUpgrades[key] || 0;
+        const btMax = btItem.costs.length;
+        const btIsMax = btLvl >= btMax;
+        const btCost = btIsMax ? null : btItem.costs[btLvl];
+        const canBuyBT = baseMaxed && !btIsMax && this.bossTokens >= btCost;
+        const btCls = btIsMax ? 'maxed-upg-btn' : (canBuyBT ? 'affordable' : '');
+        const bottomLabel = btIsMax
+          ? 'MAX'
+          : (!baseMaxed ? `🔒 MAX Speed+Power (${btCost} BT)` : `${btCost} BT`);
+        btBtnHtml = `
+          <div id="wrap-upg-bt-${key}" style="width:100%; max-width:140px;">
+            <button class="ball-bt-btn ${btCls}" id="btn-upg-bt-${key}" ${(!canBuyBT || btIsMax) ? 'disabled' : ''}>
+              <div class="btn-top-info">👑 Ability ${btLvl}/${btMax}</div>
+              <div class="btn-cost-bottom" style="font-size:${!baseMaxed && !btIsMax ? '12px' : '15px'};">${bottomLabel}</div>
+            </button>
+          </div>
+        `;
+      }
+
       col.innerHTML = `
         <div class="ball-title-label">
           <span style="font-size: 14px; color: #555;">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
@@ -2935,6 +3341,8 @@ class IdleBreakoutGame {
           <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
         </button>
 
+        ${btBtnHtml}
+
         <button class="delete-ball-btn" id="btn-del-ball-${key}">DELETE x1</button>
       `;
 
@@ -2942,6 +3350,25 @@ class IdleBreakoutGame {
 
       if (!spdMaxed) col.querySelector(`#btn-upg-spd-${key}`).addEventListener('click', () => this.upgradeBallSpeed(key));
       if (!pwrMaxed) col.querySelector(`#btn-upg-pwr-${key}`).addEventListener('click', () => this.upgradeBallPower(key));
+      if (btItem) {
+        const btWrap = col.querySelector(`#wrap-upg-bt-${key}`);
+        const btBtn = col.querySelector(`#btn-upg-bt-${key}`);
+        const btLvl = this.btUpgrades[key] || 0;
+        const lockNote = (!baseMaxed && btLvl < btItem.costs.length)
+          ? '🔒 Először maxold ki a labda Speed és Power fejlesztéseit!'
+          : null;
+        if (btWrap) {
+          btWrap.addEventListener('mouseenter', (e) => this.showBBPhaseTooltip(btItem, btLvl, e, 'BT', btItem.costs, lockNote));
+          btWrap.addEventListener('mousemove', (e) => this.positionBBPhaseTooltip(e));
+          btWrap.addEventListener('mouseleave', () => this.hideBBPhaseTooltip());
+        }
+        if (btBtn && baseMaxed && btLvl < btItem.costs.length) {
+          btBtn.addEventListener('click', () => {
+            this.hideBBPhaseTooltip();
+            this.buyBTAbilityUpgrade(key);
+          });
+        }
+      }
       col.querySelector(`#btn-del-ball-${key}`).addEventListener('click', () => this.deleteBall(key));
     }
 
@@ -3001,51 +3428,115 @@ class IdleBreakoutGame {
     if (!clickMaxed) clickCol.querySelector('#btn-upg-click').addEventListener('click', () => this.upgradeClick());
   }
 
-  // --- All-Phases Hover Tooltip for Power-Up Upgrades ---
-  showBBPhaseTooltip(item, curLvl, mouseEvent) {
+  // --- All-Phases & Currency Hover Tooltip (slightly translucent + top-right X button!) ---
+  renderTooltipBox(titleHtml, bodyHtml, mouseEvent) {
     const tooltip = document.getElementById('bb-phase-tooltip');
     if (!tooltip) return;
 
-    let phasesHtml = `<div class="bb-phase-tooltip-title">${item.icon} ${item.name} – Összes Fázis</div>`;
-    phasesHtml += `<div style="font-size:14px; color:#94a3b8; margin-bottom:6px;">${item.baseDesc}</div>`;
+    tooltip.innerHTML = `
+      <div class="bb-phase-tooltip-header">
+        <div class="bb-phase-tooltip-title">${titleHtml}</div>
+        <button class="tooltip-close-x" id="btn-close-tooltip" type="button" aria-label="Bezárás">✕</button>
+      </div>
+      ${bodyHtml}
+    `;
+
+    const closeBtn = tooltip.querySelector('#btn-close-tooltip');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        this.hideBBPhaseTooltip();
+      });
+    }
+
+    tooltip.classList.add('visible');
+    this.positionBBPhaseTooltip(mouseEvent);
+  }
+
+  showBBPhaseTooltip(item, curLvl, mouseEvent, currency = 'BB', costsArr = BB_UPGRADE_COSTS, lockNote = null) {
+    let bodyHtml = `<div style="font-size:13px; color:#94a3b8; margin-bottom:5px;">${item.baseDesc}</div>`;
+    if (lockNote) {
+      bodyHtml += `<div style="font-size:13px; color:#fca5a5; background:rgba(239,68,68,0.18); border-left:3px solid #ef4444; padding:3px 5px; margin-bottom:5px;">${lockNote}</div>`;
+    }
 
     for (let i = 0; i < item.levels.length; i++) {
       const phaseNum = i + 1;
-      const cost = BB_UPGRADE_COSTS[i];
+      const cost = costsArr[i];
       const isUnlocked = curLvl >= phaseNum;
       const isNext = curLvl + 1 === phaseNum;
       const cls = isUnlocked ? 'unlocked' : (isNext ? 'next-phase' : '');
       const prefix = isUnlocked ? '✅ ' : (isNext ? '➔ ' : '🔒 ');
 
-      phasesHtml += `
+      bodyHtml += `
         <div class="bb-phase-row ${cls}">
-          <strong>${prefix}Phase ${phaseNum} (${cost} BB):</strong> ${item.levels[i]}
+          <strong>${prefix}Phase ${phaseNum} (${cost} ${currency}):</strong> ${item.levels[i]}
         </div>
       `;
     }
 
-    tooltip.innerHTML = phasesHtml;
-    tooltip.classList.add('visible');
-    this.positionBBPhaseTooltip(mouseEvent);
+    this.renderTooltipBox(`${item.icon} ${item.name} – Összes Fázis`, bodyHtml, mouseEvent);
+  }
+
+  showCurrencyTooltip(kind, mouseEvent) {
+    const infos = {
+      money: {
+        title: '💵 Pénz ($)',
+        body: `
+          <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> A játék alap fizetőeszköze.</div>
+          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Blokkok és Bossok sebzésével/kiütésével, valamint kerek coinok begyűjtésével.</div>
+          <div class="bb-phase-row"><strong>Mire jó?</strong> Új labdák vásárlására felül, illetve a labdák (Speed, Power) és a Click Power fejlesztésére az <strong>UPGRADES</strong> menüben.</div>
+        `
+      },
+      bb: {
+        title: '⭐ Breakout Badge (BB)',
+        body: `
+          <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> Ritka, <strong>Rebirth után is megmaradó</strong> prémium valuta.</div>
+          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Rebirth-tel (+1 BB), 5 Boss Token beváltásával (5 BT ➔ 1 BB), vagy Lvl 5 Quick Time Money coinokkal.</div>
+          <div class="bb-phase-row"><strong>Mire jó?</strong> Tartós kattintás- és power-up fejlesztésekre a <strong>⚡ POWERUP UPGRADES</strong> menüben (1, 3, 5, 7, 10 BB).</div>
+        `
+      },
+      bt: {
+        title: '👑 Boss Token (BT)',
+        body: `
+          <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> Különleges Boss valuta, amely <strong>Rebirth után is megmarad</strong>!</div>
+          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Minden Boss blokk legyőzése után automatikusan kapsz <strong>+1 BT</strong>-t.</div>
+          <div class="bb-phase-row"><strong>Mire jó?</strong> Beváltóható BB-re (<strong>5 BT ➔ 1 BB</strong>), illetve kimaxolt labdák (Poison, Ghost, Multiply, Rocket) különleges képességeinek fejlesztésére az <strong>UPGRADES</strong> menüben!</div>
+        `
+      }
+    };
+
+    const info = infos[kind];
+    if (!info) return;
+    this.renderTooltipBox(info.title, info.body, mouseEvent);
   }
 
   positionBBPhaseTooltip(mouseEvent) {
     const tooltip = document.getElementById('bb-phase-tooltip');
     if (!tooltip || !tooltip.classList.contains('visible')) return;
 
-    const pad = 14;
+    const pad = 10;
     const tipRect = tooltip.getBoundingClientRect();
-    let x = mouseEvent.clientX + 16;
-    let y = mouseEvent.clientY + 16;
+    const isCompactMobile = window.innerWidth <= 980 || window.innerHeight <= 540;
 
-    if (x + tipRect.width > window.innerWidth - pad) {
-      x = mouseEvent.clientX - tipRect.width - 16;
+    let x, y;
+    if (isCompactMobile) {
+      // Telefonon fektetve mindig a kattintott oldallal ELLENTÉTES szélre helyezzük,
+      // hogy ne takarja ki a képernyő közepét és kényelmesen bezárható legyen az X-szel!
+      const clickOnLeft = (mouseEvent.clientX || 0) < window.innerWidth / 2;
+      x = clickOnLeft ? (window.innerWidth - tipRect.width - pad) : pad;
+      y = Math.max(pad, Math.min(window.innerHeight - tipRect.height - pad, 46));
+    } else {
+      x = mouseEvent.clientX + 16;
+      y = mouseEvent.clientY + 16;
+      if (x + tipRect.width > window.innerWidth - pad) {
+        x = mouseEvent.clientX - tipRect.width - 16;
+      }
+      if (y + tipRect.height > window.innerHeight - pad) {
+        y = window.innerHeight - tipRect.height - pad;
+      }
+      x = Math.max(pad, x);
+      y = Math.max(pad, y);
     }
-    if (y + tipRect.height > window.innerHeight - pad) {
-      y = window.innerHeight - tipRect.height - pad;
-    }
-    x = Math.max(pad, x);
-    y = Math.max(pad, y);
 
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;
@@ -3060,6 +3551,8 @@ class IdleBreakoutGame {
   renderPowerUpUpgradesModal() {
     const balanceEl = document.getElementById('bb-modal-balance');
     if (balanceEl) balanceEl.textContent = this.bb.toLocaleString();
+    const bbMoney = document.getElementById('bb-modal-money');
+    if (bbMoney) bbMoney.textContent = Math.floor(this.money).toLocaleString();
     this.updateBossTokenExchangeUI();
 
     const grid = document.getElementById('bb-upgrades-grid');
@@ -3110,8 +3603,16 @@ class IdleBreakoutGame {
 
       // Hover események az összes fázis megjelenítéséhez (Phase 1..5)
       card.addEventListener('mouseenter', (e) => this.showBBPhaseTooltip(item, curLvl, e));
-      card.addEventListener('mousemove', (e) => this.positionBBPhaseTooltip(e));
-      card.addEventListener('mouseleave', () => this.hideBBPhaseTooltip());
+      card.addEventListener('mousemove', (e) => {
+        if (window.innerWidth > 980 && window.innerHeight > 540) {
+          this.positionBBPhaseTooltip(e);
+        }
+      });
+      card.addEventListener('mouseleave', () => {
+        if (window.innerWidth > 980 && window.innerHeight > 540) {
+          this.hideBBPhaseTooltip();
+        }
+      });
 
       grid.appendChild(card);
 
@@ -3205,6 +3706,7 @@ class IdleBreakoutGame {
 
     if (closeUpgradesBtn && upgradesModal) {
       closeUpgradesBtn.addEventListener('click', () => {
+        this.hideBBPhaseTooltip();
         upgradesModal.classList.remove('open');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
@@ -3238,6 +3740,28 @@ class IdleBreakoutGame {
         exBtn.addEventListener('click', () => this.exchangeBossTokensForBB());
       }
     }
+
+    // Currency Hover / Tap Tooltips ($, BB, BT – mi az és mire jó!)
+    document.querySelectorAll('[data-currency-tip]').forEach((el) => {
+      const kind = el.getAttribute('data-currency-tip');
+      el.addEventListener('mouseenter', (e) => this.showCurrencyTooltip(kind, e));
+      el.addEventListener('mousemove', (e) => {
+        if (window.innerWidth > 980 && window.innerHeight > 540) {
+          this.positionBBPhaseTooltip(e);
+        }
+      });
+      el.addEventListener('mouseleave', () => {
+        if (window.innerWidth > 980 && window.innerHeight > 540) {
+          this.hideBBPhaseTooltip();
+        }
+      });
+      el.addEventListener('click', (e) => {
+        if (window.innerWidth <= 980 || window.innerHeight <= 540) {
+          e.stopPropagation();
+          this.showCurrencyTooltip(kind, e);
+        }
+      });
+    });
 
     // Rebirth Modal
     const rebirthTrigger = document.getElementById('btn-rebirth-trigger');
@@ -3331,6 +3855,7 @@ class IdleBreakoutGame {
       rebirthCount: this.rebirthCount,
       clickUpgradeLevel: this.clickUpgradeLevel,
       bbUpgrades: { ...this.bbUpgrades },
+      btUpgrades: { ...this.btUpgrades },
       pierceSpeedUpgradeLevel: this.pierceSpeedUpgradeLevel,
       nextBossIsGold: this.nextBossIsGold,
       hasPermanentPierce: this.balls.some(b => b.isPiercing && b.isPermanentPierce),
@@ -3377,8 +3902,15 @@ class IdleBreakoutGame {
         }
       }
 
+      if (data.btUpgrades) {
+        for (const item of BT_ABILITY_CATALOG) {
+          this.btUpgrades[item.key] = Math.max(0, Math.min(item.costs.length, data.btUpgrades[item.key] ?? 0));
+        }
+      }
+
       if (data.persistedPowerUps && typeof data.persistedPowerUps === 'object') {
         for (const key in data.persistedPowerUps) {
+          if (key === 'ball_army') continue; // Eltávolított power-up figyelmen kívül hagyása
           const p = data.persistedPowerUps[key];
           if (p && (p.mode === 'until_rebirth' || (p.mode === 'rounds' && p.roundsLeft > 0))) {
             this.activePowerUps[key] = p;
