@@ -7,10 +7,23 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=3.3">
+  <link rel="stylesheet" href="css/style.css?v=3.6">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
+
+<!-- Power-Saving / Eco Progress Mode Overlay -->
+<div id="eco-mode-overlay" class="eco-mode-overlay" aria-hidden="true">
+  <div class="eco-mode-content">
+    <div class="eco-mode-icon">🌙</div>
+    <div class="eco-mode-title">TAKARÉKOS FEJLŐDÉS</div>
+    <p class="eco-mode-desc">
+      Az effektusok és a grafika ki vannak kapcsolva az energiatakarékosság érdekében.<br>
+      A játék a háttérben tovább fut — a pontokat és a pénzt ugyanúgy megkapod!
+    </p>
+    <button id="btn-exit-eco-mode" class="eco-exit-btn" type="button">Visszatérés a játékba</button>
+  </div>
+</div>
 
 <!-- Mobile Portrait Rotate Prompt -->
 <div id="rotate-phone-overlay" class="rotate-phone-overlay">
@@ -83,7 +96,7 @@
         </div>
       </div>
 
-      <!-- Right: Currency HUD ($, BB, Boss Tokens) and Settings/Sound -->
+      <!-- Right: Currency HUD ($, BB, Boss Tokens) and Settings/Sound/Eco -->
       <div class="top-right-section">
         <div class="boss-token-hud" data-currency-tip="bt">
           <span class="bt-icon">👑</span>
@@ -103,6 +116,10 @@
         </div>
 
         <div class="top-controls-group">
+          <button id="btn-eco-mode" class="retro-icon-btn eco-mode-btn" title="Effektusok kizárása (Takarékos fejlődés)">
+            <span class="eco-btn-icon">🌙</span>
+            <span class="eco-btn-label">Effektusok<br>kizárása</span>
+          </button>
           <button id="btn-settings" class="retro-icon-btn" title="Teljes Újraindítás (Factory Reset)">⚙️</button>
           <button id="btn-toggle-sound" class="retro-icon-btn sound-btn" title="Hang ki/be">🔊</button>
         </div>
@@ -155,7 +172,11 @@
       </div>
 
       <div class="upgrades-content-grid" id="upgrades-content-grid">
-        <!-- Dynamically rendered ball upgrades, BT Ball Abilities, Pierce Speed & Click X -->
+        <!-- Dynamically rendered ball upgrades, BT Ball Abilities, Pierce Speed & Click X (Desktop) -->
+      </div>
+
+      <div class="mobile-carousel-shell" id="upgrades-mobile-carousel">
+        <!-- Dynamically rendered single-ball carousel with arrows (Mobile ONLY) -->
       </div>
 
       <div class="modal-footer">
@@ -181,8 +202,12 @@
 
       <div class="bb-modal-scroll">
         <div class="bb-upgrades-grid" id="bb-upgrades-grid">
-          <!-- Dynamically rendered BB upgrade cards -->
+          <!-- Dynamically rendered BB upgrade cards (Desktop) -->
         </div>
+      </div>
+
+      <div class="mobile-carousel-shell" id="bb-mobile-carousel">
+        <!-- Dynamically rendered single-powerup split carousel with arrows (Mobile ONLY) -->
       </div>
 
       <div class="modal-footer">
@@ -221,8 +246,8 @@
 </div>
 
 <!-- Audio Engine and Core Game Scripts -->
-<script src="js/audio.js?v=3.4"></script>
-<script src="js/game.js?v=3.4"></script>
+<script src="js/audio.js?v=3.6"></script>
+<script src="js/game.js?v=3.6"></script>
 
 </body>
 </html>

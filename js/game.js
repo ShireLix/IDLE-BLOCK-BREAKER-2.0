@@ -1,13 +1,24 @@
 /**
  * Idle Breakout - Extended Arcade Edition
- * BB Upgrade System, 6 Distinct Ball Types, Redesigned Bosses (1-35),
- * All Power-Ups (incl. Gold Boss, Ball Army, Auto Clicker, Discount, QTM, Free Upgrade),
+ * BB Upgrade System, 7 Distinct Ball Types, Redesigned Bosses (1-35),
+ * All Power-Ups (incl. Gold Boss, Super Ball, Pierce Ball, Discount, QTM, Free Upgrade), Eco Progress Mode,
  * Background Tab & Offline Progression.
  */
 
 const BB_UPGRADE_COSTS = [1, 3, 5, 7, 10]; // 1., 2., 3., 4., 5. fejlesztés ára BB-ben
 
 const PIERCE_SPEED_COSTS = [
+  1_000_000,   // 1M
+  5_000_000,   // 5M
+  10_000_000,  // 10M
+  20_000_000,  // 20M
+  35_000_000,  // 35M
+  50_000_000,  // 50M
+  75_000_000,  // 75M
+  100_000_000  // 100M
+];
+
+const SUPERBALL_UPGRADE_COSTS = [
   1_000_000,   // 1M
   5_000_000,   // 5M
   10_000_000,  // 10M
@@ -138,16 +149,16 @@ const BB_UPGRADE_CATALOG = [
     ]
   },
   {
-    key: 'autoClicker',
-    icon: '🤖',
-    name: 'Auto Clicker',
-    baseDesc: 'Alap: 15 mp-ig automatikusan sebez random blokkokat (Click Power/mp).',
+    key: 'superball',
+    icon: '☄️',
+    name: 'Super Ball',
+    baseDesc: 'Alap: 1 Super Ball (45 mp) – nagyon lassan indul, minden ütközésnél 2x-esére gyorsul!',
     levels: [
-      '30 másodperc időtartam.',
-      '60 másodperc időtartam.',
-      '120 másodperc időtartam.',
-      '5 körön keresztül folyamatosan aktív.',
-      '10 körön keresztül folyamatosan aktív!'
+      'Kinetikus Lendület: sebességgel arányosan max +75% sebzés és 60 mp időtartam.',
+      'Turbó Korlát Törés: +50% maximális végsebesség és 2x gyorsabb kezdősebesség.',
+      '+1 további Super Ball (2 db) + csúcssebességnél minden 4. találatnál 60% területi robbanás!',
+      'Rebirthig megtartasz 1 Super Ballt (+ extra ideiglenes Super Ball dropnál).',
+      'Szupernova (25% áttörés, +35% Boss krit, 25% sebességmegtartás) + külön $ fejlesztés!'
     ]
   },
   {
@@ -259,7 +270,7 @@ class IdleBreakoutGame {
       money2x: 0,
       dmg2x: 0,
       speed: 0,
-      autoClicker: 0,
+      superball: 0,
       discount: 0,
       quickTimeMoney: 0
     };
@@ -272,8 +283,9 @@ class IdleBreakoutGame {
       rocket: 0    // 0..1 (10 BT)
     };
 
-    // Pierce Ball separate $ speed upgrade (unlocked at bbUpgrades.piercing >= 5)
+    // Pierce Ball & Super Ball separate $ upgrades (unlocked at BB Level 5)
     this.pierceSpeedUpgradeLevel = 0;
+    this.superBallUpgradeLevel = 0;
 
     // Gold Boss pending flag
     this.nextBossIsGold = false;
@@ -281,6 +293,7 @@ class IdleBreakoutGame {
     // Upgrade Caps
     this.MAX_CLICK_LEVEL = 100;
     this.MAX_PIERCE_SPEED_LEVEL = 20;
+    this.MAX_SUPERBALL_UPGRADE_LEVEL = 20;
 
     // Base Speed Reference (1x = 4.2) & 6 Distinct Ball Types
     this.BASE_SPEED = 4.2;
@@ -425,7 +438,7 @@ class IdleBreakoutGame {
     this.bricks = [];
     this.perimeterBricks = [];
     this.floatingTexts = [];
-    this.visualRings = []; // Click area ripples, auto-clicker pings, shockwave rings
+    this.visualRings = []; // Click area ripples, sonic booms, shockwave rings
     this.bossSparks = [];
     this.ghostBombs = [];  // Ghostball BT bomb entities
     this.rockets = [];     // Rocket Ball missile projectiles
@@ -438,7 +451,6 @@ class IdleBreakoutGame {
 
     // Tickers
     this.shockwaveTimer = 0;
-    this.autoClickerTimer = 0;
 
     // Quick Time Money (Coin Orb) Event
     this.bonusOrb = null;
@@ -469,7 +481,22 @@ class IdleBreakoutGame {
     this.pendingOfflineSeconds = 0;
     this.bgWorker = null;
     this.bgInterval = null;
+    this.rafId = null;
     this.isResetting = false;
+
+    // Eco / Power-Saving Mode ("Effektusok kizárása" / "Takarékos fejlődés")
+    this.ecoMode = false;
+    this.ecoInterval = null;
+    this.ecoStartMoney = 0;
+    this.ecoStartLevel = 1;
+
+    // Mobile-ONLY Carousel State
+    this.mobileUpgradeIndex = 0;
+    this.mobilePowerUpIndex = 0;
+  }
+
+  isMobileView() {
+    return window.matchMedia('(max-width: 980px) and (orientation: landscape), (max-height: 540px) and (orientation: landscape)').matches;
   }
 
   init() {
@@ -505,7 +532,7 @@ class IdleBreakoutGame {
 
     // Start 60 FPS visual Game Loop
     this.lastTickMs = Date.now();
-    requestAnimationFrame((t) => this.gameLoop(t));
+    this.rafId = requestAnimationFrame((t) => this.gameLoop(t));
   }
 
   // --- Canvas Setup ---
@@ -522,9 +549,12 @@ class IdleBreakoutGame {
   }
 
   handleResize() {
-    this.setupCanvas();
-    this.createPerimeterBricks();
-    this.generateLevel(this.level);
+    if (!this.ecoMode) {
+      this.setupCanvas();
+      this.createPerimeterBricks();
+      this.generateLevel(this.level);
+    }
+    this.refreshOpenModals();
   }
 
   // --- White Perimeter Border Bricks ---
@@ -837,7 +867,7 @@ class IdleBreakoutGame {
 
     this.money += reward;
 
-    const silent = this.suppressAudioAndVisuals || document.hidden;
+    const silent = this.suppressAudioAndVisuals || this.ecoMode || document.hidden;
 
     if (!silent) {
       if (reward >= 1 || brick.hp <= 0) {
@@ -876,12 +906,12 @@ class IdleBreakoutGame {
       this.checkLevelClear();
     } else {
       if (!silent && window.soundEngine && source !== 'dot') {
-        if (source === 'click' || source === 'auto_clicker') window.soundEngine.playClickHit();
+        if (source === 'click') window.soundEngine.playClickHit();
         else window.soundEngine.playHit(source);
       }
     }
 
-    if (!this.suppressAudioAndVisuals) {
+    if (!this.suppressAudioAndVisuals && !this.ecoMode) {
       this.updateHUD();
     }
   }
@@ -891,7 +921,8 @@ class IdleBreakoutGame {
     if (remaining === 0) {
       this.level++;
       this.onRoundCleared();
-      if (!this.suppressAudioAndVisuals && !document.hidden && window.soundEngine) {
+      this.resetSuperBallsForNewLevel();
+      if (!this.suppressAudioAndVisuals && !this.ecoMode && !document.hidden && window.soundEngine) {
         window.soundEngine.playLevelUp();
       }
       this.generateLevel(this.level);
@@ -952,14 +983,14 @@ class IdleBreakoutGame {
       { id: 'shockwave',    weight: 5.0  },
       { id: 'gold_boss',    weight: 5.0  },
       { id: 'speed_boost',  weight: 0.65 },
-      { id: 'auto_clicker', weight: 0.65 },
+      { id: 'superball',    weight: 0.65 },
       { id: 'discount',     weight: 0.65 },
       { id: 'piercing',     weight: 0.65 },
       { id: 'free_upgrade', weight: 0.65 }
     ].filter(c => {
       if (c.id === 'gold_boss' && this.nextBossIsGold) return false;
       const active = this.activePowerUps[c.id];
-      if (active && active.mode === 'until_rebirth' && c.id !== 'piercing') return false;
+      if (active && active.mode === 'until_rebirth' && c.id !== 'piercing' && c.id !== 'superball') return false;
       return true;
     });
 
@@ -1069,20 +1100,27 @@ class IdleBreakoutGame {
       case 'gold_boss': {
         this.nextBossIsGold = true;
         this.activatePowerUp('gold_boss', '👑', 'Gold Boss', 'A következő Boss blokk Gold Boss lesz (2x Boss pénz)!', { mode: 'until_rebirth' });
-        this.showToast('👑 <strong>GOLD BOSS AKTIVÁLVA!</strong> A következő Boss dupla pénzt ad!');
+        if (!this.ecoMode) this.showToast('👑 <strong>GOLD BOSS AKTIVÁLVA!</strong> A következő Boss dupla pénzt ad!');
         break;
       }
 
-      case 'auto_clicker': {
-        const lvl = this.bbUpgrades.autoClicker;
-        if (lvl >= 5) {
-          this.activatePowerUp('auto_clicker', '🤖', 'Auto Clicker', `Automatikusan sebez (${this.clickPower}/mp) 10 körön át!`, { mode: 'rounds', rounds: 10 });
-        } else if (lvl === 4) {
-          this.activatePowerUp('auto_clicker', '🤖', 'Auto Clicker', `Automatikusan sebez (${this.clickPower}/mp) 5 körön át!`, { mode: 'rounds', rounds: 5 });
+      case 'superball': {
+        const lvl = this.bbUpgrades.superball;
+        const duration = lvl >= 1 ? 60 : 45;
+        if (lvl >= 4) {
+          const hasPerm = this.balls.some(b => b.isSuperBall && b.isPermanentSuperBall);
+          if (!hasPerm) {
+            this.spawnSuperBall({ permanent: true });
+          }
+          // Extra ideiglenes Super Ball is érkezik dropnál!
+          this.spawnSuperBall({ permanent: false, duration });
+          this.activatePowerUp('superball', '☄️', 'Super Ball', `1 Super Ball Rebirthig marad (+ extra Super Ball ${duration} mp-re)!`, { mode: 'until_rebirth' });
         } else {
-          const durations = [15, 30, 60, 120];
-          const sec = durations[lvl] || 15;
-          this.activatePowerUp('auto_clicker', '🤖', 'Auto Clicker', `Automatikusan sebez random blokkokat (${this.clickPower}/mp) ${sec} mp-ig!`, { mode: 'timed', duration: sec });
+          const count = lvl >= 3 ? 2 : 1;
+          for (let i = 0; i < count; i++) {
+            this.spawnSuperBall({ permanent: false, duration });
+          }
+          this.activatePowerUp('superball', '☄️', 'Super Ball', `${count} db gyorsuló Super Ball (2x sebesség / ütközés) ${duration} mp-re!`, { mode: 'timed', duration });
         }
         break;
       }
@@ -1091,7 +1129,7 @@ class IdleBreakoutGame {
         const lvl = this.bbUpgrades.discount;
         if (lvl >= 5) {
           this.activatePowerUp('discount', '🏴‍☠️', 'PIRATE SHOP', 'MINDEN labda és kurzor fejlesztés INGYENES 5 mp-ig!', { mode: 'timed', duration: 5, extra: { discountPct: 100 } });
-          this.showToast('🏴‍☠️ <strong>PIRATE SHOP AKTÍV (5 mp)!</strong> Minden labda és kurzor upgrade INGYENES!');
+          if (!this.ecoMode) this.showToast('🏴‍☠️ <strong>PIRATE SHOP AKTÍV (5 mp)!</strong> Minden labda és kurzor upgrade INGYENES!');
         } else {
           const configs = [
             { pct: 10, sec: 15 },
@@ -1118,8 +1156,10 @@ class IdleBreakoutGame {
     const upgradable = BB_UPGRADE_CATALOG.filter(item => (this.bbUpgrades[item.key] || 0) < 5);
     if (upgradable.length === 0) {
       this.bb += 5;
-      this.showToast('🎁 <strong>INGYENES FEJLESZTÉS:</strong> Minden maxon van ➔ <span style="color:#fde047;">+5 BB!</span>');
-      this.updateHUD();
+      if (!this.ecoMode) {
+        this.showToast('🎁 <strong>INGYENES FEJLESZTÉS:</strong> Minden maxon van ➔ <span style="color:#fde047;">+5 BB!</span>');
+        this.updateHUD();
+      }
       this.save();
       return;
     }
@@ -1131,12 +1171,14 @@ class IdleBreakoutGame {
     // Ha pont Rebirthig aktív vagy permanens szintet kapott, aktiváljuk is azonnal!
     this.onBBUpgradePurchased(chosen.key, newLvl);
 
-    this.showToast(`🎁 <strong>INGYENES FEJLESZTÉS:</strong> ${chosen.icon} ${chosen.name} ➔ <span style="color:#2cd64e;">LVL ${newLvl}!</span>`);
-    if (!this.suppressAudioAndVisuals && !document.hidden && window.soundEngine) {
-      window.soundEngine.playLevelUp();
+    if (!this.ecoMode) {
+      this.showToast(`🎁 <strong>INGYENES FEJLESZTÉS:</strong> ${chosen.icon} ${chosen.name} ➔ <span style="color:#2cd64e;">LVL ${newLvl}!</span>`);
+      if (!this.suppressAudioAndVisuals && !document.hidden && window.soundEngine) {
+        window.soundEngine.playLevelUp();
+      }
+      this.renderPowerUpUpgradesModal();
+      this.updateHUD();
     }
-    this.renderPowerUpUpgradesModal();
-    this.updateHUD();
     this.save();
   }
 
@@ -1155,10 +1197,10 @@ class IdleBreakoutGame {
       extra: opts.extra || {}
     };
 
-    if (!this.suppressAudioAndVisuals && !document.hidden && window.soundEngine) {
+    if (!this.suppressAudioAndVisuals && !this.ecoMode && !document.hidden && window.soundEngine) {
       window.soundEngine.playCoin();
     }
-    if (!this.suppressAudioAndVisuals) {
+    if (!this.suppressAudioAndVisuals && !this.ecoMode) {
       this.renderPowerUpsHUD();
       this.updateHUD();
     }
@@ -1198,16 +1240,7 @@ class IdleBreakoutGame {
       }
     }
 
-    // Auto Clicker ticker (every 1.0 second while active: deals exact clickPower to 1 random brick)
-    if (this.isPowerUpActive('auto_clicker')) {
-      this.autoClickerTimer += dt;
-      if (this.autoClickerTimer >= 1.0) {
-        this.autoClickerTimer = 0;
-        this.triggerAutoClickerHit();
-      }
-    }
-
-    if (!this.suppressAudioAndVisuals) {
+    if (!this.suppressAudioAndVisuals && !this.ecoMode) {
       if (changed) {
         this.renderPowerUpsHUD();
         if (discountEnded) {
@@ -1225,7 +1258,7 @@ class IdleBreakoutGame {
     const cy = this.height / 2;
     const maxRadius = Math.min(this.width, this.height) * 0.48;
 
-    if (!this.suppressAudioAndVisuals) {
+    if (!this.suppressAudioAndVisuals && !this.ecoMode) {
       this.visualRings.push({ x: cx, y: cy, radius: 10, maxRadius, alpha: 0.85, color: '59, 130, 246', speed: 260 });
     }
 
@@ -1237,20 +1270,6 @@ class IdleBreakoutGame {
         this.damageBrick(b, dmgPerSec, 'shockwave');
       }
     }
-  }
-
-  triggerAutoClickerHit() {
-    const alive = this.bricks.filter(b => b.hp > 0);
-    if (alive.length === 0) return;
-
-    const target = alive[Math.floor(Math.random() * alive.length)];
-    const tx = target.x + target.w / 2;
-    const ty = target.y + target.h / 2;
-
-    if (!this.suppressAudioAndVisuals) {
-      this.visualRings.push({ x: tx, y: ty, radius: 4, maxRadius: 28, alpha: 0.9, color: '168, 85, 247', speed: 120 });
-    }
-    this.damageBrick(target, this.clickPower, 'auto_clicker');
   }
 
   // --- Poison BT Ability System (Normál blokkon NEM stackelődik, csak Boss-on!) ---
@@ -1736,6 +1755,94 @@ class IdleBreakoutGame {
     return null;
   }
 
+  // --- Super Ball Power-Up Helpers (Nagyon lassú indulás -> minden ütközésnél 2x sebesség, 5 BB upgrade!) ---
+  getSuperBallStartSpeed() {
+    const base = this.BASE_SPEED * 0.04; // ~0.168: nagyon-nagyon lassan indul!
+    const lvl = this.bbUpgrades.superball || 0;
+    return lvl >= 2 ? base * 2.0 : base;
+  }
+
+  getSuperBallMaxSpeed() {
+    let cap = 16.0;
+    const lvl = this.bbUpgrades.superball || 0;
+    if (lvl >= 2) cap *= 1.5;   // 24.0
+    if (lvl >= 5) cap *= 1.25;  // 30.0
+    // Lvl 5 külön $ fejlesztés (+1.5 végsebesség szintenként!)
+    cap += this.superBallUpgradeLevel * 1.5;
+    return cap;
+  }
+
+  getSuperBallBaseDamage() {
+    const base = Math.max(12, Math.ceil(this.level * 0.6));
+    const mult = 1 + this.superBallUpgradeLevel * 0.25;
+    return base * mult;
+  }
+
+  spawnSuperBall({ permanent = false, duration = 45 } = {}) {
+    const borderWidth = 22;
+    const x = this.width / 2 + (Math.random() * 40 - 20);
+    const y = this.height - borderWidth - 24;
+    const angle = -(Math.PI * 0.25 + Math.random() * Math.PI * 0.5);
+    const speed = this.getSuperBallStartSpeed();
+
+    this.balls.push({
+      type: 'superball',
+      color: '#06b6d4',
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 8.5,
+      power: this.getSuperBallBaseDamage(),
+      speed,
+      isPiercing: false,
+      isSuperBall: true,
+      isPermanentSuperBall: permanent,
+      isSplitChild: false,
+      timeLeft: permanent ? Infinity : duration,
+      superBounceCooldown: 0,
+      superHitCounter: 0,
+      superPassThroughId: null,
+      trail: []
+    });
+  }
+
+  accelerateSuperBall(ball) {
+    if (!ball || !ball.isSuperBall) return;
+    if ((ball.superBounceCooldown || 0) > 0) return;
+    ball.superBounceCooldown = 0.04;
+
+    const maxSpd = this.getSuperBallMaxSpeed();
+    const prevSpd = ball.speed;
+    const nextSpd = Math.min(maxSpd, prevSpd * 2.0);
+    ball.speed = nextSpd;
+
+    const angle = Math.atan2(ball.vy, ball.vx);
+    ball.vx = Math.cos(angle) * nextSpd;
+    ball.vy = Math.sin(angle) * nextSpd;
+
+    if (prevSpd < maxSpd * 0.95 && nextSpd >= maxSpd * 0.95 && !this.suppressAudioAndVisuals && !this.ecoMode) {
+      this.visualRings.push({ x: ball.x, y: ball.y, radius: 6, maxRadius: 42, alpha: 0.9, color: '244, 63, 94', speed: 200 });
+    }
+  }
+
+  resetSuperBallsForNewLevel() {
+    const startSpd = this.getSuperBallStartSpeed();
+    const keepMomentum = (this.bbUpgrades.superball || 0) >= 5;
+    for (const ball of this.balls) {
+      if (ball.isSuperBall) {
+        const nextSpd = keepMomentum ? Math.max(startSpd, ball.speed * 0.25) : startSpd;
+        const angle = Math.atan2(ball.vy, ball.vx);
+        ball.speed = nextSpd;
+        ball.vx = Math.cos(angle) * nextSpd;
+        ball.vy = Math.sin(angle) * nextSpd;
+        ball.superHitCounter = 0;
+        ball.superPassThroughId = null;
+        if (ball.trail) ball.trail.length = 0;
+      }
+    }
+  }
+
   // --- Ball Purchase, Spawning & Stats ---
   getBallSpeed(typeKey) {
     const b = this.ballTypes[typeKey];
@@ -1795,6 +1902,7 @@ class IdleBreakoutGame {
       power,
       speed,
       isPiercing: false,
+      isSuperBall: false,
       isSplitChild: false,
       splitTier: 0,
       splitCooldown: 0,
@@ -1890,7 +1998,7 @@ class IdleBreakoutGame {
     const bDef = this.ballTypes[typeKey];
     if (bDef.count > 0) {
       bDef.count--;
-      const idx = this.balls.findIndex(b => b.type === typeKey && !b.isPiercing && !b.isSplitChild);
+      const idx = this.balls.findIndex(b => b.type === typeKey && !b.isPiercing && !b.isSuperBall && !b.isSplitChild);
       if (idx !== -1) this.balls.splice(idx, 1);
       this.updateHUD();
       this.renderUpgradesMenu();
@@ -1899,7 +2007,7 @@ class IdleBreakoutGame {
 
   getTotalBalls() {
     // Csak a megvásárolt alaplabdák számítanak a labdaférőhelybe
-    return this.balls.filter(b => !b.isPiercing && !b.isSplitChild).length;
+    return this.balls.filter(b => !b.isPiercing && !b.isSuperBall && !b.isSplitChild).length;
   }
 
   // --- $ Upgrades (Speed, Power, Click, Pierce Speed) ---
@@ -1931,6 +2039,17 @@ class IdleBreakoutGame {
     return this.applyDiscount(raw);
   }
 
+  getSuperBallUpgradeCost() {
+    const idx = this.superBallUpgradeLevel;
+    let raw;
+    if (idx < SUPERBALL_UPGRADE_COSTS.length) {
+      raw = SUPERBALL_UPGRADE_COSTS[idx];
+    } else {
+      raw = Math.round(SUPERBALL_UPGRADE_COSTS[SUPERBALL_UPGRADE_COSTS.length - 1] * Math.pow(1.5, idx - SUPERBALL_UPGRADE_COSTS.length + 1));
+    }
+    return this.applyDiscount(raw);
+  }
+
   upgradeBallSpeed(typeKey) {
     const bDef = this.ballTypes[typeKey];
     if (bDef.speedLevel >= bDef.maxSpeedLevel) return;
@@ -1941,7 +2060,7 @@ class IdleBreakoutGame {
 
       const newSpeed = this.getBallSpeed(typeKey);
       this.balls.forEach(ball => {
-        if (ball.type === typeKey && !ball.isPiercing) {
+        if (ball.type === typeKey && !ball.isPiercing && !ball.isSuperBall) {
           const mult = ball.isSplitChild ? (1 + (ball.splitTier || 0) * 0.06) : 1;
           const targetSpd = newSpeed * mult;
           const angle = Math.atan2(ball.vy, ball.vx);
@@ -1970,7 +2089,7 @@ class IdleBreakoutGame {
       const tierBaseDamages = [10, 5, 2, 1, 0.5];
 
       this.balls.forEach(ball => {
-        if (ball.type === typeKey && !ball.isPiercing) {
+        if (ball.type === typeKey && !ball.isPiercing && !ball.isSuperBall) {
           if (ball.isSplitChild) {
             ball.power = (tierBaseDamages[ball.splitTier] ?? 0.5) * multScale;
           } else {
@@ -2026,6 +2145,21 @@ class IdleBreakoutGame {
     }
   }
 
+  upgradeSuperBallPower() {
+    if (this.bbUpgrades.superball < 5) return;
+    if (this.superBallUpgradeLevel >= this.MAX_SUPERBALL_UPGRADE_LEVEL) return;
+    const cost = this.getSuperBallUpgradeCost();
+    if (this.money >= cost) {
+      this.money -= cost;
+      this.superBallUpgradeLevel++;
+
+      if (window.soundEngine) window.soundEngine.playCoin();
+      this.updateHUD();
+      this.renderUpgradesMenu();
+      this.save();
+    }
+  }
+
   // --- BB Upgrade Purchase System (1, 3, 5, 7, 10 BB) ---
   getBBUpgradeCost(key) {
     const lvl = this.bbUpgrades[key] || 0;
@@ -2068,6 +2202,12 @@ class IdleBreakoutGame {
         this.spawnPiercingBall({ permanent: true, speedMult: this.getPermanentPierceSpeedMult() });
       }
       this.activatePowerUp('piercing', '⚡', 'Pierce Ball', '1 áttörő labda Rebirthig aktív (1x sebesség)!', { mode: 'until_rebirth' });
+    } else if (key === 'superball' && newLvl === 4) {
+      const hasPerm = this.balls.some(b => b.isSuperBall && b.isPermanentSuperBall);
+      if (!hasPerm) {
+        this.spawnSuperBall({ permanent: true });
+      }
+      this.activatePowerUp('superball', '☄️', 'Super Ball', '1 Super Ball Rebirthig aktív (2x sebesség / ütközés)!', { mode: 'until_rebirth' });
     }
   }
 
@@ -2136,10 +2276,10 @@ class IdleBreakoutGame {
     this.rockets = [];
     this.floatingTexts = [];
     this.shockwaveTimer = 0;
-    this.autoClickerTimer = 0;
     this.isPointerDown = false;
     this.holdDamageTimer = 0;
     this.pierceSpeedUpgradeLevel = 0;
+    this.superBallUpgradeLevel = 0;
 
     for (const key in this.ballTypes) {
       this.ballTypes[key].count = 0;
@@ -2173,6 +2313,7 @@ class IdleBreakoutGame {
   }
 
   showToast(htmlMsg, durationMs = 5500) {
+    if (this.ecoMode) return;
     const toast = document.getElementById('offline-toast');
     if (!toast) return;
     toast.innerHTML = htmlMsg;
@@ -2286,9 +2427,11 @@ class IdleBreakoutGame {
         this.save();
       } else {
         this.advanceByElapsedTime(true);
-        this.renderPowerUpsHUD();
-        this.updateHUD();
-        this.render();
+        if (!this.ecoMode) {
+          this.renderPowerUpsHUD();
+          this.updateHUD();
+          this.render();
+        }
       }
     });
 
@@ -2296,18 +2439,96 @@ class IdleBreakoutGame {
     window.addEventListener('pagehide', () => this.save());
   }
 
+  // --- Eco / Power-Saving Mode ("Effektusok kizárása" -> "Takarékos fejlődés") ---
+  enterEcoMode() {
+    if (this.ecoMode) return;
+    this.ecoMode = true;
+    this.isPointerDown = false;
+    this.ecoStartMoney = this.money;
+    this.ecoStartLevel = this.level;
+
+    // Clear ephemeral visual effects & hide tooltips
+    this.floatingTexts = [];
+    this.visualRings = [];
+    this.bossSparks = [];
+    for (const ball of this.balls) {
+      if (ball.trail) ball.trail.length = 0;
+    }
+    this.hideBBPhaseTooltip();
+
+    // Stop 60 FPS visual loop completely!
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+
+    document.body.classList.add('eco-mode-active');
+    const overlay = document.getElementById('eco-mode-overlay');
+    if (overlay) {
+      overlay.classList.add('active');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    // Run lightweight headless simulation 4x/sec (zero canvas draw, zero DOM repaint!)
+    if (this.ecoInterval) clearInterval(this.ecoInterval);
+    this.lastTickMs = Date.now();
+    this.ecoInterval = setInterval(() => {
+      if (this.ecoMode && !document.hidden) {
+        this.advanceByElapsedTime(true);
+      }
+    }, 250);
+  }
+
+  exitEcoMode() {
+    if (!this.ecoMode) return;
+    // Catch up any remaining ms before turning visuals back on
+    this.advanceByElapsedTime(true);
+
+    this.ecoMode = false;
+    if (this.ecoInterval) {
+      clearInterval(this.ecoInterval);
+      this.ecoInterval = null;
+    }
+
+    document.body.classList.remove('eco-mode-active');
+    const overlay = document.getElementById('eco-mode-overlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    // Re-sync canvas & UI immediately
+    this.setupCanvas();
+    this.createPerimeterBricks();
+    this.renderPowerUpsHUD();
+    this.updateHUD();
+    this.refreshOpenModals();
+    this.render();
+    this.save();
+
+    const gainedMoney = Math.floor(this.money - this.ecoStartMoney);
+    const gainedLevels = this.level - this.ecoStartLevel;
+    if (gainedMoney > 0 || gainedLevels > 0) {
+      const lvlTxt = gainedLevels > 0 ? ` | +${gainedLevels} szint` : '';
+      this.showToast(`🌙 <strong>TAKARÉKOS FEJLŐDÉS:</strong> <span style="color:#2cd64e;">+$${gainedMoney.toLocaleString()}</span>${lvlTxt}`, 5000);
+    }
+
+    this.lastTickMs = Date.now();
+    this.rafId = requestAnimationFrame((t) => this.gameLoop(t));
+  }
+
   // --- Core Simulation Step ---
   stepSimulation(dt, isBackground = false) {
     this.animTime += dt;
 
-    // 1. Update Power-ups (Shockwave, Auto Clicker, Timers)
+    // 1. Update Power-ups (Shockwave, Timers)
     this.updatePowerUps(dt);
 
     // 2. Update Quick Time Money Coin Orb
     this.updateBonusOrb(dt, isBackground);
 
     // 3. Hold-to-Damage (Click BB Level 3 = 1.0s, Level 4+ = 0.5s)
-    if (!isBackground && this.isPointerDown && this.bbUpgrades.click >= 3) {
+    if (!isBackground && !this.ecoMode && this.isPointerDown && this.bbUpgrades.click >= 3) {
       const interval = this.bbUpgrades.click >= 4 ? 0.5 : 1.0;
       this.holdDamageTimer += dt;
       if (this.holdDamageTimer >= interval) {
@@ -2325,7 +2546,7 @@ class IdleBreakoutGame {
     this.updateBalls(dt);
 
     // 6. Update Bricks & Visual Effects
-    if (!this.suppressAudioAndVisuals) {
+    if (!this.suppressAudioAndVisuals && !this.ecoMode) {
       for (const b of this.bricks) {
         if (b.flash > 0) b.flash -= dt;
         if (b.shake > 0) b.shake = Math.max(0, b.shake - dt * 18);
@@ -2370,7 +2591,7 @@ class IdleBreakoutGame {
     if (elapsedSec <= 0.001) return;
     this.lastTickMs = now;
 
-    if (!isBackground && elapsedSec <= 0.1) {
+    if (!isBackground && !this.ecoMode && elapsedSec <= 0.1) {
       this.stepSimulation(elapsedSec, false);
       return;
     }
@@ -2392,8 +2613,10 @@ class IdleBreakoutGame {
       this.applyOfflineProgress(elapsedSec - maxRealSimSec, false);
     }
 
-    this.renderPowerUpsHUD();
-    this.updateHUD();
+    if (!this.ecoMode) {
+      this.renderPowerUpsHUD();
+      this.updateHUD();
+    }
   }
 
   // --- Offline Progress (when closed) ---
@@ -2426,6 +2649,11 @@ class IdleBreakoutGame {
         if (key === 'multiply') hitRate = speed * 0.65;
         totalDps += b.count * power * hitRate;
       }
+      if (this.balls.some(b => b.isSuperBall && b.isPermanentSuperBall)) {
+        const sbAvgSpd = this.getSuperBallMaxSpeed() * 0.45;
+        const sbBaseDmg = this.getSuperBallBaseDamage() * (this.bbUpgrades.superball >= 1 ? 1.4 : 1.0);
+        totalDps += sbBaseDmg * sbAvgSpd * 0.45;
+      }
 
       let remainingDamage = totalDps * cappedSec;
       let earned = 0;
@@ -2454,10 +2682,12 @@ class IdleBreakoutGame {
       this.generateLevel(this.level);
     }
 
-    this.updateHUD();
+    if (!this.ecoMode) {
+      this.updateHUD();
+    }
     this.save();
 
-    if (showToast) {
+    if (showToast && !this.ecoMode) {
       const gainedMoney = Math.floor(this.money - startMoney);
       const gainedLevels = this.level - startLevel;
       if (gainedMoney > 0 || gainedLevels > 0) {
@@ -2478,13 +2708,17 @@ class IdleBreakoutGame {
   }
 
   gameLoop(timestamp) {
+    if (this.ecoMode) {
+      this.rafId = null;
+      return;
+    }
     this.lastTime = timestamp;
     this.advanceByElapsedTime(false);
     this.render();
-    requestAnimationFrame((t) => this.gameLoop(t));
+    this.rafId = requestAnimationFrame((t) => this.gameLoop(t));
   }
 
-  // --- Ball Physics & Collision (with Ball Army, Multiply, Ghost, Poison, Heavy, Pierce & Overlap Safety) ---
+  // --- Ball Physics & Collision (with Super Ball, Multiply, Ghost, Poison, Heavy, Rocket, Pierce & Overlap Safety) ---
   updateBalls(dt) {
     const borderWidth = 18;
     const arenaLeft = borderWidth;
@@ -2495,12 +2729,14 @@ class IdleBreakoutGame {
     const speedMult = this.getSpeedBoostMultiplier();
     const ghostCfg = this.getGhostAbilityConfig();
     const rocketCooldown = (this.btUpgrades.rocket || 0) >= 1 ? 3.0 : 10.0;
+    const superBallLvl = this.bbUpgrades.superball || 0;
+    const superBallMaxSpd = this.getSuperBallMaxSpeed();
 
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
 
-      // Temporary ball lifespans (Pierce Ball temporary & Multiply split children = 5s)
-      if ((ball.isPiercing && !ball.isPermanentPierce) || ball.isSplitChild) {
+      // Temporary ball lifespans (Pierce Ball temporary, Super Ball temporary & Multiply split children = 5s)
+      if ((ball.isPiercing && !ball.isPermanentPierce) || (ball.isSuperBall && !ball.isPermanentSuperBall) || ball.isSplitChild) {
         ball.timeLeft -= dt;
         if (ball.timeLeft <= 0) {
           this.balls.splice(i, 1);
@@ -2530,22 +2766,34 @@ class IdleBreakoutGame {
         }
       }
 
+      // Record visual motion trail for Super Ball (only when visible & not in eco mode)
+      if (ball.isSuperBall && ball.trail && !this.suppressAudioAndVisuals && !this.ecoMode) {
+        ball.trail.push({ x: ball.x, y: ball.y });
+        if (ball.trail.length > 6) ball.trail.shift();
+      }
+
       const effectiveSpeed = ball.speed * speedMult;
-      // Dynamically scale sub-steps for high-speed balls (e.g. 4x Pierce Ball or 3x Speed Boost) so they NEVER tunnel!
-      const steps = Math.max(2, Math.min(8, Math.ceil(effectiveSpeed / 5.5)));
+      // Dynamically scale sub-steps for high-speed balls (Super Ball, 4x Pierce Ball, 3x Speed Boost) so they NEVER tunnel!
+      const steps = Math.max(2, Math.min(14, Math.ceil(effectiveSpeed / 5.0)));
       const subDt = dt / steps;
 
       for (let s = 0; s < steps; s++) {
-        if (Math.abs(ball.vx) < ball.speed * 0.22) {
-          ball.vx += (ball.vx >= 0 ? 0.25 : -0.25);
+        if (ball.superBounceCooldown > 0) {
+          ball.superBounceCooldown = Math.max(0, ball.superBounceCooldown - subDt);
         }
-        if (Math.abs(ball.vy) < ball.speed * 0.22) {
-          ball.vy += (ball.vy >= 0 ? 0.25 : -0.25);
+
+        const minAxis = ball.speed * 0.22;
+        const nudge = Math.max(0.03, ball.speed * 0.25);
+        if (Math.abs(ball.vx) < minAxis) {
+          ball.vx += (ball.vx >= 0 ? nudge : -nudge);
+        }
+        if (Math.abs(ball.vy) < minAxis) {
+          ball.vy += (ball.vy >= 0 ? nudge : -nudge);
         }
 
         // Normalize velocity to exact ball.speed
         const curMag = Math.hypot(ball.vx, ball.vy);
-        if (curMag > 0.001) {
+        if (curMag > 0.0001) {
           ball.vx = (ball.vx / curMag) * ball.speed;
           ball.vy = (ball.vy / curMag) * ball.speed;
         }
@@ -2554,26 +2802,36 @@ class IdleBreakoutGame {
         ball.y += ball.vy * speedMult * subDt * 60;
 
         // Perimeter wall collisions
+        let hitWall = false;
         if (ball.x - ball.radius < arenaLeft) {
           ball.x = arenaLeft + ball.radius;
           ball.vx = Math.abs(ball.vx);
+          hitWall = true;
         } else if (ball.x + ball.radius > arenaRight) {
           ball.x = arenaRight - ball.radius;
           ball.vx = -Math.abs(ball.vx);
+          hitWall = true;
         }
 
         if (ball.y - ball.radius < arenaTop) {
           ball.y = arenaTop + ball.radius;
           ball.vy = Math.abs(ball.vy);
+          hitWall = true;
         } else if (ball.y + ball.radius > arenaBottom) {
           ball.y = arenaBottom - ball.radius;
           ball.vy = -Math.abs(ball.vy);
+          hitWall = true;
+        }
+
+        if (hitWall && ball.isSuperBall) {
+          this.accelerateSuperBall(ball);
         }
 
         const isPassThrough = ball.isPiercing || ball.type === 'ghost';
 
         // Ghostball tracks bricks it is currently inside so it hits each brick ONCE per pass-through
         const currentlyTouchingIds = ball.type === 'ghost' ? new Set() : null;
+        let stillTouchingSuperPass = false;
 
         for (const brick of this.bricks) {
           if (brick.hp <= 0) continue;
@@ -2592,6 +2850,20 @@ class IdleBreakoutGame {
                 this.handleBallBrickImpact(ball, brick);
               }
               continue;
+            }
+
+            // Super Ball Lvl 5: Szupernova — 25% eséllyel áttör sima blokkon csúcssebességnél!
+            if (ball.isSuperBall && !brick.isBoss) {
+              if (ball.superPassThroughId === brick.id) {
+                stillTouchingSuperPass = true;
+                continue;
+              }
+              if (superBallLvl >= 5 && ball.speed >= superBallMaxSpd * 0.95 && Math.random() < 0.25) {
+                ball.superPassThroughId = brick.id;
+                stillTouchingSuperPass = true;
+                this.handleBallBrickImpact(ball, brick);
+                continue;
+              }
             }
 
             // Pierce Ball passes through normal bricks, bounces off Boss
@@ -2641,6 +2913,10 @@ class IdleBreakoutGame {
           }
         }
 
+        if (ball.isSuperBall && !stillTouchingSuperPass) {
+          ball.superPassThroughId = null;
+        }
+
         // Clear exited brick IDs from Ghostball's hit set so it can hit them again on next pass!
         if (ball.type === 'ghost' && ball.ghostHitSet) {
           for (const id of ball.ghostHitSet) {
@@ -2678,6 +2954,55 @@ class IdleBreakoutGame {
         ball.hasSplit = true;
         this.spawnMultiplyChildren(ball);
       }
+    } else if (ball.isSuperBall) {
+      const startSpd = this.getSuperBallStartSpeed();
+      const maxSpd = this.getSuperBallMaxSpeed();
+      const ratio = Math.max(0, Math.min(1, (ball.speed - startSpd) / Math.max(0.01, maxSpd - startSpd)));
+      const atMaxSpeed = ball.speed >= maxSpd * 0.95;
+      const sbLvl = this.bbUpgrades.superball || 0;
+
+      let dmg = this.getSuperBallBaseDamage();
+      // Lvl 1+: Kinetikus Lendület (akár +75% bónusz sebzés csúcssebességnél)
+      if (sbLvl >= 1) {
+        dmg *= (1 + 0.75 * ratio);
+      }
+
+      // Lvl 5: +35% kritikus sebzés Boss-on csúcssebességnél
+      if (sbLvl >= 5 && atMaxSpeed && brick.isBoss) {
+        dmg *= 1.35;
+      }
+
+      this.damageBrick(brick, dmg, 'superball');
+
+      // Lvl 3+: Hangrobbanás — csúcssebességnél minden 4. blokk-ütközésnél 60% területi sebzés szomszédos blokkokra!
+      if (sbLvl >= 3 && atMaxSpeed) {
+        ball.superHitCounter = (ball.superHitCounter || 0) + 1;
+        if (ball.superHitCounter >= 4) {
+          ball.superHitCounter = 0;
+          const hcx = brick.x + brick.w / 2;
+          const hcy = brick.y + brick.h / 2;
+          const cellW = Math.max(24, brick.isBoss ? (this.gridCellW || 60) : brick.w);
+          const cellH = Math.max(18, brick.isBoss ? (this.gridCellH || 34) : brick.h);
+          const splashDmg = dmg * 0.6;
+
+          for (const nb of this.bricks) {
+            if (nb === brick || nb.hp <= 0) continue;
+            const ncx = nb.x + nb.w / 2;
+            const ncy = nb.y + nb.h / 2;
+            const ringDist = Math.max(Math.round(Math.abs(ncx - hcx) / cellW), Math.round(Math.abs(ncy - hcy) / cellH));
+            if (ringDist === 1) {
+              this.damageBrick(nb, splashDmg, 'superball');
+            }
+          }
+
+          if (!this.suppressAudioAndVisuals && !this.ecoMode) {
+            this.visualRings.push({ x: hcx, y: hcy, radius: 8, maxRadius: cellW * 1.5, alpha: 0.9, color: '168, 85, 247', speed: 260 });
+          }
+        }
+      }
+
+      // Minden ütközésnél 2x-esére gyorsul (végsebességig)!
+      this.accelerateSuperBall(ball);
     } else {
       this.damageBrick(brick, ball.power, ball.type);
     }
@@ -2875,6 +3200,7 @@ class IdleBreakoutGame {
 
   // --- Main Render ---
   render() {
+    if (this.ecoMode) return;
     this.ctx.fillStyle = '#ede0c8';
     this.ctx.fillRect(0, 0, this.width, this.height);
 
@@ -3118,6 +3444,61 @@ class IdleBreakoutGame {
         this.ctx.arc(ball.x, ball.y, ball.radius * 0.42, 0, Math.PI * 2);
         this.ctx.fillStyle = '#fef08a';
         this.ctx.fill();
+      } else if (ball.isSuperBall) {
+        const startSpd = this.getSuperBallStartSpeed();
+        const maxSpd = this.getSuperBallMaxSpeed();
+        const ratio = Math.max(0, Math.min(1, (ball.speed - startSpd) / Math.max(0.01, maxSpd - startSpd)));
+
+        // Speed-reactive color shift: Slow Blue -> Cyan -> Gold -> Overdrive Crimson/Magenta
+        let coreColor = '#3b82f6';
+        let glowRgb = '59, 130, 246';
+        if (ratio >= 0.92) {
+          coreColor = '#f43f5e';
+          glowRgb = '244, 63, 94';
+        } else if (ratio >= 0.55) {
+          coreColor = '#f59e0b';
+          glowRgb = '245, 158, 11';
+        } else if (ratio >= 0.2) {
+          coreColor = '#06b6d4';
+          glowRgb = '6, 182, 212';
+        }
+
+        // Motion trail when accelerating
+        if (ball.trail && ball.trail.length > 1 && ratio > 0.12) {
+          for (let ti = 0; ti < ball.trail.length; ti++) {
+            const pt = ball.trail[ti];
+            const frac = (ti + 1) / ball.trail.length;
+            this.ctx.beginPath();
+            this.ctx.arc(pt.x, pt.y, Math.max(2, ball.radius * frac * 0.8), 0, Math.PI * 2);
+            this.ctx.fillStyle = `rgba(${glowRgb}, ${(frac * 0.34 * ratio).toFixed(2)})`;
+            this.ctx.fill();
+          }
+        }
+
+        // Outer energy aura (gold ring if permanent until rebirth, or speed-reactive glow)
+        if (ball.isPermanentSuperBall || ratio >= 0.35) {
+          this.ctx.beginPath();
+          this.ctx.arc(ball.x, ball.y, ball.radius + 3 + ratio * 2, 0, Math.PI * 2);
+          this.ctx.strokeStyle = ball.isPermanentSuperBall
+            ? 'rgba(250, 204, 21, 0.9)'
+            : `rgba(${glowRgb}, ${(0.45 + ratio * 0.45).toFixed(2)})`;
+          this.ctx.lineWidth = ratio >= 0.92 ? 2.5 : 2;
+          this.ctx.stroke();
+        }
+
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = coreColor;
+        this.ctx.fill();
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.stroke();
+
+        // Inner bright core
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius * 0.38, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fill();
       } else {
         this.ctx.beginPath();
         this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
@@ -3282,6 +3663,7 @@ class IdleBreakoutGame {
   }
 
   refreshOpenModals() {
+    if (this.ecoMode) return;
     const upgModal = document.getElementById('upgrades-modal');
     if (upgModal && upgModal.classList.contains('open')) {
       this.renderUpgradesMenu();
@@ -3319,6 +3701,12 @@ class IdleBreakoutGame {
     }
 
     const pirateActive = this.isPirateShopActive();
+
+    // Mobile-ONLY view: single-item carousel with arrows & ZERO scrolling!
+    if (this.isMobileView()) {
+      this.renderMobileUpgradesCarousel(pirateActive);
+      return;
+    }
 
     for (const key in this.ballTypes) {
       const b = this.ballTypes[key];
@@ -3444,6 +3832,33 @@ class IdleBreakoutGame {
       if (!pierceMaxed) pierceCol.querySelector('#btn-upg-pierce-spd').addEventListener('click', () => this.upgradePierceSpeed());
     }
 
+    // Super Ball Separate $ Overclock Upgrade (Unlocked at Super Ball BB Level 5: 1M, 5M, 10M...)
+    if (this.bbUpgrades.superball >= 5) {
+      const sbMaxed = this.superBallUpgradeLevel >= this.MAX_SUPERBALL_UPGRADE_LEVEL;
+      const sbCost = this.getSuperBallUpgradeCost();
+      const canAffordSb = !sbMaxed && this.money >= sbCost;
+      const sbClass = sbMaxed
+        ? 'maxed-upg-btn'
+        : (pirateActive ? 'pirate-free' : (canAffordSb ? 'affordable' : ''));
+
+      const sbCol = document.createElement('div');
+      sbCol.className = 'ball-upgrade-section';
+      sbCol.innerHTML = `
+        <div class="ball-title-label">
+          <span style="font-size: 14px; color: #b45309;">SUPERBALL LVL 5 BONUS</span>
+          <span>☄️ SUPERBALL BOOST</span>
+          <span style="font-size: 13px; color: #444;">+25% sebzés & +1.5 végsebesség</span>
+        </div>
+
+        <button class="ball-upgrade-btn ${sbClass}" id="btn-upg-superball-pwr" ${sbMaxed ? 'disabled' : ''}>
+          <div class="btn-top-info">${sbMaxed ? `LVL ${this.MAX_SUPERBALL_UPGRADE_LEVEL}/${this.MAX_SUPERBALL_UPGRADE_LEVEL}` : `LVL ${this.superBallUpgradeLevel}/${this.MAX_SUPERBALL_UPGRADE_LEVEL} >> ${this.superBallUpgradeLevel + 1}`}</div>
+          <div class="btn-cost-bottom">${sbMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(sbCost))}</div>
+        </button>
+      `;
+      container.appendChild(sbCol);
+      if (!sbMaxed) sbCol.querySelector('#btn-upg-superball-pwr').addEventListener('click', () => this.upgradeSuperBallPower());
+    }
+
     // Manual Click Power Upgrade
     const clickMaxed = this.clickUpgradeLevel >= this.MAX_CLICK_LEVEL;
     const clickCost = this.getClickUpgradeCost();
@@ -3469,6 +3884,282 @@ class IdleBreakoutGame {
 
     container.appendChild(clickCol);
     if (!clickMaxed) clickCol.querySelector('#btn-upg-click').addEventListener('click', () => this.upgradeClick());
+  }
+
+  // --- Mobile-ONLY Single-Ball Carousel for UPGRADES ($) (No scrolling!) ---
+  renderMobileUpgradesCarousel(pirateActive) {
+    const shell = document.getElementById('upgrades-mobile-carousel');
+    if (!shell) return;
+    shell.innerHTML = '';
+
+    const items = [];
+    for (const key in this.ballTypes) {
+      if (this.ballTypes[key].count > 0) {
+        items.push({ kind: 'ball', key });
+      }
+    }
+    if (this.bbUpgrades.piercing >= 5) {
+      items.push({ kind: 'pierce' });
+    }
+    if (this.bbUpgrades.superball >= 5) {
+      items.push({ kind: 'superball' });
+    }
+    items.push({ kind: 'click' });
+
+    const total = items.length;
+    this.mobileUpgradeIndex = ((this.mobileUpgradeIndex % total) + total) % total;
+    const cur = items[this.mobileUpgradeIndex];
+
+    const mainRow = document.createElement('div');
+    mainRow.className = 'mobile-carousel-main';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'mobile-nav-arrow';
+    prevBtn.type = 'button';
+    prevBtn.setAttribute('aria-label', 'Előző');
+    prevBtn.textContent = '◀';
+    prevBtn.disabled = total <= 1;
+    prevBtn.addEventListener('click', () => {
+      this.hideBBPhaseTooltip();
+      this.mobileUpgradeIndex = (this.mobileUpgradeIndex - 1 + total) % total;
+      this.renderUpgradesMenu();
+      if (window.soundEngine) window.soundEngine.playClickHit();
+    });
+
+    const card = document.createElement('div');
+    card.className = 'mobile-carousel-card';
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'mobile-nav-arrow';
+    nextBtn.type = 'button';
+    nextBtn.setAttribute('aria-label', 'Következő');
+    nextBtn.textContent = '▶';
+    nextBtn.disabled = total <= 1;
+    nextBtn.addEventListener('click', () => {
+      this.hideBBPhaseTooltip();
+      this.mobileUpgradeIndex = (this.mobileUpgradeIndex + 1) % total;
+      this.renderUpgradesMenu();
+      if (window.soundEngine) window.soundEngine.playClickHit();
+    });
+
+    // Optional horizontal touch swipe on card
+    let touchStartX = null;
+    card.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+    card.addEventListener('touchend', (e) => {
+      if (touchStartX === null || !e.changedTouches || !e.changedTouches[0] || total <= 1) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      touchStartX = null;
+      if (Math.abs(dx) > 45) {
+        this.hideBBPhaseTooltip();
+        this.mobileUpgradeIndex = dx < 0
+          ? (this.mobileUpgradeIndex + 1) % total
+          : (this.mobileUpgradeIndex - 1 + total) % total;
+        this.renderUpgradesMenu();
+      }
+    }, { passive: true });
+
+    if (cur.kind === 'ball') {
+      const key = cur.key;
+      const b = this.ballTypes[key];
+      const spdMaxed = b.speedLevel >= b.maxSpeedLevel;
+      const pwrMaxed = b.powerLevel >= b.maxPowerLevel;
+      const spdCost = this.getSpeedUpgradeCost(key);
+      const pwrCost = this.getPowerUpgradeCost(key);
+      const canAffordSpeed = !spdMaxed && this.money >= spdCost;
+      const canAffordPower = !pwrMaxed && this.money >= pwrCost;
+
+      const spdClass = spdMaxed ? 'maxed-upg-btn' : (pirateActive ? 'pirate-free' : (canAffordSpeed ? 'affordable' : ''));
+      const pwrClass = pwrMaxed ? 'maxed-upg-btn' : (pirateActive ? 'pirate-free' : (canAffordPower ? 'affordable' : ''));
+      const typeLimit = this.getMaxBallTypeLimit(key);
+      const btItem = this.getBTAbilityCatalogItem(key);
+      const baseMaxed = spdMaxed && pwrMaxed;
+
+      let btInfoHtml = '';
+      let btBtnHtml = '';
+      if (btItem) {
+        const btLvl = this.btUpgrades[key] || 0;
+        const btMax = btItem.costs.length;
+        const btIsMax = btLvl >= btMax;
+        const btCost = btIsMax ? null : btItem.costs[btLvl];
+        const canBuyBT = baseMaxed && !btIsMax && this.bossTokens >= btCost;
+        const btCls = btIsMax ? 'maxed-upg-btn' : (canBuyBT ? 'affordable' : '');
+        const bottomLabel = btIsMax ? 'MAX' : (!baseMaxed ? `🔒 MAX Spd+Pwr (${btCost} BT)` : `${btCost} BT`);
+        const btNextDesc = btIsMax
+          ? `✅ Max (${btMax}/${btMax}): ${btItem.levels[btMax - 1]}`
+          : `➔ Phase ${btLvl + 1} (${btCost} BT): ${btItem.levels[btLvl]}`;
+
+        btInfoHtml = `
+          <div class="m-upg-bt-info" id="m-bt-info-${key}" title="Koppints az összes BT fázishoz">
+            <div class="m-upg-bt-info-title">👑 ${btItem.name} (${btLvl}/${btMax})</div>
+            <div class="m-upg-bt-info-next">${btNextDesc}</div>
+          </div>
+        `;
+        btBtnHtml = `
+          <button class="ball-bt-btn ${btCls}" id="m-btn-upg-bt-${key}" ${(!canBuyBT || btIsMax) ? 'disabled' : ''}>
+            <div class="btn-top-info">👑 BT Ability ${btLvl}/${btMax}</div>
+            <div class="btn-cost-bottom" style="font-size:${!baseMaxed && !btIsMax ? '11px' : '13px'};">${bottomLabel}</div>
+          </button>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="m-upg-left">
+          <div class="m-upg-head">
+            <div class="ball-dot m-upg-dot ball-icon-${key}"></div>
+            <div class="m-upg-title-wrap">
+              <div class="m-upg-name">${b.name}</div>
+              <div class="m-upg-count">Darab: x${b.count}${typeLimit !== null ? '/' + typeLimit : ''} • Sebzés: ${this.getBallPower(key).toFixed(1).replace(/\.0$/, '')}</div>
+            </div>
+          </div>
+          <div class="m-upg-desc">${b.shortDesc}</div>
+          ${btInfoHtml}
+        </div>
+        <div class="m-upg-right">
+          <button class="ball-upgrade-btn ${spdClass}" id="m-btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${spdMaxed ? `Speed ${b.maxSpeedLevel}/${b.maxSpeedLevel}` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} >> ${b.speedLevel + 1}`}</div>
+            <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
+          </button>
+
+          <button class="ball-upgrade-btn ${pwrClass}" id="m-btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${pwrMaxed ? `Power ${b.maxPowerLevel}/${b.maxPowerLevel}` : `Power ${b.powerLevel}/${b.maxPowerLevel} >> ${b.powerLevel + 1}`}</div>
+            <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
+          </button>
+
+          ${btBtnHtml}
+
+          <button class="delete-ball-btn" id="m-btn-del-ball-${key}">DELETE x1</button>
+        </div>
+      `;
+
+      if (!spdMaxed) card.querySelector(`#m-btn-upg-spd-${key}`).addEventListener('click', () => this.upgradeBallSpeed(key));
+      if (!pwrMaxed) card.querySelector(`#m-btn-upg-pwr-${key}`).addEventListener('click', () => this.upgradeBallPower(key));
+      if (btItem) {
+        const btLvl = this.btUpgrades[key] || 0;
+        const btInfoEl = card.querySelector(`#m-bt-info-${key}`);
+        if (btInfoEl) {
+          const lockNote = (!baseMaxed && btLvl < btItem.costs.length)
+            ? '🔒 Először maxold ki a labda Speed és Power fejlesztéseit!'
+            : null;
+          btInfoEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showBBPhaseTooltip(btItem, btLvl, e, 'BT', btItem.costs, lockNote);
+          });
+        }
+        const btBtn = card.querySelector(`#m-btn-upg-bt-${key}`);
+        if (btBtn && baseMaxed && btLvl < btItem.costs.length) {
+          btBtn.addEventListener('click', () => {
+            this.hideBBPhaseTooltip();
+            this.buyBTAbilityUpgrade(key);
+          });
+        }
+      }
+      card.querySelector(`#m-btn-del-ball-${key}`).addEventListener('click', () => this.deleteBall(key));
+    } else if (cur.kind === 'pierce') {
+      const pierceMaxed = this.pierceSpeedUpgradeLevel >= this.MAX_PIERCE_SPEED_LEVEL;
+      const pCost = this.getPierceSpeedUpgradeCost();
+      const canAffordPierce = !pierceMaxed && this.money >= pCost;
+      const curMult = this.getPermanentPierceSpeedMult().toFixed(1);
+      const nextMult = (this.getPermanentPierceSpeedMult() + 0.5).toFixed(1);
+      const pClass = pierceMaxed ? 'maxed-upg-btn' : (pirateActive ? 'pirate-free' : (canAffordPierce ? 'affordable' : ''));
+
+      card.innerHTML = `
+        <div class="m-upg-left">
+          <div class="m-upg-head">
+            <div style="font-size: 26px;">⚡</div>
+            <div class="m-upg-title-wrap">
+              <div class="m-upg-name">PIERCE SPEED</div>
+              <div class="m-upg-count" style="color:#b45309;">PIERCE LVL 5 BONUS</div>
+            </div>
+          </div>
+          <div class="m-upg-desc">Külön fejleszthető áttörő labda sebesség ($-ból). Jelenlegi szorzó: <strong>${curMult}x</strong>.</div>
+        </div>
+        <div class="m-upg-right single-action">
+          <button class="ball-upgrade-btn ${pClass}" id="m-btn-upg-pierce-spd" ${pierceMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${pierceMaxed ? `${curMult}x (LVL ${this.MAX_PIERCE_SPEED_LEVEL})` : `${curMult}x >> ${nextMult}x`}</div>
+            <div class="btn-cost-bottom">${pierceMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pCost))}</div>
+          </button>
+        </div>
+      `;
+      if (!pierceMaxed) card.querySelector('#m-btn-upg-pierce-spd').addEventListener('click', () => this.upgradePierceSpeed());
+    } else if (cur.kind === 'superball') {
+      const sbMaxed = this.superBallUpgradeLevel >= this.MAX_SUPERBALL_UPGRADE_LEVEL;
+      const sbCost = this.getSuperBallUpgradeCost();
+      const canAffordSb = !sbMaxed && this.money >= sbCost;
+      const sbClass = sbMaxed ? 'maxed-upg-btn' : (pirateActive ? 'pirate-free' : (canAffordSb ? 'affordable' : ''));
+
+      card.innerHTML = `
+        <div class="m-upg-left">
+          <div class="m-upg-head">
+            <div style="font-size: 26px;">☄️</div>
+            <div class="m-upg-title-wrap">
+              <div class="m-upg-name">SUPERBALL BOOST</div>
+              <div class="m-upg-count" style="color:#b45309;">SUPERBALL LVL 5 BONUS</div>
+            </div>
+          </div>
+          <div class="m-upg-desc">Külön fejleszthető Super Ball sebzés (+25%/szint) és maximális végsebesség (+1.5/szint) $-ból!</div>
+        </div>
+        <div class="m-upg-right single-action">
+          <button class="ball-upgrade-btn ${sbClass}" id="m-btn-upg-superball-pwr" ${sbMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${sbMaxed ? `LVL ${this.MAX_SUPERBALL_UPGRADE_LEVEL}/${this.MAX_SUPERBALL_UPGRADE_LEVEL}` : `LVL ${this.superBallUpgradeLevel}/${this.MAX_SUPERBALL_UPGRADE_LEVEL} >> ${this.superBallUpgradeLevel + 1}`}</div>
+            <div class="btn-cost-bottom">${sbMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(sbCost))}</div>
+          </button>
+        </div>
+      `;
+      if (!sbMaxed) card.querySelector('#m-btn-upg-superball-pwr').addEventListener('click', () => this.upgradeSuperBallPower());
+    } else {
+      const clickMaxed = this.clickUpgradeLevel >= this.MAX_CLICK_LEVEL;
+      const clickCost = this.getClickUpgradeCost();
+      const canAffordClick = !clickMaxed && this.money >= clickCost;
+      const clickClass = clickMaxed ? 'maxed-upg-btn' : (pirateActive ? 'pirate-free' : (canAffordClick ? 'affordable' : ''));
+
+      card.innerHTML = `
+        <div class="m-upg-left">
+          <div class="m-upg-head">
+            <div style="font-size: 26px;">👆</div>
+            <div class="m-upg-title-wrap">
+              <div class="m-upg-name">CLICK POWER</div>
+              <div class="m-upg-count">MANUAL • Sebzés: ${this.clickPower}</div>
+            </div>
+          </div>
+          <div class="m-upg-desc">Növeli a kézi kattintás (és nyomva tartás) sebzését a blokkokon és a Bossokon.</div>
+        </div>
+        <div class="m-upg-right single-action">
+          <button class="ball-upgrade-btn ${clickClass}" id="m-btn-upg-click" ${clickMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} >> ${this.clickUpgradeLevel + 1}`}</div>
+            <div class="btn-cost-bottom">${clickMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost))}</div>
+          </button>
+        </div>
+      `;
+      if (!clickMaxed) card.querySelector('#m-btn-upg-click').addEventListener('click', () => this.upgradeClick());
+    }
+
+    mainRow.appendChild(prevBtn);
+    mainRow.appendChild(card);
+    mainRow.appendChild(nextBtn);
+    shell.appendChild(mainRow);
+
+    // Bottom counter + dots indicator
+    const dotsRow = document.createElement('div');
+    dotsRow.className = 'mobile-carousel-dots';
+    const counterSpan = document.createElement('span');
+    counterSpan.className = 'mobile-carousel-counter';
+    counterSpan.textContent = `${this.mobileUpgradeIndex + 1} / ${total}`;
+    dotsRow.appendChild(counterSpan);
+
+    for (let i = 0; i < total; i++) {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = `mobile-dot ${i === this.mobileUpgradeIndex ? 'active' : ''}`;
+      dot.addEventListener('click', () => {
+        this.hideBBPhaseTooltip();
+        this.mobileUpgradeIndex = i;
+        this.renderUpgradesMenu();
+      });
+      dotsRow.appendChild(dot);
+    }
+    shell.appendChild(dotsRow);
   }
 
   // --- All-Phases & Currency Hover Tooltip (slightly translucent + top-right X button!) ---
@@ -3598,6 +4289,12 @@ class IdleBreakoutGame {
     if (bbMoney) bbMoney.textContent = Math.floor(this.money).toLocaleString();
     this.updateBossTokenExchangeUI();
 
+    // Mobile-ONLY view: single powerup split card (left: description + buy, right: all 5 levels) with arrows & ZERO scrolling!
+    if (this.isMobileView()) {
+      this.renderMobilePowerUpCarousel();
+      return;
+    }
+
     const grid = document.getElementById('bb-upgrades-grid');
     if (!grid) return;
     grid.innerHTML = '';
@@ -3669,6 +4366,155 @@ class IdleBreakoutGame {
         }
       }
     }
+  }
+
+  // --- Mobile-ONLY Single-Powerup Split Carousel for POWERUP UPGRADES (BB) (No scrolling!) ---
+  renderMobilePowerUpCarousel() {
+    const shell = document.getElementById('bb-mobile-carousel');
+    if (!shell) return;
+    shell.innerHTML = '';
+
+    const total = BB_UPGRADE_CATALOG.length;
+    if (total === 0) return;
+    this.mobilePowerUpIndex = ((this.mobilePowerUpIndex % total) + total) % total;
+    const item = BB_UPGRADE_CATALOG[this.mobilePowerUpIndex];
+
+    const curLvl = this.bbUpgrades[item.key] || 0;
+    const isMax = curLvl >= 5;
+    const cost = isMax ? null : BB_UPGRADE_COSTS[curLvl];
+    const canAfford = !isMax && this.bb >= cost;
+
+    let pipsHtml = '';
+    for (let i = 1; i <= 5; i++) {
+      const filled = i <= curLvl ? 'filled' : '';
+      const maxed = isMax ? 'maxed' : '';
+      pipsHtml += `<div class="bb-pip ${filled} ${maxed}"></div>`;
+    }
+
+    const currentStatusHtml = curLvl === 0
+      ? `<strong>Jelenlegi:</strong> Alap szint (0/5)`
+      : (isMax
+        ? `✅ <strong>MAX SZINT (5/5):</strong> ${item.levels[4]}`
+        : `<strong>Aktuális (Phase ${curLvl}):</strong> ${item.levels[curLvl - 1]}`);
+
+    let levelsHtml = '<div class="m-bb-levels-heading">SZINTEK (1–5):</div>';
+    for (let i = 0; i < item.levels.length; i++) {
+      const phaseNum = i + 1;
+      const pCost = BB_UPGRADE_COSTS[i];
+      const unlocked = curLvl >= phaseNum;
+      const isNext = curLvl + 1 === phaseNum;
+      const cls = unlocked ? 'unlocked' : (isNext ? 'next-phase' : '');
+      const prefix = unlocked ? '✅' : (isNext ? '➔' : '🔒');
+      levelsHtml += `
+        <div class="m-bb-level-row ${cls}">
+          <span>${prefix} <strong>Lvl ${phaseNum} (${pCost} BB):</strong> ${item.levels[i]}</span>
+        </div>
+      `;
+    }
+
+    const btnClass = isMax ? 'bb-buy-btn maxed-btn' : (canAfford ? 'bb-buy-btn affordable' : 'bb-buy-btn');
+    const btnText = isMax ? 'MAX SZINT' : `FEJLESZTÉS (${cost} BB)`;
+
+    const mainRow = document.createElement('div');
+    mainRow.className = 'mobile-carousel-main';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'mobile-nav-arrow';
+    prevBtn.type = 'button';
+    prevBtn.setAttribute('aria-label', 'Előző power-up');
+    prevBtn.textContent = '◀';
+    prevBtn.addEventListener('click', () => {
+      this.hideBBPhaseTooltip();
+      this.mobilePowerUpIndex = (this.mobilePowerUpIndex - 1 + total) % total;
+      this.renderPowerUpUpgradesModal();
+      if (window.soundEngine) window.soundEngine.playClickHit();
+    });
+
+    const card = document.createElement('div');
+    card.className = 'mobile-carousel-card';
+    card.innerHTML = `
+      <div class="m-bb-left">
+        <div>
+          <div class="m-bb-head">
+            <div class="m-bb-title"><span>${item.icon}</span><span>${item.name}</span></div>
+            <div class="m-bb-lvl">LVL ${curLvl}/5</div>
+          </div>
+          <div class="bb-pips-row" style="margin: 4px 0;">${pipsHtml}</div>
+          <div class="m-bb-base">${item.baseDesc}</div>
+        </div>
+        <div class="m-bb-current">${currentStatusHtml}</div>
+        <button class="${btnClass}" id="m-btn-bb-upg-${item.key}" ${(!canAfford || isMax) ? 'disabled' : ''}>${btnText}</button>
+      </div>
+      <div class="m-bb-right">
+        ${levelsHtml}
+      </div>
+    `;
+
+    if (!isMax) {
+      const buyBtn = card.querySelector(`#m-btn-bb-upg-${item.key}`);
+      if (buyBtn) {
+        buyBtn.addEventListener('click', () => {
+          this.hideBBPhaseTooltip();
+          this.buyBBUpgrade(item.key);
+        });
+      }
+    }
+
+    // Optional horizontal touch swipe
+    let touchStartX = null;
+    card.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+    card.addEventListener('touchend', (e) => {
+      if (touchStartX === null || !e.changedTouches || !e.changedTouches[0]) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      touchStartX = null;
+      if (Math.abs(dx) > 45) {
+        this.hideBBPhaseTooltip();
+        this.mobilePowerUpIndex = dx < 0
+          ? (this.mobilePowerUpIndex + 1) % total
+          : (this.mobilePowerUpIndex - 1 + total) % total;
+        this.renderPowerUpUpgradesModal();
+      }
+    }, { passive: true });
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'mobile-nav-arrow';
+    nextBtn.type = 'button';
+    nextBtn.setAttribute('aria-label', 'Következő power-up');
+    nextBtn.textContent = '▶';
+    nextBtn.addEventListener('click', () => {
+      this.hideBBPhaseTooltip();
+      this.mobilePowerUpIndex = (this.mobilePowerUpIndex + 1) % total;
+      this.renderPowerUpUpgradesModal();
+      if (window.soundEngine) window.soundEngine.playClickHit();
+    });
+
+    mainRow.appendChild(prevBtn);
+    mainRow.appendChild(card);
+    mainRow.appendChild(nextBtn);
+    shell.appendChild(mainRow);
+
+    // Bottom counter + dots indicator
+    const dotsRow = document.createElement('div');
+    dotsRow.className = 'mobile-carousel-dots';
+    const counterSpan = document.createElement('span');
+    counterSpan.className = 'mobile-carousel-counter';
+    counterSpan.textContent = `${this.mobilePowerUpIndex + 1} / ${total}`;
+    dotsRow.appendChild(counterSpan);
+
+    for (let i = 0; i < total; i++) {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = `mobile-dot ${i === this.mobilePowerUpIndex ? 'active' : ''}`;
+      dot.addEventListener('click', () => {
+        this.hideBBPhaseTooltip();
+        this.mobilePowerUpIndex = i;
+        this.renderPowerUpUpgradesModal();
+      });
+      dotsRow.appendChild(dot);
+    }
+    shell.appendChild(dotsRow);
   }
 
   // --- Bind All Events ---
@@ -3852,6 +4698,20 @@ class IdleBreakoutGame {
       });
     }
 
+    // Eco / Power-Saving Mode ("Effektusok kizárása" -> "Takarékos fejlődés")
+    const ecoBtn = document.getElementById('btn-eco-mode');
+    const exitEcoBtn = document.getElementById('btn-exit-eco-mode');
+    if (ecoBtn) {
+      ecoBtn.addEventListener('click', () => {
+        this.enterEcoMode();
+      });
+    }
+    if (exitEcoBtn) {
+      exitEcoBtn.addEventListener('click', () => {
+        this.exitEcoMode();
+      });
+    }
+
     // Sound Toggle
     const soundBtn = document.getElementById('btn-toggle-sound');
     if (soundBtn) {
@@ -3870,6 +4730,7 @@ class IdleBreakoutGame {
           this.isResetting = true;
           if (this.bgWorker) this.bgWorker.terminate();
           if (this.bgInterval) clearInterval(this.bgInterval);
+          if (this.ecoInterval) clearInterval(this.ecoInterval);
           localStorage.removeItem(this.SAVE_KEY);
           window.location.reload();
         }
@@ -3900,8 +4761,10 @@ class IdleBreakoutGame {
       bbUpgrades: { ...this.bbUpgrades },
       btUpgrades: { ...this.btUpgrades },
       pierceSpeedUpgradeLevel: this.pierceSpeedUpgradeLevel,
+      superBallUpgradeLevel: this.superBallUpgradeLevel,
       nextBossIsGold: this.nextBossIsGold,
       hasPermanentPierce: this.balls.some(b => b.isPiercing && b.isPermanentPierce),
+      hasPermanentSuperBall: this.balls.some(b => b.isSuperBall && b.isPermanentSuperBall),
       persistedPowerUps,
       lastSavedAt: Date.now(),
       balls: {}
@@ -3937,6 +4800,7 @@ class IdleBreakoutGame {
       this.clickUpgradeLevel = Math.min(this.MAX_CLICK_LEVEL, data.clickUpgradeLevel ?? 1);
       this.clickPower = this.clickUpgradeLevel;
       this.pierceSpeedUpgradeLevel = Math.min(this.MAX_PIERCE_SPEED_LEVEL, data.pierceSpeedUpgradeLevel ?? 0);
+      this.superBallUpgradeLevel = Math.min(this.MAX_SUPERBALL_UPGRADE_LEVEL, data.superBallUpgradeLevel ?? 0);
       this.nextBossIsGold = !!data.nextBossIsGold;
 
       if (data.bbUpgrades) {
@@ -3953,7 +4817,7 @@ class IdleBreakoutGame {
 
       if (data.persistedPowerUps && typeof data.persistedPowerUps === 'object') {
         for (const key in data.persistedPowerUps) {
-          if (key === 'ball_army') continue; // Eltávolított power-up figyelmen kívül hagyása
+          if (key === 'ball_army' || key === 'auto_clicker') continue; // Eltávolított power-up figyelmen kívül hagyása
           const p = data.persistedPowerUps[key];
           if (p && (p.mode === 'until_rebirth' || (p.mode === 'rounds' && p.roundsLeft > 0))) {
             this.activePowerUps[key] = p;
@@ -4012,6 +4876,10 @@ class IdleBreakoutGame {
       if (data.hasPermanentPierce && this.bbUpgrades.piercing >= 4) {
         this.spawnPiercingBall({ permanent: true, speedMult: this.getPermanentPierceSpeedMult() });
         this.activatePowerUp('piercing', '⚡', 'Pierce Ball', '1 áttörő labda Rebirthig aktív!', { mode: 'until_rebirth' });
+      }
+      if (data.hasPermanentSuperBall && this.bbUpgrades.superball >= 4) {
+        this.spawnSuperBall({ permanent: true });
+        this.activatePowerUp('superball', '☄️', 'Super Ball', '1 Super Ball Rebirthig aktív (2x sebesség / ütközés)!', { mode: 'until_rebirth' });
       }
     } catch (e) {
       console.error('Load failed:', e);

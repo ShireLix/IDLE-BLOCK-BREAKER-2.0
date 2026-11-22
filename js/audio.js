@@ -109,6 +109,14 @@ class SoundEngine {
         duration = 0.06;
         vol = this.volume * 0.3;
         break;
+      case 'superball':
+      case 'turbo':
+        type = 'sawtooth';
+        startFreq = 420;
+        endFreq = 980;
+        duration = 0.04;
+        vol = this.volume * 0.24;
+        break;
       default:
         type = 'sine';
         startFreq = 480;
