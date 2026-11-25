@@ -7,23 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=3.6">
+  <link rel="stylesheet" href="css/style.css?v=4.9">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
-
-<!-- Power-Saving / Eco Progress Mode Overlay -->
-<div id="eco-mode-overlay" class="eco-mode-overlay" aria-hidden="true">
-  <div class="eco-mode-content">
-    <div class="eco-mode-icon">🌙</div>
-    <div class="eco-mode-title">TAKARÉKOS FEJLŐDÉS</div>
-    <p class="eco-mode-desc">
-      Az effektusok és a grafika ki vannak kapcsolva az energiatakarékosság érdekében.<br>
-      A játék a háttérben tovább fut — a pontokat és a pénzt ugyanúgy megkapod!
-    </p>
-    <button id="btn-exit-eco-mode" class="eco-exit-btn" type="button">Visszatérés a játékba</button>
-  </div>
-</div>
 
 <!-- Mobile Portrait Rotate Prompt -->
 <div id="rotate-phone-overlay" class="rotate-phone-overlay">
@@ -31,7 +18,7 @@
     <div class="rotate-phone-icon">📱</div>
     <div class="rotate-phone-title">FORDÍTSD EL A TELEFONODAT!</div>
     <p class="rotate-phone-desc">
-      Kérlek, fordítsd a készülékedet <strong>fektetett (vízszintes) módba</strong>, hogy a játék ugyanúgy és kényelmesen jelenjen meg, mint számítógépen!
+      Kérlek, fordítsd a készülékedet <strong>fektetett (vízszintes) módba</strong>, hogy a játék kényelmesen jelenjen meg!
     </p>
   </div>
 </div>
@@ -44,210 +31,543 @@
   <div class="ambient-shape"></div>
 </div>
 
-<div id="game-container">
+<div class="page-layout">
 
-  <!-- Top Navigation & Information Bar -->
-  <header class="top-bar">
-
-    <!-- Row 1: 6 Ball Buy Slots + Currency HUD + Controls -->
-    <div class="top-bar-row top-bar-row-main">
-      <!-- Left: 6 Distinct Ball Purchase Slots -->
-      <div class="top-left-section">
-        <div class="ball-buy-slot" id="ball-slot-normal" title="NORMAL BALL: 1x sebesség, 1x sebzés">
-          <div class="ball-dot ball-icon-normal"></div>
-          <div class="ball-slot-tag">NORM</div>
-          <div class="ball-price-box" id="ball-price-normal">$25</div>
-        </div>
-
-        <div class="ball-buy-slot" id="ball-slot-speedy" title="SPEEDY BALL: 2x sebesség, 50% sebzés">
-          <div class="ball-dot ball-icon-speedy"></div>
-          <div class="ball-slot-tag">FAST</div>
-          <div class="ball-price-box" id="ball-price-speedy">$150</div>
-        </div>
-
-        <div class="ball-buy-slot" id="ball-slot-heavy" title="HEAVY BALL: 0.5x sebesség, 20 alap sebzés azonnal!">
-          <div class="ball-dot ball-icon-heavy"></div>
-          <div class="ball-slot-tag">HEAV</div>
-          <div class="ball-price-box" id="ball-price-heavy">$750</div>
-        </div>
-
-        <div class="ball-buy-slot" id="ball-slot-poison" title="POISON BALL: 1.5x sebesség, azonnali sebzés + BT-ből fejleszthető méreg">
-          <div class="ball-dot ball-icon-poison"></div>
-          <div class="ball-slot-tag">POIS</div>
-          <div class="ball-price-box" id="ball-price-poison">$3K</div>
-        </div>
-
-        <div class="ball-buy-slot" id="ball-slot-ghost" title="GHOSTBALL (max 40 db): 1x sebesség, áthalad a blokkokon + BT szellembomba">
-          <div class="ball-dot ball-icon-ghost"></div>
-          <div class="ball-slot-tag">GHST</div>
-          <div class="ball-price-box" id="ball-price-ghost">$45K</div>
-        </div>
-
-        <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL (max 15 / 100-nál 25 db): 1x sebesség, ütközéskor osztódik (BT-ből 16-ig!)">
-          <div class="ball-dot ball-icon-multiply"></div>
-          <div class="ball-slot-tag">MULT</div>
-          <div class="ball-price-box" id="ball-price-multiply">$65K</div>
-        </div>
-
-        <div class="ball-buy-slot" id="ball-slot-rocket" title="ROCKET BALL (max 5 db): 10 dmg labda | rakéta 100 dmg (mellette 50, amellett 20) – 10 BT: 3 mp homing!">
-          <div class="ball-dot ball-icon-rocket"></div>
-          <div class="ball-slot-tag">RCKT</div>
-          <div class="ball-price-box" id="ball-price-rocket">$90K</div>
-        </div>
-      </div>
-
-      <!-- Right: Currency HUD ($, BB, Boss Tokens) and Settings/Sound/Eco -->
-      <div class="top-right-section">
-        <div class="boss-token-hud" data-currency-tip="bt">
-          <span class="bt-icon">👑</span>
-          <span id="hud-boss-tokens-text">0</span>
-          <span class="bt-label">BT</span>
-        </div>
-
-        <div class="currency-hud-box">
-          <div class="currency-hud-row" data-currency-tip="money">
-            <span class="currency-label money-lbl">$</span>
-            <span class="currency-value-bar gold-bar" id="hud-money-text">0</span>
-          </div>
-          <div class="currency-hud-row" data-currency-tip="bb">
-            <span class="currency-label bb-lbl">BB</span>
-            <span class="currency-value-bar bb-bar" id="hud-bb-text">0</span>
-          </div>
-        </div>
-
-        <div class="top-controls-group">
-          <button id="btn-eco-mode" class="retro-icon-btn eco-mode-btn" title="Effektusok kizárása (Takarékos fejlődés)">
-            <span class="eco-btn-icon">🌙</span>
-            <span class="eco-btn-label">Effektusok<br>kizárása</span>
-          </button>
-          <button id="btn-settings" class="retro-icon-btn" title="Teljes Újraindítás (Factory Reset)">⚙️</button>
-          <button id="btn-toggle-sound" class="retro-icon-btn sound-btn" title="Hang ki/be">🔊</button>
-        </div>
-      </div>
+  <!-- Left Sidebar: LEADERBOARD (PC Only) -->
+  <aside id="leaderboard-sidebar" class="desktop-sidebar leaderboard-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title"><span class="sidebar-icon">🏆</span> RANGLISTA</div>
+      <div class="sidebar-subtitle">Arcade Globális Bajnokság</div>
+      <div id="lb-conn-status-pc" class="lb-conn-status" title="Valós idejű multiplayer kapcsolat"><span class="conn-dot"></span> ÉLŐ SZINKRON</div>
     </div>
 
-    <!-- Row 2: Status, Action Buttons (UPGRADES, POWERUP UPGRADES, REBIRTH) & Active Power-ups -->
-    <div class="top-bar-row top-bar-row-actions">
-      <div class="top-center-section">
-        <div class="status-box">
-          <span id="hud-balls-text">0/15</span>
-          <span class="status-sub">BALLS</span>
-        </div>
-
-        <div class="status-box">
-          <span class="status-sub">LEVEL</span>
-          <span id="hud-level-text" class="status-box-val">1</span>
-        </div>
-
-        <button id="btn-open-upgrades" class="retro-btn">UPGRADES</button>
-        <button id="btn-open-powerup-upgrades" class="retro-btn powerup-upg-btn">⚡ POWERUP UPGRADES</button>
-        <button id="btn-rebirth-trigger" class="retro-btn rebirth-btn">REBIRTH</button>
-      </div>
-
-      <!-- Active Power-ups Bar -->
-      <div id="active-powerups-container" class="powerups-hud-bar"></div>
+    <!-- Dec 24 Event Countdown Banner (Desktop Sidebar) -->
+    <div class="dec24-event-banner">
+      <div class="dec24-timer-row">🎄 DEC. 24-IG: <strong class="dec24-countdown-text">-- nap --:--:--</strong></div>
+      <div class="dec24-prize-text">🏆 A Leaderboard <strong>TOP 1</strong> ingyen megkapja a Prémium Battle Pass-t!</div>
     </div>
 
-  </header>
+    <!-- Player Profile Strip -->
+    <div class="player-profile-card">
+      <div class="player-profile-row">
+        <label for="player-name-input-pc" class="profile-label">NÉV:</label>
+        <input type="text" id="player-name-input-pc" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
+        <button id="btn-save-name-pc" class="retro-btn mini-save-btn">OK</button>
+      </div>
+      <div class="player-stats-mini">
+        <span>⭐ REB: <strong id="lb-player-rebirths">0</strong></span>
+        <span>🚩 SZINT: <strong id="lb-player-level">1</strong></span>
+        <span>🎖️ HELYEZÉS: <strong id="lb-player-rank">#--</strong></span>
+      </div>
+      <button id="lb-auth-status-pc" class="lb-auth-status-bar" type="button" title="Fiók / Felhőmentés megnyitása">👤 Vendég mód ➔ <u>Belépés / Mentés</u></button>
+    </div>
 
-  <!-- Arena Container with Canvas and Perimeter Border Blocks -->
-  <main id="arena-wrapper">
-    <canvas id="game-canvas"></canvas>
-    <div id="offline-toast" class="offline-toast"></div>
-  </main>
+    <div class="leaderboard-table-header">
+      <span class="col-rank">#</span>
+      <span class="col-name">JÁTÉKOS</span>
+      <span class="col-reb">REB</span>
+      <span class="col-lvl">SZINT</span>
+    </div>
 
-  <!-- Upgrades Popup Overlay ($ Upgrades: Balls, BT Ball Abilities, Click Power, Pierce Speed + Boss Token Exchange) -->
-  <div id="upgrades-modal" class="overlay-backdrop">
-    <div class="retro-modal-window">
-      <div class="modal-header-row">
-        <div class="modal-title-box">UPGRADES ($)</div>
-        <div class="bb-header-right">
-          <div class="money-balance-pill" data-currency-tip="money">💵 $<span id="upg-modal-money">0</span></div>
-          <div class="token-exchange-bar">
-            <span class="token-count-pill" data-currency-tip="bt">👑 <strong id="upg-boss-tokens">0</strong> BT</span>
-            <button id="btn-exchange-tokens-upg" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+    <div class="leaderboard-table-body" id="leaderboard-list-pc">
+      <!-- Dynamically filled with ranked players -->
+    </div>
+
+    <div class="sidebar-footer-note">
+      Adatok mentése automatikus. Növeld a Rebirth és Szint számod a feljebb jutáshoz!
+    </div>
+  </aside>
+
+  <!-- Center: Main Game Container -->
+  <div id="game-container">
+
+    <!-- Top Navigation & Information Bar -->
+    <header class="top-bar">
+
+      <!-- Row 1: 8 Ball Purchase Slots + Currency HUD + Controls -->
+      <div class="top-bar-row top-bar-row-main">
+        <!-- 8 Distinct Ball Purchase Slots in Reordered Sequence -->
+        <div class="top-left-section">
+          <div class="ball-buy-slot" id="ball-slot-normal" title="NORMAL BALL: 0.72x sebesség, 1x sebzés, Battle Pass testreszabható!">
+            <div class="ball-dot ball-icon-normal"></div>
+            <div class="ball-slot-tag">NORM</div>
+            <div class="ball-price-box" id="ball-price-normal">$25</div>
           </div>
-          <div id="upgrades-discount-banner" class="discount-banner" style="display: none;"></div>
+
+          <div class="ball-buy-slot" id="ball-slot-speedy" title="SPEEDY BALL: 2x sebesség, 50% sebzés">
+            <div class="ball-dot ball-icon-speedy"></div>
+            <div class="ball-slot-tag">FAST</div>
+            <div class="ball-price-box" id="ball-price-speedy">$150</div>
+          </div>
+
+          <div class="ball-buy-slot" id="ball-slot-heavy" title="HEAVY BALL: 0.5x sebesség, 20 alap sebzés azonnal!">
+            <div class="ball-dot ball-icon-heavy"></div>
+            <div class="ball-slot-tag">HEAV</div>
+            <div class="ball-price-box" id="ball-price-heavy">$750</div>
+          </div>
+
+          <div class="ball-buy-slot" id="ball-slot-smasher" title="SMASHER BALL: 0.9x sebesség, a célpontot és 3 szomszédos blokkot is megsebez!">
+            <div class="ball-dot ball-icon-smasher"></div>
+            <div class="ball-slot-tag">SMASH</div>
+            <div class="ball-price-box" id="ball-price-smasher">$2.5K</div>
+          </div>
+
+          <div class="ball-buy-slot" id="ball-slot-poison" title="POISON BALL: 1.5x sebesség, azonnali sebzés + BT méreg!">
+            <div class="ball-dot ball-icon-poison"></div>
+            <div class="ball-slot-tag">POIS</div>
+            <div class="ball-price-box" id="ball-price-poison">$8K</div>
+          </div>
+
+          <div class="ball-buy-slot" id="ball-slot-rocket" title="ROCKET BALL (max 5 db): 10 dmg labda | rakéta 100 dmg (mellette 50, amellett 20) – 10 BT: 3 mp homing!">
+            <div class="ball-dot ball-icon-rocket"></div>
+            <div class="ball-slot-tag">RCKT</div>
+            <div class="ball-price-box" id="ball-price-rocket">$45K</div>
+          </div>
+
+          <div class="ball-buy-slot" id="ball-slot-ghost" title="GHOSTBALL (max 40 db): 1x sebesség, áthalad a blokkokon + BT szellembomba!">
+            <div class="ball-dot ball-icon-ghost"></div>
+            <div class="ball-slot-tag">GHST</div>
+            <div class="ball-price-box" id="ball-price-ghost">$180K</div>
+          </div>
+
+          <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL (max 15 / 50-nél 25 db): 1x sebesség, ütközéskor osztódik (BT: 16-ig!)">
+            <div class="ball-dot ball-icon-multiply"></div>
+            <div class="ball-slot-tag">MULT</div>
+            <div class="ball-price-box" id="ball-price-multiply">$650K</div>
+          </div>
+        </div>
+
+        <!-- Right: Currency HUD ($, BB, Boss Tokens) and Settings/Sound -->
+        <div class="top-right-section">
+          <div class="boss-token-hud" data-currency-tip="bt">
+            <span class="bt-icon">👑</span>
+            <span id="hud-boss-tokens-text">0</span>
+            <span class="bt-label">BT</span>
+          </div>
+
+          <div class="currency-hud-box">
+            <div class="currency-hud-row" data-currency-tip="money">
+              <span class="currency-label money-lbl">$</span>
+              <span class="currency-value-bar gold-bar" id="hud-money-text">0</span>
+            </div>
+            <div class="currency-hud-row" data-currency-tip="bb">
+              <span class="currency-label bb-lbl">BB</span>
+              <span class="currency-value-bar bb-bar" id="hud-bb-text">0</span>
+            </div>
+          </div>
+
+          <div class="top-controls-group">
+            <button id="btn-settings" class="retro-icon-btn" title="Teljes Újraindítás (Factory Reset)">⚙️</button>
+            <button id="btn-toggle-sound" class="retro-icon-btn sound-btn" title="Hang ki/be">🔊</button>
+          </div>
         </div>
       </div>
 
-      <div class="upgrades-content-grid" id="upgrades-content-grid">
-        <!-- Dynamically rendered ball upgrades, BT Ball Abilities, Pierce Speed & Click X (Desktop) -->
+      <!-- Row 2: Status, Action Buttons & Active Power-ups -->
+      <div class="top-bar-row top-bar-row-actions">
+        <div class="top-center-section">
+          <div class="status-box">
+            <span id="hud-balls-text">0/15</span>
+            <span class="status-sub">BALLS</span>
+          </div>
+
+          <div class="status-box">
+            <span class="status-sub">LEVEL</span>
+            <span id="hud-level-text" class="status-box-val">1</span>
+          </div>
+
+          <!-- Mobile Action Buttons with Info 'i' Icons (Visible only on mobile/narrow screens) -->
+          <div class="mobile-tab-group">
+            <button id="btn-open-leaderboard" class="retro-btn mobile-action-btn" title="Ranglista megnyitása">🏆 RANGLISTA</button>
+            <button id="btn-hud-lb-info" class="retro-btn mobile-action-btn mobile-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Ranglista esemény infó">i</button>
+          </div>
+          <div class="mobile-tab-group">
+            <button id="btn-open-battlepass" class="retro-btn mobile-action-btn" title="Battle Pass megnyitása">🎖️ BATTLE PASS</button>
+            <button id="btn-hud-bp-info" class="retro-btn mobile-action-btn mobile-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Battle Pass esemény infó">i</button>
+          </div>
+
+          <button id="btn-open-upgrades" class="retro-btn">UPGRADES</button>
+          <button id="btn-open-powerup-upgrades" class="retro-btn powerup-upg-btn">⚡ POWERUP UPGRADES</button>
+          <button id="btn-rebirth-trigger" class="retro-btn rebirth-btn">REBIRTH</button>
+          <button id="btn-open-auth" class="retro-btn auth-btn" title="Bejelentkezés és Felhőmentés">👤 BELÉPÉS</button>
+        </div>
+
+        <!-- Active Power-ups Bar -->
+        <div id="active-powerups-container" class="powerups-hud-bar"></div>
       </div>
 
-      <div class="mobile-carousel-shell" id="upgrades-mobile-carousel">
-        <!-- Dynamically rendered single-ball carousel with arrows (Mobile ONLY) -->
-      </div>
+    </header>
 
-      <div class="modal-footer">
-        <button id="btn-close-upgrades" class="close-btn">CLOSE</button>
-      </div>
-    </div>
+    <!-- Arena Container with Canvas and Perimeter Border Blocks -->
+    <main id="arena-wrapper">
+      <canvas id="game-canvas"></canvas>
+      <div id="offline-toast" class="offline-toast"></div>
+    </main>
+
   </div>
 
-  <!-- Power-Up & Click BB Upgrades Popup Overlay -->
-  <div id="powerup-upgrades-modal" class="overlay-backdrop">
-    <div class="retro-modal-window bb-modal-window">
-      <div class="modal-header-row">
-        <div class="modal-title-box bb-title-box">⚡ POWERUP UPGRADES (BB)</div>
-        <div class="bb-header-right">
-          <div class="money-balance-pill" data-currency-tip="money">💵 $<span id="bb-modal-money">0</span></div>
-          <div class="token-exchange-bar">
-            <span class="token-count-pill" data-currency-tip="bt">👑 <strong id="bb-modal-boss-tokens">0</strong> BT</span>
-            <button id="btn-exchange-tokens-bb" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
-          </div>
-          <div class="bb-balance-pill" data-currency-tip="bb">⭐ <span id="bb-modal-balance">0</span> BB</div>
-        </div>
+  <!-- Right Sidebar: BATTLE PASS (PC Only) -->
+  <aside id="battlepass-sidebar" class="desktop-sidebar battlepass-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title"><span class="sidebar-icon">🎖️</span> BATTLE PASS</div>
+      <div class="sidebar-subtitle">30 Stage Szezonális Jutalom</div>
+    </div>
+
+    <!-- Dec 24 Event Countdown Banner (Desktop Sidebar) -->
+    <div class="dec24-event-banner">
+      <div class="dec24-timer-row">🎄 DEC. 24-IG: <strong class="dec24-countdown-text">-- nap --:--:--</strong></div>
+      <div class="dec24-prize-text">🏆 A Leaderboard <strong>TOP 1</strong> ingyen megkapja a Prémium Battle Pass-t!</div>
+    </div>
+
+    <!-- Battle Pass Overall Progress Strip -->
+    <div class="bp-progress-card">
+      <div class="bp-stage-indicator">
+        <span>Fokozat: <strong id="bp-current-stage-pc" class="highlight-stage">Stage 1/30</strong></span>
+        <span>Törött blokk: <strong id="bp-total-bricks-pc">0</strong></span>
+      </div>
+      <div class="bp-progress-bar-wrap">
+        <div class="bp-progress-bar-fill" id="bp-progress-fill-pc" style="width: 0%;"></div>
+        <span class="bp-progress-bar-text" id="bp-progress-text-pc">0 / 5,000</span>
       </div>
 
-      <div class="bb-modal-scroll">
-        <div class="bb-upgrades-grid" id="bb-upgrades-grid">
-          <!-- Dynamically rendered BB upgrade cards (Desktop) -->
-        </div>
+      <!-- Premium Upgrade Banner -->
+      <div class="bp-premium-banner">
+        <button id="btn-unlock-premium-pc" class="retro-btn bp-premium-btn" title="Prémium vásárlása PayPalon keresztül">
+          💳 PRÉMIUM VÁSÁRLÁSA (4 999 FT)
+        </button>
       </div>
 
-      <div class="mobile-carousel-shell" id="bb-mobile-carousel">
-        <!-- Dynamically rendered single-powerup split carousel with arrows (Mobile ONLY) -->
-      </div>
-
-      <div class="modal-footer">
-        <button id="btn-close-powerup-upgrades" class="close-btn">CLOSE</button>
+      <!-- Quick Tab for Equipping Ball Skins & Effects -->
+      <div class="bp-tab-row">
+        <button id="btn-bp-tab-stages-pc" class="bp-tab-btn active">SZINTEK (1-30)</button>
+        <button id="btn-bp-tab-armory-pc" class="bp-tab-btn">🎨 NORMÁL LABDÁK</button>
       </div>
     </div>
-  </div>
 
-  <!-- Floating Tooltip for All Phases of Power-Up & Ability Upgrades -->
-  <div id="bb-phase-tooltip" class="bb-phase-tooltip"></div>
-
-  <!-- Rebirth Confirmation Modal -->
-  <div id="rebirth-modal" class="overlay-backdrop">
-    <div class="rebirth-dialog-box">
-      <div class="rebirth-dialog-title">REBIRTH (ÚJJÁSZÜLETÉS)</div>
-      <div class="rebirth-desc-text">
-        Elért szinted: <span id="rebirth-current-lvl" class="rebirth-highlight">20</span> (Szükséges minimum: <span id="rebirth-required-lvl" style="font-weight: bold;">20</span>)<br><br>
-        Jutalmak az újjászületésért:<br>
-        ⭐ <strong style="color: #d97706;">+1 BB (Breakout Badge)</strong><br>
-        💰 <strong>Jövedelem szorzó:</strong> <span id="rebirth-current-mult">1.00x</span> ➔ <span id="rebirth-next-mult" class="rebirth-highlight" style="color: #2cd64e;">1.25x</span> (+25% pénz!)<br>
-        🎱 <strong>Max labdaférőhely:</strong> <span id="rebirth-slots-info" style="color: #2563eb; font-weight: bold;">15 ➔ 15</span><br>
-        🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.14% ➔ 0.16%</span><br>
-        ⚡ <strong>Kritikus kattintás:</strong> <span id="rebirth-crit-info" style="color: #38bdf8; font-weight: bold;">5% ➔ 6%</span><br><br>
-        <small style="color: #555; display: block; border-top: 1px dashed #888; padding-top: 6px;">
-          (Újra az 1. szintről kezdesz 0 labdával, de a BB/BT valutád, a BB/BT fejlesztéseid, a pénzszorzód és a labdaférőhelyed megmaradnak!)
-        </small>
-      </div>
-
-      <div class="rebirth-actions-row">
-        <button id="btn-confirm-rebirth" class="retro-btn" style="background: #2cd64e; flex: 1;">ÚJJÁSZÜLETÉS MOST</button>
-        <button id="btn-cancel-rebirth" class="retro-btn" style="background: var(--gray-btn); flex: 1;">MÉGSE</button>
-      </div>
+    <!-- Container for Stages List -->
+    <div class="bp-stages-scroll" id="bp-stages-container-pc">
+      <!-- Dynamically filled with 30 stages -->
     </div>
-  </div>
+
+    <!-- Container for Normal Ball Customization / Armory (Switchable tab) -->
+    <div class="bp-armory-scroll" id="bp-armory-container-pc" style="display: none;">
+      <!-- Dynamically filled with player's Normal Balls and skin/effect selectors -->
+    </div>
+  </aside>
 
 </div>
 
-<!-- Audio Engine and Core Game Scripts -->
-<script src="js/audio.js?v=3.6"></script>
-<script src="js/game.js?v=3.6"></script>
+<!-- Mobile Modal: LEADERBOARD -->
+<div id="leaderboard-modal" class="overlay-backdrop">
+  <div class="retro-modal-window modal-mobile-responsive">
+    <div class="modal-header-row">
+      <div class="modal-title-box">🏆 RANGLISTA</div>
+      <div id="lb-conn-status-mobile" class="lb-conn-status" title="Valós idejű multiplayer kapcsolat"><span class="conn-dot"></span> ÉLŐ SZINKRON</div>
+      <div class="modal-header-actions">
+        <button id="btn-modal-lb-info" class="retro-info-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Ranglista esemény infó">i</button>
+        <button id="btn-close-leaderboard" class="retro-modal-x-btn">✕</button>
+      </div>
+    </div>
+
+    <div class="player-profile-card">
+      <div class="player-profile-row">
+        <label for="player-name-input-mobile" class="profile-label">NÉV:</label>
+        <input type="text" id="player-name-input-mobile" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
+        <button id="btn-save-name-mobile" class="retro-btn mini-save-btn">OK</button>
+      </div>
+      <div class="player-stats-mini">
+        <span>⭐ REB: <strong id="lb-player-rebirths-mobile">0</strong></span>
+        <span>🚩 SZINT: <strong id="lb-player-level-mobile">1</strong></span>
+        <span>🎖️ HELYEZÉS: <strong id="lb-player-rank-mobile">#--</strong></span>
+      </div>
+      <button id="lb-auth-status-mobile" class="lb-auth-status-bar" type="button" title="Fiók / Felhőmentés megnyitása">👤 Vendég mód ➔ <u>Belépés / Mentés</u></button>
+    </div>
+
+    <div class="leaderboard-table-header">
+      <span class="col-rank">#</span>
+      <span class="col-name">JÁTÉKOS</span>
+      <span class="col-reb">REB</span>
+      <span class="col-lvl">SZINT</span>
+    </div>
+
+    <div class="leaderboard-table-body" id="leaderboard-list-mobile">
+      <!-- Dynamically filled with ranked players -->
+    </div>
+
+    <div class="modal-footer">
+      <button id="btn-close-leaderboard-footer" class="close-btn">BEZÁRÁS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mobile Modal: BATTLE PASS -->
+<div id="battlepass-modal" class="overlay-backdrop">
+  <div class="retro-modal-window modal-mobile-responsive bp-modal-window">
+    <div class="modal-header-row">
+      <div class="modal-title-box">🎖️ BATTLE PASS (30 STAGE)</div>
+      <div class="modal-header-actions">
+        <button id="btn-modal-bp-info" class="retro-info-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Battle Pass esemény infó">i</button>
+        <button id="btn-close-battlepass" class="retro-modal-x-btn">✕</button>
+      </div>
+    </div>
+
+    <div class="bp-progress-card">
+      <div class="bp-stage-indicator">
+        <span>Fokozat: <strong id="bp-current-stage-mobile" class="highlight-stage">Stage 1/30</strong></span>
+        <span>Törött blokk: <strong id="bp-total-bricks-mobile">0</strong></span>
+      </div>
+      <div class="bp-progress-bar-wrap">
+        <div class="bp-progress-bar-fill" id="bp-progress-fill-mobile" style="width: 0%;"></div>
+        <span class="bp-progress-bar-text" id="bp-progress-text-mobile">0 / 5,000</span>
+      </div>
+
+      <div class="bp-premium-banner">
+        <button id="btn-unlock-premium-mobile" class="retro-btn bp-premium-btn" title="Prémium vásárlása PayPalon keresztül">
+          💳 PRÉMIUM VÁSÁRLÁSA (4 999 FT)
+        </button>
+      </div>
+
+      <div class="bp-tab-row">
+        <button id="btn-bp-tab-stages-mobile" class="bp-tab-btn active">SZINTEK (1-30)</button>
+        <button id="btn-bp-tab-armory-mobile" class="bp-tab-btn">🎨 NORMÁL LABDÁK</button>
+      </div>
+    </div>
+
+    <div class="bp-stages-scroll" id="bp-stages-container-mobile">
+      <!-- Dynamically filled with 30 stages -->
+    </div>
+
+    <div class="bp-armory-scroll" id="bp-armory-container-mobile" style="display: none;">
+      <!-- Dynamically filled with player's Normal Balls and skin/effect selectors -->
+    </div>
+
+    <div class="modal-footer">
+      <button id="btn-close-battlepass-footer" class="close-btn">BEZÁRÁS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Premium Checkout Confirmation Modal -->
+<div id="premium-checkout-modal" class="overlay-backdrop">
+  <div class="rebirth-dialog-box premium-dialog-box">
+    <div class="rebirth-dialog-title" style="color: #fde047;">💳 PRÉMIUM VÁSÁRLÁSA (PAYPAL)</div>
+    <div class="rebirth-desc-text" style="font-size: 15px; line-height: 1.4;">
+      Biztonságos PayPal Vásárlás:<br><br>
+      💰 <strong>Ár:</strong> <span style="color:#22c55e; font-weight:bold; font-size:18px;">4 999 Ft</span> (Egyszeri prémium hozzáférés)<br><br>
+      🎁 <strong>Amit kapsz:</strong><br>
+      • Mind a <strong>30 exkluzív prémium szint</strong> feloldása!<br>
+      • Összesen <strong>15 Prémium Normal Ball Skin</strong> és <strong>15 Látványos Normal Ball Effekt</strong>!<br>
+      • Korlátlan hozzáférés a szezonális kozmetikákhoz!<br><br>
+      <small style="color: #fde047; display: block; border-top: 1px dashed #888; padding-top: 6px;">
+        A gomb megnyomásakor a PayPal egy új ablakban nyílik meg. A Prémium sáv automatikusan nem aktiválható a játékon belül.
+      </small>
+    </div>
+
+    <div class="rebirth-actions-row">
+      <button id="btn-confirm-premium-pay" class="retro-btn" style="background: #0070ba; color: #fff; font-weight: bold; flex: 1.3;">💳 FIZETÉS PAYPALLAL (4 999 FT)</button>
+      <button id="btn-cancel-premium-pay" class="retro-btn" style="background: var(--gray-btn); flex: 1;">MÉGSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrades Popup Overlay ($ Upgrades: Balls, BT Ball Abilities, Click Power, Pierce Speed + Boss Token Exchange) -->
+<div id="upgrades-modal" class="overlay-backdrop">
+  <div class="retro-modal-window">
+    <div class="modal-header-row">
+      <div class="modal-title-box">UPGRADES ($)</div>
+      <div class="bb-header-right">
+        <div class="money-balance-pill" data-currency-tip="money">💵 $<span id="upg-modal-money">0</span></div>
+        <div class="token-exchange-bar">
+          <span class="token-count-pill" data-currency-tip="bt">👑 <strong id="upg-boss-tokens">0</strong> BT</span>
+          <button id="btn-exchange-tokens-upg" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+        </div>
+        <div id="upgrades-discount-banner" class="discount-banner" style="display: none;"></div>
+      </div>
+    </div>
+
+    <div class="upgrades-content-grid" id="upgrades-content-grid">
+      <!-- Dynamically rendered ball upgrades, BT Ball Abilities, Pierce Speed & Click X -->
+    </div>
+
+    <div class="modal-footer">
+      <button id="btn-close-upgrades" class="close-btn">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Power-Up & Click BB Upgrades Popup Overlay -->
+<div id="powerup-upgrades-modal" class="overlay-backdrop">
+  <div class="retro-modal-window bb-modal-window">
+    <div class="modal-header-row">
+      <div class="modal-title-box bb-title-box">⚡ POWERUP UPGRADES (BB)</div>
+      <div class="bb-header-right">
+        <div class="money-balance-pill" data-currency-tip="money">💵 $<span id="bb-modal-money">0</span></div>
+        <div class="token-exchange-bar">
+          <span class="token-count-pill" data-currency-tip="bt">👑 <strong id="bb-modal-boss-tokens">0</strong> BT</span>
+          <button id="btn-exchange-tokens-bb" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+        </div>
+        <div class="bb-balance-pill" data-currency-tip="bb">⭐ <span id="bb-modal-balance">0</span> BB</div>
+      </div>
+    </div>
+
+    <div class="bb-modal-scroll">
+      <div class="bb-section-heading">⚡ FEJLESZTHETŐ POWER-UPOK & KÉPESSÉGEK (BB)</div>
+      <div class="bb-upgrades-grid" id="bb-upgrades-grid">
+        <!-- Dynamically rendered BB upgrade cards -->
+      </div>
+
+      <div class="bb-section-heading non-upgradable-heading" id="bb-nonupgradable-heading">🔒 NEM FEJLESZTHETŐ POWER-UPOK (Csak eséssel szerezhető)</div>
+      <div class="bb-upgrades-grid bb-nonupgradable-grid" id="bb-nonupgradable-grid">
+        <!-- Dynamically rendered non-upgradable power-ups -->
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="btn-close-powerup-upgrades" class="close-btn">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Floating Tooltip for All Phases of Power-Up & Ability Upgrades -->
+<div id="bb-phase-tooltip" class="bb-phase-tooltip"></div>
+
+<!-- Rebirth Confirmation Modal -->
+<div id="rebirth-modal" class="overlay-backdrop">
+  <div class="rebirth-dialog-box">
+    <div class="rebirth-dialog-title">REBIRTH (ÚJJÁSZÜLETÉS)</div>
+    <div class="rebirth-desc-text">
+      Elért szinted: <span id="rebirth-current-lvl" class="rebirth-highlight">25</span> (Szükséges minimum: <span id="rebirth-required-lvl" style="font-weight: bold;">25</span>)<br><br>
+      Jutalmak az újjászületésért:<br>
+      ⭐ <strong style="color: #d97706;">+1 BB (Breakout Badge)</strong><br>
+      💰 <strong>Jövedelem szorzó:</strong> <span id="rebirth-current-mult">1.00x</span> ➔ <span id="rebirth-next-mult" class="rebirth-highlight" style="color: #22c55e;">1.25x</span> (+25% pénz!)<br>
+      🎱 <strong>Max labdaférőhely:</strong> <span id="rebirth-slots-info" style="color: #2563eb; font-weight: bold;">15 ➔ 15</span><br>
+      🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.13% ➔ 0.13%</span><br>
+      ⚡ <strong>Kritikus kattintás:</strong> <span id="rebirth-crit-info" style="color: #38bdf8; font-weight: bold;">5% ➔ 6%</span><br><br>
+      <small style="color: #555; display: block; border-top: 1px dashed #888; padding-top: 6px;">
+        (Újra az 1. szintről kezdesz 0 labdával, de a BB/BT valutád, a BB/BT fejlesztéseid, a Battle Pass haladásod, a játékosneved, a pénzszorzód és a labdaférőhelyed megmaradnak!)
+      </small>
+    </div>
+
+    <div class="rebirth-actions-row">
+      <button id="btn-confirm-rebirth" class="retro-btn" style="background: #22c55e; flex: 1;">ÚJJÁSZÜLETÉS MOST</button>
+      <button id="btn-cancel-rebirth" class="retro-btn" style="background: var(--gray-btn); flex: 1;">MÉGSE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cloud Login & Account Modal (Bejelentkezés Fül) -->
+<div id="auth-modal" class="overlay-backdrop">
+  <div class="retro-modal-window auth-modal-window">
+    <div class="modal-header-row">
+      <div class="modal-title-box">👤 BEJELENTKEZÉS ÉS FELHŐMENTÉS</div>
+      <button id="btn-close-auth" class="retro-modal-x-btn" type="button">✕</button>
+    </div>
+
+    <div class="auth-modal-scroll">
+      <div id="auth-config-warning" class="auth-config-warning" style="display: none;">
+        ⚠️ <strong>Firebase még nincs beállítva!</strong><br>
+        A felhőalapú bejelentkezéshez másold be a saját Firebase kulcsodat a <code>js/firebase-config.js</code> fájlba! (Alul addig is használható a Mentési Kód export/import.)
+      </div>
+
+      <div id="auth-error-box" class="auth-error-box" style="display: none;"></div>
+
+      <!-- Guest View: Login / Register Tabs -->
+      <div id="auth-guest-view" class="auth-panel-section">
+        <div class="auth-tabs-row">
+          <button id="btn-auth-tab-login" class="bp-tab-btn active" type="button">🔑 BEJELENTKEZÉS</button>
+          <button id="btn-auth-tab-register" class="bp-tab-btn" type="button">✨ REGISZTRÁCIÓ</button>
+        </div>
+
+        <form id="auth-login-form" class="auth-form">
+          <div class="auth-field-group">
+            <label for="auth-login-email">E-mail cím:</label>
+            <input type="email" id="auth-login-email" class="auth-input" placeholder="pelda@gmail.com" required autocomplete="email">
+          </div>
+          <div class="auth-field-group">
+            <label for="auth-login-password">Jelszó:</label>
+            <input type="password" id="auth-login-password" class="auth-input" placeholder="Jelszó..." required autocomplete="current-password">
+          </div>
+          <button id="btn-auth-submit-login" type="submit" class="retro-btn auth-submit-btn">🔑 BELÉPÉS ÉS FOLYTATÁS</button>
+          <div class="auth-hint-text">Ha egy másik gépen már játszottál ezzel a fiókkal, belépéskor onnan folytathatod a haladásod!</div>
+        </form>
+
+        <form id="auth-register-form" class="auth-form" style="display: none;">
+          <div class="auth-field-group">
+            <label for="auth-reg-name">Játékosnév (Ranglistára):</label>
+            <input type="text" id="auth-reg-name" class="auth-input" maxlength="14" placeholder="Pl. Shirelix" autocomplete="nickname">
+          </div>
+          <div class="auth-field-group">
+            <label for="auth-reg-email">E-mail cím:</label>
+            <input type="email" id="auth-reg-email" class="auth-input" placeholder="pelda@gmail.com" required autocomplete="email">
+          </div>
+          <div class="auth-field-group">
+            <label for="auth-reg-password">Jelszó (min. 6 karakter):</label>
+            <input type="password" id="auth-reg-password" class="auth-input" minlength="6" placeholder="Legalább 6 karakter..." required autocomplete="new-password">
+          </div>
+          <button id="btn-auth-submit-register" type="submit" class="retro-btn auth-submit-btn" style="background: #22c55e;">✨ FIÓK LÉTREHOZÁSA ÉS MENTÉS</button>
+          <div class="auth-hint-text">A jelenlegi gépen elért haladásod automatikusan mentésre kerül az új fiókodba!</div>
+        </form>
+      </div>
+
+      <!-- Logged-in View -->
+      <div id="auth-logged-in-view" class="auth-panel-section" style="display: none;">
+        <div class="auth-status-card">
+          <div class="auth-status-header">🟢 BEJELENTKEZVE</div>
+          <div class="auth-status-line"><strong>Játékosnév:</strong> <span id="auth-user-name">-</span></div>
+          <div class="auth-status-line"><strong>E-mail:</strong> <span id="auth-user-email">-</span></div>
+          <div class="auth-status-line"><strong>Haladás:</strong> <span id="auth-user-stats">-</span></div>
+          <div class="auth-status-line"><strong>Utolsó felhőmentés:</strong> <span id="auth-cloud-sync-time">-</span></div>
+        </div>
+
+        <div class="auth-actions-grid">
+          <button id="btn-cloud-save-now" type="button" class="retro-btn" style="background: #22c55e; flex: 1;">☁️ MENTÉS MOST</button>
+          <button id="btn-cloud-load-now" type="button" class="retro-btn" style="background: #38bdf8; flex: 1;">🔄 BETÖLTÉS FELHŐBŐL</button>
+        </div>
+        <button id="btn-auth-logout" type="button" class="retro-btn" style="background: #ef4444; color: #fff; width: 100%;">🚪 KIJELENTKEZÉS</button>
+        <button id="btn-auth-delete-open" type="button" class="retro-btn auth-delete-open-btn">🗑️ FIÓK TÖRLÉSE</button>
+
+        <div id="auth-delete-confirm-box" class="auth-delete-confirm-box" style="display: none;">
+          <div class="auth-delete-title">⚠️ Biztosan törlöd a fiókodat?</div>
+          <div class="auth-delete-desc">
+            Ez véglegesen törli a fiókodat, a felhőmentésedet, a ranglistás rekordodat és a helyi mentést is. <strong>Nem vonható vissza!</strong>
+          </div>
+          <div id="auth-delete-password-wrap" class="auth-field-group" style="display: none;">
+            <label for="auth-delete-password">Biztonsági jelszó megerősítés:</label>
+            <input type="password" id="auth-delete-password" class="auth-input" placeholder="Add meg a jelszavad..." autocomplete="current-password">
+          </div>
+          <div class="auth-actions-grid">
+            <button id="btn-auth-delete-confirm" type="button" class="retro-btn auth-delete-confirm-btn">✅ IGEN, VÉGLEGESEN TÖRLÖM</button>
+            <button id="btn-auth-delete-cancel" type="button" class="retro-btn auth-delete-cancel-btn">❌ MÉGSE</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Offline Backup Code Section -->
+      <div class="auth-backup-box">
+        <div class="auth-backup-title">📋 Tartalék Mentési Kód (Offline / Kézi átvitel)</div>
+        <div class="auth-backup-row">
+          <input type="text" id="auth-backup-code-input" class="auth-input" placeholder="Másold ide a mentési kódot (IB4:...)...">
+          <button id="btn-export-save-code" type="button" class="retro-btn auth-mini-btn">MÁSOLÁS</button>
+          <button id="btn-import-save-code" type="button" class="retro-btn auth-mini-btn" style="background: #fde047;">BETÖLTÉS</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="btn-close-auth-footer" class="close-btn" type="button">BEZÁRÁS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK (Auth + Firestore), MQTT, Audio & Core Game Scripts -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/mqtt.min.js"></script>
+<script src="js/firebase-config.js?v=4.5"></script>
+<script src="js/cloud.js?v=4.9"></script>
+<script src="js/audio.js?v=4.8"></script>
+<script src="js/game.js?v=4.8"></script>
 
 </body>
 </html>
