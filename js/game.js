@@ -544,9 +544,10 @@ class IdleBreakoutGame {
       if (savedRemote) {
         const parsed = JSON.parse(savedRemote);
         const nowMs = Date.now();
+        const maxGuestAge = 3 * 24 * 60 * 60 * 1000;
         for (const k in parsed) {
           const rp = parsed[k];
-          if (rp && (rp.fromFirestore || (nowMs - (rp.ts || 0) <= 120000))) {
+          if (rp && (rp.uid || rp.fromFirestore || rp.keepInTop10 || (nowMs - (rp.ts || 0) < maxGuestAge))) {
             this.remotePlayers[k] = rp;
           }
         }
@@ -5246,6 +5247,12 @@ class IdleBreakoutGame {
     this.guestDeadlineAt = now + this.GUEST_RETENTION_MS;
     this.guestLastActiveAt = now;
     this.guestExtendedByManual = false;
+    this.playerName = 'Játékos';
+    try { localStorage.removeItem('idle_breakout_player_name'); } catch (e) {}
+    const pcIn = document.getElementById('player-name-input-pc');
+    const mobIn = document.getElementById('player-name-input-mobile');
+    if (pcIn) pcIn.value = 'Játékos';
+    if (mobIn) mobIn.value = 'Játékos';
     this.money = 0;
     this.level = 1;
     this.bb = 0;
@@ -5735,9 +5742,9 @@ class IdleBreakoutGame {
                 const dLvl = Number(data.level) || 1;
                 const dBrk = Number(data.bricks) || 0;
                 const dTs = Number(data.ts) || Date.now();
-                const isCloudReady = !!(this.cloud && this.cloud.isReady && this.cloud.db);
-                if (isCloudReady && (!existing || !existing.fromFirestore) && (Date.now() - dTs > 120000)) {
-                  // Régi (>2 perc), Firestore-ban nem létező MQTT retain üzenet figyelmen kívül hagyása
+                const isProtectedRemote = !!(data.uid || (existing && (existing.uid || existing.fromFirestore || existing.keepInTop10)));
+                if (!isProtectedRemote && (Date.now() - dTs >= this.GUEST_RETENTION_MS)) {
+                  // Csak a >3 napos inaktív, nem Top 10 vendég maradjon ki
                   return;
                 }
 
@@ -5756,12 +5763,20 @@ class IdleBreakoutGame {
                   }
                 }
 
+                const incomingName = (data.name || '').trim().slice(0, 14);
+                const prevName = (existing && existing.name || '').trim().slice(0, 14);
+                const resolvedName = (incomingName && incomingName !== 'Játékos')
+                  ? incomingName
+                  : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
+
                 this.remotePlayers[canonKey] = {
                   id: canonKey,
                   uid: data.uid || (existing && existing.uid) || null,
+                  docId: (existing && existing.docId) || null,
                   clientId: data.id || (existing && existing.clientId) || null,
                   fromFirestore: !!(existing && existing.fromFirestore),
-                  name: (data.name || (existing && existing.name) || 'Játékos').slice(0, 14),
+                  keepInTop10: !!(existing && existing.keepInTop10),
+                  name: resolvedName,
                   rebirths: keepReb,
                   level: keepLvl,
                   bricks: keepBrk,
@@ -6035,6 +6050,7 @@ class IdleBreakoutGame {
           docId: rp.docId || null,
           clientId: rp.clientId || null,
           fromFirestore: !!rp.fromFirestore,
+          keepInTop10: !!rp.keepInTop10,
           rawKeys: [...new Set(keysToAdd)],
           name: rp.name || 'Játékos',
           rebirths: Number(rp.rebirths) || 0,
@@ -6052,6 +6068,7 @@ class IdleBreakoutGame {
       if (!existing.docId && rp.docId) existing.docId = rp.docId;
       if (!existing.clientId && rp.clientId) existing.clientId = rp.clientId;
       if (rp.fromFirestore) existing.fromFirestore = true;
+      if (rp.keepInTop10) existing.keepInTop10 = true;
 
       const rReb = Number(rp.rebirths) || 0;
       const rLvl = Number(rp.level) || 1;
@@ -6068,18 +6085,19 @@ class IdleBreakoutGame {
       }
       if ((Number(rp.ts) || 0) > existing.ts) {
         existing.ts = Number(rp.ts) || 0;
-        if (rp.name) existing.name = rp.name;
+        const rn = (rp.name || '').trim();
+        if (rn && (rn !== 'Játékos' || !existing.name || existing.name === 'Játékos')) {
+          existing.name = rn;
+        }
       }
       if (!existing.uid && rp.uid) existing.uid = rp.uid;
       if (rpOnline) existing.isOnline = true;
     };
 
-    const isCloudReady = !!(this.cloud && this.cloud.isReady && this.cloud.db);
     for (const pid in this.remotePlayers) {
       const rp = this.remotePlayers[pid];
       if (!rp) continue;
-      if (!rp.uid && !rp.fromFirestore && (now - (rp.ts || 0) >= this.GUEST_RETENTION_MS)) continue;
-      if (isCloudReady && !rp.fromFirestore && (now - (rp.ts || 0) > 120000)) continue;
+      if (!rp.uid && !rp.fromFirestore && !rp.keepInTop10 && (now - (rp.ts || 0) >= this.GUEST_RETENTION_MS)) continue;
       const resolvedUid = rp.uid || clientToUid[rp.id] || clientToUid[pid] || null;
       if (pid === this.myPlayerId || rp.id === this.myPlayerId || rp.clientId === this.myPlayerId) continue;
       if (myUid && (pid === myUid || resolvedUid === myUid)) continue;
@@ -6286,6 +6304,29 @@ class IdleBreakoutGame {
       if (rebEl) rebEl.textContent = this.rebirthCount;
       if (lvlEl) lvlEl.textContent = this.level;
       if (rnkEl) rnkEl.textContent = playerRank;
+    }
+
+    // A TOP 10 játékosokat megjelöljük, hogy offline állapotban és újratöltéskor se tűnjenek el!
+    let top10Dirty = false;
+    const top10Ids = new Set();
+    for (const e of entries.slice(0, 10)) {
+      if (e && !e.isPlayer && !e.isCustom) {
+        for (const k of this.getEntryMatchIds(e)) top10Ids.add(k);
+      }
+    }
+    if (this.remotePlayers) {
+      for (const pid in this.remotePlayers) {
+        const rp = this.remotePlayers[pid];
+        if (!rp) continue;
+        const shouldPin = top10Ids.has(pid) || top10Ids.has(rp.id) || (rp.uid && top10Ids.has(rp.uid));
+        if (shouldPin && !rp.keepInTop10) {
+          rp.keepInTop10 = true;
+          top10Dirty = true;
+        }
+      }
+      if (top10Dirty) {
+        try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+      }
     }
 
     // Mindig csak a TOP 10 látszik + ha a helyi játékos nincs a TOP 10-ben, közvetlenül utána ő (pl. #16, #50, #163)
@@ -6761,13 +6802,22 @@ class IdleBreakoutGame {
     const now = Date.now();
     let pruned = 0;
     const toDeleteFirestore = [];
+    const guestExpiryMs = this.GUEST_RETENTION_MS || (3 * 24 * 60 * 60 * 1000);
     for (const k of Object.keys(this.remotePlayers)) {
       const rp = this.remotePlayers[k];
-      const isOld = !rp || (now - (rp.ts || 0) > 25000);
-      if (isOld || (rp.name || '').trim().toLowerCase() === 'játékos') {
+      if (!rp) {
+        delete this.remotePlayers[k];
+        pruned++;
+        continue;
+      }
+      const isUnnamed = (rp.name || '').trim().toLowerCase() === 'játékos';
+      const isProtected = !!(rp.fromFirestore || rp.uid || rp.keepInTop10);
+      const isExpiredGuest = !isProtected && (now - (rp.ts || 0) > guestExpiryMs);
+      const isStaleUnnamedGhost = isUnnamed && !rp.uid && !rp.fromFirestore && (now - (rp.ts || 0) > 25000);
+      if (isExpiredGuest || isStaleUnnamedGhost) {
         this.clearRetainedMqttPlayer(k);
-        if (rp && rp.clientId) this.clearRetainedMqttPlayer(rp.clientId);
-        if (rp && rp.docId) toDeleteFirestore.push(rp.docId);
+        if (rp.clientId) this.clearRetainedMqttPlayer(rp.clientId);
+        if (rp.docId) toDeleteFirestore.push(rp.docId);
         delete this.remotePlayers[k];
         pruned++;
       }
@@ -6778,7 +6828,7 @@ class IdleBreakoutGame {
     }
     this.renderLeaderboard();
     this.renderDevLeaderboardPanel();
-    this.showToast(`🧹 ${pruned} régi / alapértelmezett cache bejegyzés megtisztítva!`, 3000);
+    this.showToast(`🧹 ${pruned} lejárt / névtelen cache bejegyzés megtisztítva!`, 3000);
   }
 
   renderDevLeaderboardPanel() {

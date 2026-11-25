@@ -507,7 +507,11 @@ class CloudAuthManager {
             }
 
             if (shouldLoadCloud) {
-              this.game.applySaveData(cloudSave, { isLiveReload: true, ownerUid: user.uid });
+              const effectiveCloudSave = { ...cloudSave };
+              if ((!effectiveCloudSave.playerName || effectiveCloudSave.playerName === 'Játékos') && (cloudDoc.playerName || user.displayName)) {
+                effectiveCloudSave.playerName = cloudDoc.playerName || user.displayName;
+              }
+              this.game.applySaveData(effectiveCloudSave, { isLiveReload: true, ownerUid: user.uid });
               this.lastCloudSaveMs = cloudSave.lastSavedAt || Date.now();
               this.updateAuthUI();
               this.game.showToast(`☁️ <strong>Felhőmentés betöltve!</strong> Folytatás: Rebirth ${this.game.rebirthCount} | Szint ${this.game.level}`, 4500);
@@ -536,7 +540,11 @@ class CloudAuthManager {
         this.showError('Még nincs mentett adat a felhőben ehhez a fiókhoz.');
         return;
       }
-      const cloudSave = snap.data().saveData;
+      const cloudDoc = snap.data();
+      const cloudSave = { ...cloudDoc.saveData };
+      if ((!cloudSave.playerName || cloudSave.playerName === 'Játékos') && (cloudDoc.playerName || this.currentUser.displayName)) {
+        cloudSave.playerName = cloudDoc.playerName || this.currentUser.displayName;
+      }
       this.game.applySaveData(cloudSave, { isLiveReload: true, ownerUid: this.currentUser.uid });
       this.lastCloudSaveMs = cloudSave.lastSavedAt || Date.now();
       this.updateAuthUI();
@@ -630,6 +638,7 @@ class CloudAuthManager {
             });
           }
 
+          let dirtyRemote = removedAny;
           snapshot.forEach((doc) => {
             const d = doc.data();
             if (!d) return;
@@ -643,27 +652,36 @@ class CloudAuthManager {
             if ((this.currentUser && docUid === this.currentUser.uid) || d.id === this.game.myPlayerId) return;
             const key = docUid;
             const existing = this.game.remotePlayers[key];
-            if (!existing || (d.ts || 0) >= (existing.ts || 0)) {
+            if (!existing || (d.ts || 0) >= (existing.ts || 0) || !existing.fromFirestore) {
+              const incomingName = (d.name || '').trim().slice(0, 14);
+              const prevName = (existing && existing.name || '').trim().slice(0, 14);
+              const resolvedName = (incomingName && incomingName !== 'Játékos')
+                ? incomingName
+                : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
+
               this.game.remotePlayers[key] = {
                 id: key,
                 uid: docUid,
                 docId: doc.id,
-                clientId: d.id || null,
+                clientId: d.id || (existing && existing.clientId) || null,
                 fromFirestore: true,
-                name: (d.name || 'Játékos').slice(0, 14),
-                rebirths: Number(d.rebirths) || 0,
+                keepInTop10: !!(existing && existing.keepInTop10),
+                name: resolvedName,
+                rebirths: Math.max(Number(d.rebirths) || 0, existing ? (Number(existing.rebirths) || 0) : 0),
                 level: Number(d.level) || 1,
                 bricks: Number(d.bricks) || 0,
-                ts: Number(d.ts) || 0
+                ts: Math.max(Number(d.ts) || 0, existing ? (Number(existing.ts) || 0) : 0)
               };
+              dirtyRemote = true;
             }
             // Ha már szerepelt külön kliens-ID alatt ugyanaz az UID, takarítsuk le:
             if (d.id && d.id !== key && this.game.remotePlayers[d.id]) {
               delete this.game.remotePlayers[d.id];
+              dirtyRemote = true;
             }
           });
 
-          if (removedAny) {
+          if (dirtyRemote) {
             try {
               localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.game.remotePlayers));
             } catch (e) {}
