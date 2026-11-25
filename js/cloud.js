@@ -406,13 +406,22 @@ class CloudAuthManager {
 
       await user.delete();
 
+      if (typeof this.game.clearRetainedMqttPlayer === 'function') {
+        this.game.clearRetainedMqttPlayer(uid);
+        this.game.clearRetainedMqttPlayer(this.game.myPlayerId);
+      }
+
       this.currentUser = null;
       this.lastCloudSaveMs = 0;
       this.pendingCloudSave = false;
 
       if (this.game.remotePlayers) {
-        delete this.game.remotePlayers[uid];
-        delete this.game.remotePlayers[this.game.myPlayerId];
+        for (const k of Object.keys(this.game.remotePlayers)) {
+          const entry = this.game.remotePlayers[k];
+          if (k === uid || k === this.game.myPlayerId || (entry && entry.uid === uid)) {
+            delete this.game.remotePlayers[k];
+          }
+        }
         try {
           localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.game.remotePlayers));
         } catch (e) {}
@@ -454,11 +463,18 @@ class CloudAuthManager {
     this.updateAuthUI();
 
     if (user) {
+      if (typeof this.game.cleanupDuplicateMqttForUid === 'function') {
+        this.game.cleanupDuplicateMqttForUid(user.uid);
+      }
       if (this.suppressNextAuthLoad) {
         this.suppressNextAuthLoad = false;
+        this.game.broadcastMyStatus();
         return;
       }
       await this.syncOnLogin(user, false);
+      this.game.broadcastMyStatus();
+    } else {
+      this.game.renderLeaderboard();
     }
   }
 
@@ -598,10 +614,16 @@ class CloudAuthManager {
             snapshot.docChanges().forEach((change) => {
               if (change.type === 'removed') {
                 const d = change.doc.data() || {};
-                const key = d.uid || d.id || change.doc.id;
-                if (this.game.remotePlayers && this.game.remotePlayers[key]) {
-                  delete this.game.remotePlayers[key];
-                  removedAny = true;
+                const remUid = d.uid || change.doc.id;
+                const remCid = d.id || null;
+                if (this.game.remotePlayers) {
+                  for (const k of Object.keys(this.game.remotePlayers)) {
+                    const rp = this.game.remotePlayers[k];
+                    if (k === remUid || k === remCid || (rp && rp.uid === remUid)) {
+                      delete this.game.remotePlayers[k];
+                      removedAny = true;
+                    }
+                  }
                 }
               }
             });
@@ -609,18 +631,26 @@ class CloudAuthManager {
 
           snapshot.forEach((doc) => {
             const d = doc.data();
-            if (!d || (this.currentUser && d.uid === this.currentUser.uid) || d.id === this.game.myPlayerId) return;
-            const key = d.uid || d.id;
+            if (!d) return;
+            const docUid = d.uid || doc.id;
+            if ((this.currentUser && docUid === this.currentUser.uid) || d.id === this.game.myPlayerId) return;
+            const key = docUid;
             const existing = this.game.remotePlayers[key];
             if (!existing || (d.ts || 0) >= (existing.ts || 0)) {
               this.game.remotePlayers[key] = {
                 id: key,
+                uid: docUid,
+                clientId: d.id || null,
                 name: (d.name || 'Játékos').slice(0, 14),
                 rebirths: Number(d.rebirths) || 0,
                 level: Number(d.level) || 1,
                 bricks: Number(d.bricks) || 0,
                 ts: Number(d.ts) || 0
               };
+            }
+            // Ha már szerepelt külön kliens-ID alatt ugyanaz az UID, takarítsuk le:
+            if (d.id && d.id !== key && this.game.remotePlayers[d.id]) {
+              delete this.game.remotePlayers[d.id];
             }
           });
 

@@ -5445,6 +5445,11 @@ class IdleBreakoutGame {
           client.subscribe('shirelix/idle_breakout_v4/players/+', { qos: 0 });
           client.subscribe('shirelix/idle_breakout_v4/sync', { qos: 0 });
 
+          // Ha már be van jelentkezve, takarítsuk le az esetleges korábbi vendég/duplikált MQTT topicokat:
+          if (this.cloud && this.cloud.currentUser) {
+            this.cleanupDuplicateMqttForUid(this.cloud.currentUser.uid);
+          }
+
           // Saját állapot azonnali közzététele (retain: true, hogy az újonnan érkezők azonnal megkapják!)
           this.broadcastMyStatus();
 
@@ -5461,22 +5466,74 @@ class IdleBreakoutGame {
           try {
             const str = payload.toString();
             if (topic.startsWith('shirelix/idle_breakout_v4/players/')) {
+              const topicId = topic.slice('shirelix/idle_breakout_v4/players/'.length);
+              if (!str || !str.trim()) {
+                if (topicId && this.remotePlayers[topicId]) {
+                  delete this.remotePlayers[topicId];
+                  try {
+                    localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers));
+                  } catch (e) {}
+                  this.renderLeaderboard();
+                }
+                return;
+              }
+
               const data = JSON.parse(str);
               const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
-              if (data && data.id && data.id !== this.myPlayerId && (!myUid || data.uid !== myUid)) {
-                this.remotePlayers[data.id] = {
-                  id: data.id,
-                  uid: data.uid || null,
-                  name: (data.name || 'Játékos').slice(0, 14),
-                  rebirths: Number(data.rebirths) || 0,
-                  level: Number(data.level) || 1,
-                  bricks: Number(data.bricks) || 0,
-                  ts: Number(data.ts) || Date.now()
+              const canonKey = (data && (data.uid || data.id)) || topicId;
+              const isSelf = !data ||
+                data.id === this.myPlayerId ||
+                topicId === this.myPlayerId ||
+                (myUid && (data.uid === myUid || canonKey === myUid));
+
+              if (!isSelf) {
+                const existing = this.remotePlayers[canonKey];
+                const dReb = Number(data.rebirths) || 0;
+                const dLvl = Number(data.level) || 1;
+                const dBrk = Number(data.bricks) || 0;
+                const dTs = Number(data.ts) || Date.now();
+
+                let keepReb = dReb;
+                let keepLvl = dLvl;
+                let keepBrk = dBrk;
+                if (existing && (existing.ts || 0) > dTs) {
+                  // Ha a Firestore-ból vagy másik böngészőből már van újabb/magasabb adat erre az UID-re, ne rontsuk vissza régebbivel:
+                  const eReb = Number(existing.rebirths) || 0;
+                  const eLvl = Number(existing.level) || 1;
+                  const eBrk = Number(existing.bricks) || 0;
+                  if (eReb > dReb || (eReb === dReb && eLvl > dLvl) || (eReb === dReb && eLvl === dLvl && eBrk > dBrk)) {
+                    keepReb = eReb;
+                    keepLvl = eLvl;
+                    keepBrk = eBrk;
+                  }
+                }
+
+                this.remotePlayers[canonKey] = {
+                  id: canonKey,
+                  uid: data.uid || (existing && existing.uid) || null,
+                  clientId: data.id || (existing && existing.clientId) || null,
+                  name: (data.name || (existing && existing.name) || 'Játékos').slice(0, 14),
+                  rebirths: keepReb,
+                  level: keepLvl,
+                  bricks: keepBrk,
+                  ts: Math.max(dTs, (existing && existing.ts) || 0)
                 };
+
+                // Ha külön kliens-ID alatt is bent volt ugyanez az UID, töröljük a duplikált kulcsot
+                if (data.id && data.id !== canonKey && this.remotePlayers[data.id]) {
+                  delete this.remotePlayers[data.id];
+                }
+                if (topicId && topicId !== canonKey && this.remotePlayers[topicId]) {
+                  delete this.remotePlayers[topicId];
+                }
+
                 try {
                   localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers));
                 } catch (e) {}
                 this.renderLeaderboard();
+              } else if (myUid && data && data.uid === myUid && topicId && topicId !== myUid) {
+                // Saját fiók régebbi böngészős duplikált MQTT üzenetének automatikus eltüntetése a brókerről!
+                this.clearRetainedMqttPlayer(topicId);
               }
             } else if (topic === 'shirelix/idle_breakout_v4/sync') {
               const ping = JSON.parse(str);
@@ -5527,24 +5584,156 @@ class IdleBreakoutGame {
     }
   }
 
+  clearRetainedMqttPlayer(topicPlayerId) {
+    if (!topicPlayerId || !this.mqttClient || !this.mqttConnected) return;
+    try {
+      this.mqttClient.publish(`shirelix/idle_breakout_v4/players/${topicPlayerId}`, '', { retain: true, qos: 0 });
+    } catch (e) {}
+  }
+
+  cleanupDuplicateMqttForUid(uid) {
+    if (!uid) return;
+    if (this.myPlayerId && this.myPlayerId !== uid) {
+      this.clearRetainedMqttPlayer(this.myPlayerId);
+    }
+    if (this.remotePlayers) {
+      let pruned = false;
+      for (const k of Object.keys(this.remotePlayers)) {
+        const rp = this.remotePlayers[k];
+        if (!rp) continue;
+        if (k === uid || rp.uid === uid) {
+          if (k !== uid) this.clearRetainedMqttPlayer(k);
+          if (rp.clientId && rp.clientId !== uid) this.clearRetainedMqttPlayer(rp.clientId);
+          delete this.remotePlayers[k];
+          pruned = true;
+        }
+      }
+      if (pruned) {
+        try {
+          localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers));
+        } catch (e) {}
+        this.renderLeaderboard();
+      }
+    }
+  }
+
   broadcastMyStatus() {
     if (!this.mqttClient || !this.mqttConnected) return;
     try {
+      const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
+      const publishKey = myUid || this.myPlayerId;
       const payload = JSON.stringify({
         id: this.myPlayerId,
-        uid: (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null,
+        uid: myUid,
         name: this.playerName || 'Játékos',
         rebirths: this.rebirthCount || 0,
         level: this.level || 1,
         bricks: this.totalBricksDestroyed || 0,
         ts: Date.now()
       });
-      this.mqttClient.publish(`shirelix/idle_breakout_v4/players/${this.myPlayerId}`, payload, { retain: true, qos: 0 });
+      this.mqttClient.publish(`shirelix/idle_breakout_v4/players/${publishKey}`, payload, { retain: true, qos: 0 });
     } catch (e) {}
   }
 
+  getDeduplicatedRemotePlayers(myUid = null) {
+    const now = Date.now();
+    const clientToUid = {};
+    for (const pid in this.remotePlayers) {
+      const rp = this.remotePlayers[pid];
+      if (!rp) continue;
+      if (rp.uid && rp.clientId) clientToUid[rp.clientId] = rp.uid;
+      if (rp.uid && rp.id && rp.id !== rp.uid) clientToUid[rp.id] = rp.uid;
+    }
+
+    const byKey = new Map();
+    const mergeInto = (groupKey, rp) => {
+      const existing = byKey.get(groupKey);
+      const rpOnline = (now - (rp.ts || 0)) < 25000;
+      if (!existing) {
+        byKey.set(groupKey, {
+          id: rp.uid || rp.id,
+          uid: rp.uid || null,
+          name: rp.name || 'Játékos',
+          rebirths: Number(rp.rebirths) || 0,
+          level: Number(rp.level) || 1,
+          bricks: Number(rp.bricks) || 0,
+          ts: Number(rp.ts) || 0,
+          isOnline: rpOnline
+        });
+        return;
+      }
+
+      const rReb = Number(rp.rebirths) || 0;
+      const rLvl = Number(rp.level) || 1;
+      const rBrk = Number(rp.bricks) || 0;
+      const betterProgress =
+        rReb > existing.rebirths ||
+        (rReb === existing.rebirths && rLvl > existing.level) ||
+        (rReb === existing.rebirths && rLvl === existing.level && rBrk > existing.bricks);
+
+      if (betterProgress) {
+        existing.rebirths = rReb;
+        existing.level = rLvl;
+        existing.bricks = rBrk;
+      }
+      if ((Number(rp.ts) || 0) > existing.ts) {
+        existing.ts = Number(rp.ts) || 0;
+        if (rp.name) existing.name = rp.name;
+      }
+      if (!existing.uid && rp.uid) existing.uid = rp.uid;
+      if (rpOnline) existing.isOnline = true;
+    };
+
+    for (const pid in this.remotePlayers) {
+      const rp = this.remotePlayers[pid];
+      if (!rp) continue;
+      const resolvedUid = rp.uid || clientToUid[rp.id] || clientToUid[pid] || null;
+      if (pid === this.myPlayerId || rp.id === this.myPlayerId || rp.clientId === this.myPlayerId) continue;
+      if (myUid && (pid === myUid || resolvedUid === myUid)) continue;
+
+      const cleanName = (rp.name || 'Játékos').trim();
+      const lowerName = cleanName.toLowerCase();
+      let groupKey;
+      if (resolvedUid) {
+        groupKey = `uid:${resolvedUid}`;
+      } else if (lowerName && lowerName !== 'játékos') {
+        groupKey = `name:${lowerName}`;
+      } else {
+        groupKey = `id:${rp.id || pid}`;
+      }
+      mergeInto(groupKey, { ...rp, uid: resolvedUid });
+    }
+
+    // Ha ugyanahhoz az egyéni névhez létezik UID-s és régi UID nélküli bejegyzés is, vonjuk össze őket:
+    const nameToUidKey = new Map();
+    for (const [k, v] of byKey.entries()) {
+      if (k.startsWith('uid:')) {
+        const ln = (v.name || '').trim().toLowerCase();
+        if (ln && ln !== 'játékos' && !nameToUidKey.has(ln)) {
+          nameToUidKey.set(ln, k);
+        }
+      }
+    }
+    for (const [k, v] of [...byKey.entries()]) {
+      if (k.startsWith('name:')) {
+        const targetUidKey = nameToUidKey.get(k.slice(5));
+        if (targetUidKey) {
+          mergeInto(targetUidKey, v);
+          byKey.delete(k);
+        }
+      }
+    }
+
+    const myLower = (this.playerName || '').trim().toLowerCase();
+    if (myLower && myLower !== 'játékos') {
+      byKey.delete(`name:${myLower}`);
+    }
+
+    return [...byKey.values()];
+  }
+
   renderLeaderboard() {
-    // Összeállítjuk a teljes listát: a helyi játékos + az összes valós hálózati játékos (MOCK ADATOK NÉLKÜL!)
+    // Összeállítjuk a teljes listát: a helyi játékos + az összes duplikációmentesített valós játékos
     const entries = [];
     const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
 
@@ -5556,14 +5745,13 @@ class IdleBreakoutGame {
       level: this.level,
       bricks: this.totalBricksDestroyed,
       ts: Date.now(),
-      isPlayer: true
+      isPlayer: true,
+      isOnline: true
     });
 
-    // Távoli valós játékosok
-    for (const pid in this.remotePlayers) {
-      if (pid === this.myPlayerId || (myUid && pid === myUid)) continue;
-      const rp = this.remotePlayers[pid];
-      if (myUid && rp.uid && rp.uid === myUid) continue;
+    // Távoli valós játékosok (azonos UID / kliens-ID / egyéni név alapján összevonva)
+    const remoteList = this.getDeduplicatedRemotePlayers(myUid);
+    for (const rp of remoteList) {
       entries.push({
         id: rp.id,
         name: rp.name,
@@ -5571,7 +5759,8 @@ class IdleBreakoutGame {
         level: rp.level,
         bricks: rp.bricks,
         ts: rp.ts,
-        isPlayer: false
+        isPlayer: false,
+        isOnline: !!rp.isOnline
       });
     }
 
@@ -5606,7 +5795,7 @@ class IdleBreakoutGame {
       const meBadge = entry.isPlayer ? '<span class="badge-me">TE</span>' : '';
 
       // Online státusz: ha 25 másodpercen belül küldött jelet
-      const isOnline = entry.isPlayer || (now - (entry.ts || 0) < 25000);
+      const isOnline = entry.isPlayer || entry.isOnline || (now - (entry.ts || 0) < 25000);
       const dotHtml = isOnline
         ? '<span class="live-dot online" title="Élőben online">🟢</span>'
         : '<span class="live-dot offline" title="Offline (mentett pontszám)">⚪</span>';
