@@ -607,12 +607,13 @@ class CloudAuthManager {
     if (!this.db) return;
     try {
       this.leaderboardUnsub = this.db.collection('leaderboard')
-        .limit(60)
+        .limit(500)
         .onSnapshot((snapshot) => {
           let removedAny = false;
           if (typeof snapshot.docChanges === 'function') {
             snapshot.docChanges().forEach((change) => {
               if (change.type === 'removed') {
+                if (change.doc.id === '__admin_rules__') return;
                 const d = change.doc.data() || {};
                 const remUid = d.uid || change.doc.id;
                 const remCid = d.id || null;
@@ -632,6 +633,12 @@ class CloudAuthManager {
           snapshot.forEach((doc) => {
             const d = doc.data();
             if (!d) return;
+            if (doc.id === '__admin_rules__') {
+              if (typeof this.game.applyIncomingAdminRules === 'function') {
+                this.game.applyIncomingAdminRules(d, 'firestore');
+              }
+              return;
+            }
             const docUid = d.uid || doc.id;
             if ((this.currentUser && docUid === this.currentUser.uid) || d.id === this.game.myPlayerId) return;
             const key = docUid;
@@ -640,6 +647,7 @@ class CloudAuthManager {
               this.game.remotePlayers[key] = {
                 id: key,
                 uid: docUid,
+                docId: doc.id,
                 clientId: d.id || null,
                 fromFirestore: true,
                 name: (d.name || 'Játékos').slice(0, 14),
@@ -734,12 +742,21 @@ class CloudAuthManager {
         }
       }
     }
+
+    if (typeof this.game.updateGuestRetentionUI === 'function') {
+      this.game.updateGuestRetentionUI();
+    }
   }
 
   // --- Offline Tartalék: Mentési Kód Export / Import ---
   exportSaveCode() {
     try {
+      const isGuest = !this.currentUser;
+      if (isGuest && typeof this.game.extendGuestDeadlineFromManualTransfer === 'function') {
+        this.game.extendGuestDeadlineFromManualTransfer();
+      }
       const data = this.game.buildSaveData(this.currentUser ? this.currentUser.uid : null);
+      data.exportedAt = Date.now();
       const json = JSON.stringify(data);
       const bytes = new TextEncoder().encode(json);
       let bin = '';
@@ -754,7 +771,11 @@ class CloudAuthManager {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(code).catch(() => {});
       }
-      this.game.showToast('📋 Mentési kód legenerálva és vágólapra másolva!', 3500);
+      if (isGuest) {
+        this.game.showToast('📋 Kód kimásolva! A törlési határidő +3 nappal meghosszabbítva (inaktív állapotban ezután is törlődik; végleges védelemhez regisztrálj)!', 5200);
+      } else {
+        this.game.showToast('📋 Mentési kód legenerálva és vágólapra másolva!', 3500);
+      }
     } catch (e) {
       this.showError('Hiba a mentési kód készítésekor.');
     }
@@ -778,12 +799,64 @@ class CloudAuthManager {
       if (!data || typeof data !== 'object' || data.level == null) {
         throw new Error('Hibás adat');
       }
+
+      if (!this.currentUser && !data.saveOwnerUid && this.game.GUEST_RETENTION_MS) {
+        const now = Date.now();
+        const codeRefTs = Number(data.exportedAt) || Number(data.lastSavedAt) || 0;
+        const codeDeadline = Number(data.guestDeadlineAt) || (codeRefTs ? codeRefTs + this.game.GUEST_RETENTION_MS : now + this.game.GUEST_RETENTION_MS);
+        if (codeRefTs > 0 && (now >= codeDeadline || (now - codeRefTs >= this.game.GUEST_RETENTION_MS))) {
+          this.showError('⏰ Ez a be nem regisztrált mentési kód 3 nap inaktivitás után lejárt, ezért már nem tölthető be!');
+          return;
+        }
+      }
+
       this.game.applySaveData(data, { isLiveReload: true, ownerUid: this.currentUser ? this.currentUser.uid : null });
+      if (!this.currentUser && typeof this.game.extendGuestDeadlineFromManualTransfer === 'function') {
+        this.game.extendGuestDeadlineFromManualTransfer();
+      }
       if (this.currentUser) this.saveToCloud(true);
       this.updateAuthUI();
       this.game.showToast(`✅ <strong>Mentés betöltve kódból!</strong> (Rebirth ${this.game.rebirthCount} | Szint ${this.game.level})`, 4000);
     } catch (e) {
       this.showError('Hibás vagy sérült mentési kód!');
+    }
+  }
+
+  // --- Fejlesztői Ranglista Szabályok & Firestore Moderáció ---
+  async saveAdminRulesToCloud(rulesObj) {
+    if (!this.db || !rulesObj) return { ok: false, reason: 'no-db' };
+    try {
+      await this.db.collection('leaderboard').doc('__admin_rules__').set(rulesObj);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: (err && err.code) || 'error' };
+    }
+  }
+
+  async adminDeleteLeaderboardDocs(docIds = []) {
+    if (!this.db) return { deleted: 0, permissionDenied: false };
+    let deleted = 0;
+    let permissionDenied = false;
+    const unique = [...new Set((docIds || []).filter(Boolean))];
+    for (const id of unique) {
+      if (id === '__admin_rules__') continue;
+      try {
+        await this.db.collection('leaderboard').doc(id).delete();
+        deleted++;
+      } catch (err) {
+        if (err && err.code === 'permission-denied') permissionDenied = true;
+      }
+    }
+    return { deleted, permissionDenied };
+  }
+
+  async adminUpdateLeaderboardDoc(docId, patch) {
+    if (!this.db || !docId || docId === '__admin_rules__') return { ok: false };
+    try {
+      await this.db.collection('leaderboard').doc(docId).set(patch, { merge: true });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: (err && err.code) || 'error' };
     }
   }
 }

@@ -184,7 +184,7 @@ const NON_UPGRADABLE_POWERUPS = [
     key: 'gold_boss',
     icon: '👑',
     name: 'Gold Boss',
-    rarityBadge: '5.0 esély',
+    rarityBadge: '2.4 esély (~17%)',
     desc: 'A következő Boss blokkot Gold Boss-szá alakítja, amely dupla ($) pénzt ad sebzéskor és legyőzéskor is.',
     statusFn: (game) => game.nextBossIsGold ? '✨ BEÉLESÍTVE: A következő Boss GOLD BOSS lesz!' : 'Blokktöréskor véletlenszerűen eshet.'
   },
@@ -192,7 +192,7 @@ const NON_UPGRADABLE_POWERUPS = [
     key: 'free_upgrade',
     icon: '🎁',
     name: 'Free Upgrade',
-    rarityBadge: '0.65 esély',
+    rarityBadge: '0.70 esély (~5%)',
     desc: 'Véletlenszerűen +1 szintet ad egy még nem kimaxolt Power-up fejlesztésre (ha mind maxos: +5 BB).',
     statusFn: () => 'Azonnali jutalom eséskor.'
   },
@@ -200,14 +200,14 @@ const NON_UPGRADABLE_POWERUPS = [
     key: 'gold_level',
     icon: '🌟',
     name: 'GOLD LEVEL',
-    rarityBadge: '0.01 esély • Rebirth 15+',
+    rarityBadge: '0.08 esély (~0.6%) • Rebirth 15+',
     isGoldSpecial: true,
-    desc: 'Csak Rebirth 15 fölött van rá esély (0,01)! A következő normál pálya minden egyes blokkja 500 és 2 000 közötti HP-t kap, és mindegyik 20x annyi pénzt ($) ad, mint alapból!',
+    desc: 'Csak Rebirth 15 fölött van rá esély (0,08 súly, ~0,6% dropból)! A következő normál pálya minden egyes blokkja 500 és 2 000 közötti HP-t kap, és mindegyik 20x annyi pénzt ($) ad, mint alapból!',
     statusFn: (game) => {
       if (game.isGoldLevelActive) return '🌟 JELENLEG AKTÍV A PÁLYÁN (20x pénz)!';
       if (game.nextLevelIsGold) return '🌟 BEÉLESÍTVE: A következő normál pálya GOLD LEVEL lesz!';
       if (game.rebirthCount <= 15) return `🔒 ZÁROLVA: Rebirth 15 fölött érhető el (jelenleg: ${game.rebirthCount}/16)`;
-      return '✅ Feloldva (Rebirth > 15): 0,01 esély blokktöréskor!';
+      return '✅ Feloldva (Rebirth > 15): 0,08 esély (~0,6% a power-up esésekből)!';
     }
   }
 ];
@@ -556,6 +556,9 @@ class IdleBreakoutGame {
     this.mqttConnected = false;
     this.heartbeatTimer = 0;
     this.leaderboard = [];
+    this.lbAdminRules = this.loadLocalAdminRules();
+    this.devEditTarget = null;
+    this.activeDevTab = 'players';
 
     // Battle Pass System (30 Stages, Free Track + Paid Track 4999 Ft - Prémium sáv szigorúan zárolva!)
     this.totalBricksDestroyed = 0;
@@ -778,6 +781,17 @@ class IdleBreakoutGame {
     this.dec24TimerInterval = null;
     this.activeTooltipKind = null;
     this.cloud = null;
+
+    // 3-Day Unregistered Guest Retention State
+    this.GUEST_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
+    const initNow = Date.now();
+    this.guestCreatedAt = initNow;
+    this.guestDeadlineAt = initNow + this.GUEST_RETENTION_MS;
+    this.guestLastActiveAt = initNow;
+    this.guestExtendedByManual = false;
+    this.guestNoticeDismissed = false;
+    this.guestExpiredNotice = false;
+    this._lastGuestExpiryCheck = 0;
   }
 
   init() {
@@ -806,14 +820,22 @@ class IdleBreakoutGame {
     // Bind UI & Canvas events
     this.bindEvents();
     this.initLeaderboard();
+    this.initDevPanel();
     this.initBattlePass();
     if (typeof CloudAuthManager !== 'undefined') {
       this.cloud = new CloudAuthManager(this);
       this.cloud.init();
     }
     this.startDec24Countdown();
+    this.updateGuestRetentionUI();
     this.renderPowerUpsHUD();
     this.updateHUD();
+
+    if (this.guestExpiredNotice) {
+      setTimeout(() => {
+        this.showToast('🗑️ A be nem regisztrált haladásod lejárt (3 nap) és törölve lett! Regisztrálj fiókot a korlátlan mentéshez!', 6500);
+      }, 400);
+    }
 
     window.addEventListener('beforeunload', () => {
       this.save();
@@ -1418,28 +1440,28 @@ class IdleBreakoutGame {
       return;
     }
 
-    // Átlagosan minden ~800 blokk után 1 power-up (100 / 800 = ~0.125% blokkonként), rebirth-enként mérsékelt +0.005%
-    const totalDropPercent = (100 / 800) + (this.rebirthCount * 0.005);
+    // Átlagosan minden ~800 blokk után 1 power-up (100 / 800 = 0.125% blokkonként), rebirth-enként mérsékelt +0.002%
+    const totalDropPercent = this.getPowerUpDropChancePercent();
     const roll = Math.random() * 100;
     if (roll >= totalDropPercent) {
       return;
     }
 
-    // Power-up súlyozás a kért arányokkal:
-    // - 2x Money, 2x Damage, Shock Wave, Gold Boss: 5.0% súly
-    // - Egyéb power-upok: 0.65% súly
-    // - Gold Level (csak Rebirth 15 fölött!): 0.01 súly
+    // Kiegyensúlyozott power-up súlyozás:
+    // - Erős bónuszok (2x Money, 2x Damage, Gold Boss, Shock Wave): mérsékelt 2.2 - 2.6 súly
+    // - Hasznos ritkább bónuszok (Speed, Discount, Pierce, Auto Clicker, Free Upg): 0.70 - 0.95 súly
+    // - Gold Level (csak Rebirth 15 fölött!): megnövelt 0.08 súly (~0.6% dropból)
     const candidates = [
-      { id: '2x_money',     weight: 5.0  },
-      { id: '2x_dmg',       weight: 5.0  },
-      { id: 'shockwave',    weight: 5.0  },
-      { id: 'gold_boss',    weight: 5.0  },
-      { id: 'speed_boost',  weight: 0.65 },
-      { id: 'auto_clicker', weight: 0.65 },
-      { id: 'discount',     weight: 0.65 },
-      { id: 'piercing',     weight: 0.65 },
-      { id: 'free_upgrade', weight: 0.65 },
-      { id: 'gold_level',   weight: 0.01 }
+      { id: '2x_money',     weight: 2.2  },
+      { id: '2x_dmg',       weight: 2.2  },
+      { id: 'gold_boss',    weight: 2.4  },
+      { id: 'shockwave',    weight: 2.6  },
+      { id: 'discount',     weight: 0.95 },
+      { id: 'piercing',     weight: 0.95 },
+      { id: 'speed_boost',  weight: 0.90 },
+      { id: 'auto_clicker', weight: 0.85 },
+      { id: 'free_upgrade', weight: 0.70 },
+      { id: 'gold_level',   weight: 0.08 }
     ].filter(c => {
       if (c.id === 'gold_boss' && this.nextBossIsGold) return false;
       if (c.id === 'gold_level' && (this.rebirthCount <= 15 || this.nextLevelIsGold || this.isGoldLevelActive)) return false;
@@ -2690,6 +2712,14 @@ class IdleBreakoutGame {
   }
 
   // --- Rebirth System ---
+  getRebirthMultiplier(rebirthCount = this.rebirthCount) {
+    return Math.pow(1.15, Math.max(0, Number(rebirthCount) || 0));
+  }
+
+  getPowerUpDropChancePercent(rebirthCount = this.rebirthCount) {
+    return (100 / 800) + (Math.max(0, Number(rebirthCount) || 0) * 0.002);
+  }
+
   getRequiredRebirthLevel() {
     return (this.rebirthCount + 1) * 25;
   }
@@ -2702,7 +2732,7 @@ class IdleBreakoutGame {
     if (!this.canRebirth()) return;
 
     this.rebirthCount++;
-    this.rebirthMultiplier = Math.pow(1.25, this.rebirthCount); // +25% pénz / rebirth
+    this.rebirthMultiplier = this.getRebirthMultiplier(); // +15% pénz / rebirth
     this.bb += 1;
 
     // Reset run progress completely back to level 1
@@ -3981,7 +4011,7 @@ class IdleBreakoutGame {
       } else {
         rebirthBtn.classList.add('locked');
         rebirthBtn.textContent = `REBIRTH (LVL ${reqLvl})`;
-        rebirthBtn.title = `Az újjászületés a(z) ${reqLvl}. szint után válik elérhetővé!`;
+        rebirthBtn.title = `Kattints a következő Rebirth jutalmainak megtekintéséhez (feloldás: LVL ${reqLvl})!`;
       }
     }
 
@@ -4337,6 +4367,12 @@ class IdleBreakoutGame {
     document.querySelectorAll('.dec24-countdown-text').forEach((el) => {
       el.textContent = info.timerStr;
     });
+    this.updateGuestRetentionUI();
+    const now = Date.now();
+    if (now - (this._lastGuestExpiryCheck || 0) >= 30000) {
+      this._lastGuestExpiryCheck = now;
+      this.checkGuestExpiration(false);
+    }
   }
 
   startDec24Countdown() {
@@ -4654,27 +4690,47 @@ class IdleBreakoutGame {
     if (rebirthTrigger && rebirthModal) {
       rebirthTrigger.addEventListener('click', () => {
         const reqLvl = this.getRequiredRebirthLevel();
-        if (!this.canRebirth()) {
-          alert(`Az újjászületéshez el kell érned legalább a(z) ${reqLvl}. szintet!\nJelenlegi szinted: ${this.level}\n(1. rebirth: lvl 25, 2. rebirth: lvl 50, 3. rebirth: lvl 75...)`);
-          return;
-        }
+        const canDo = this.canRebirth();
 
         document.getElementById('rebirth-current-lvl').textContent = this.level;
         document.getElementById('rebirth-required-lvl').textContent = reqLvl;
         document.getElementById('rebirth-current-mult').textContent = this.rebirthMultiplier.toFixed(2) + 'x';
-        document.getElementById('rebirth-next-mult').textContent = (this.rebirthMultiplier * 1.25).toFixed(2) + 'x';
+        document.getElementById('rebirth-next-mult').textContent = this.getRebirthMultiplier(this.rebirthCount + 1).toFixed(2) + 'x';
 
         const curSlots = this.getMaxBalls(this.rebirthCount);
         const nextSlots = this.getMaxBalls(this.rebirthCount + 1);
         const slotsEl = document.getElementById('rebirth-slots-info');
         if (slotsEl) slotsEl.textContent = `${curSlots} ➔ ${nextSlots}`;
 
-        const curChance = ((100 / 800) + this.rebirthCount * 0.005).toFixed(2);
-        const nextChance = ((100 / 800) + (this.rebirthCount + 1) * 0.005).toFixed(2);
+        const curChance = this.getPowerUpDropChancePercent(this.rebirthCount).toFixed(3);
+        const nextChance = this.getPowerUpDropChancePercent(this.rebirthCount + 1).toFixed(3);
         document.getElementById('rebirth-chance-info').textContent = `${curChance}% ➔ ${nextChance}%`;
         document.getElementById('rebirth-crit-info').textContent = `${5 + this.rebirthCount}% ➔ ${5 + this.rebirthCount + 1}%`;
 
+        const bannerEl = document.getElementById('rebirth-status-banner');
+        if (bannerEl) {
+          bannerEl.classList.toggle('ready', canDo);
+          bannerEl.classList.toggle('locked', !canDo);
+          if (canDo) {
+            bannerEl.textContent = `✅ Készen állsz! Elérted a(z) ${reqLvl}. szintet.`;
+          } else {
+            const missing = Math.max(0, reqLvl - this.level);
+            bannerEl.textContent = `🔒 Még zárolva: min. ${reqLvl}. szint kell (hiányzik még ${missing} szint).`;
+          }
+        }
+
+        if (confirmRebirthBtn) {
+          confirmRebirthBtn.disabled = !canDo;
+          confirmRebirthBtn.textContent = canDo
+            ? 'ÚJJÁSZÜLETÉS MOST'
+            : `ZÁROLVA (${this.level}/${reqLvl})`;
+        }
+        if (cancelRebirthBtn) {
+          cancelRebirthBtn.textContent = canDo ? 'MÉGSE' : 'BEZÁRÁS';
+        }
+
         rebirthModal.classList.add('open');
+        if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
 
@@ -4754,6 +4810,28 @@ class IdleBreakoutGame {
     if (closeBpBtn) closeBpBtn.addEventListener('click', closeBp);
     if (closeBpFooter) closeBpFooter.addEventListener('click', closeBp);
 
+    // 1-Tap Mobile Switchers between Leaderboard & Battle Pass modals
+    const switchLbToBp = document.getElementById('btn-switch-lb-to-bp');
+    const switchBpToLb = document.getElementById('btn-switch-bp-to-lb');
+    if (switchLbToBp && lbModal && bpModal) {
+      switchLbToBp.addEventListener('click', () => {
+        this.hideBBPhaseTooltip();
+        lbModal.classList.remove('open');
+        this.renderBattlePass();
+        bpModal.classList.add('open');
+        if (window.soundEngine) window.soundEngine.playClickHit();
+      });
+    }
+    if (switchBpToLb && lbModal && bpModal) {
+      switchBpToLb.addEventListener('click', () => {
+        this.hideBBPhaseTooltip();
+        bpModal.classList.remove('open');
+        this.renderLeaderboard();
+        lbModal.classList.add('open');
+        if (window.soundEngine) window.soundEngine.playClickHit();
+      });
+    }
+
     // Mobile 'i' Info Buttons for Dec 24 Countdown & TOP 1 Battle Pass Prize
     for (const infoBtnId of ['btn-hud-lb-info', 'btn-hud-bp-info', 'btn-modal-lb-info', 'btn-modal-bp-info']) {
       const infoBtn = document.getElementById(infoBtnId);
@@ -4763,6 +4841,35 @@ class IdleBreakoutGame {
           this.showDec24EventTooltip(e, infoBtnId);
         });
       }
+    }
+
+    // Guest 3-Day Retention Banner Quick Actions
+    const openGuestAuth = (preferRegister = true) => {
+      const modal = document.getElementById('auth-modal');
+      if (this.cloud) {
+        this.cloud.clearError();
+        this.cloud.hideDeleteConfirm();
+        if (!this.cloud.currentUser && preferRegister) {
+          this.cloud.switchAuthTab('register');
+        }
+        this.cloud.updateAuthUI();
+      }
+      if (modal) modal.classList.add('open');
+      if (window.soundEngine) window.soundEngine.playClickHit();
+    };
+    const guestFloatBtn = document.getElementById('btn-guest-float-auth');
+    const guestFloatClose = document.getElementById('btn-guest-float-close');
+    const lbNotePc = document.getElementById('lb-retention-note-pc');
+    const lbNoteMob = document.getElementById('lb-retention-note-mobile');
+    if (guestFloatBtn) guestFloatBtn.addEventListener('click', () => openGuestAuth(true));
+    if (lbNotePc) lbNotePc.addEventListener('click', () => openGuestAuth(true));
+    if (lbNoteMob) lbNoteMob.addEventListener('click', () => openGuestAuth(true));
+    if (guestFloatClose) {
+      guestFloatClose.addEventListener('click', () => {
+        this.guestNoticeDismissed = true;
+        const el = document.getElementById('guest-retention-float');
+        if (el) el.style.display = 'none';
+      });
     }
   }
 
@@ -4806,6 +4913,10 @@ class IdleBreakoutGame {
       hasPermanentPierce: this.balls.some(b => b.isPiercing && b.isPermanentPierce),
       persistedPowerUps,
       lastSavedAt: Date.now(),
+      guestCreatedAt: this.guestCreatedAt || Date.now(),
+      guestDeadlineAt: this.guestDeadlineAt || (Date.now() + this.GUEST_RETENTION_MS),
+      guestLastActiveAt: Date.now(),
+      guestExtendedByManual: !!this.guestExtendedByManual,
       totalBricksDestroyed: this.totalBricksDestroyed,
       battlePassPremium: false,
       battlePassClaimedFree: this.battlePassClaimedFree,
@@ -4847,7 +4958,112 @@ class IdleBreakoutGame {
   load() {
     const data = this.readRawLocalSave();
     if (!data) return;
+    const now = Date.now();
+    if (!data.saveOwnerUid) {
+      const refBase = Number(data.guestCreatedAt) || Number(data.lastSavedAt) || now;
+      const deadline = Number(data.guestDeadlineAt) || (refBase + this.GUEST_RETENTION_MS);
+      const lastActive = Number(data.guestLastActiveAt) || Number(data.lastSavedAt) || now;
+      if (now >= deadline || (now - lastActive >= this.GUEST_RETENTION_MS)) {
+        try { localStorage.removeItem(this.SAVE_KEY); } catch (e) {}
+        this.guestCreatedAt = now;
+        this.guestDeadlineAt = now + this.GUEST_RETENTION_MS;
+        this.guestLastActiveAt = now;
+        this.guestExtendedByManual = false;
+        this.guestExpiredNotice = true;
+        return;
+      }
+    }
     this.applySaveData(data, { isLiveReload: false, ownerUid: data.saveOwnerUid || null });
+  }
+
+  extendGuestDeadlineFromManualTransfer() {
+    const now = Date.now();
+    this.guestDeadlineAt = now + this.GUEST_RETENTION_MS;
+    this.guestLastActiveAt = now;
+    this.guestExtendedByManual = true;
+    this.save();
+    this.updateGuestRetentionUI();
+  }
+
+  checkGuestExpiration(showAlertToast = true) {
+    if (this.isResetting) return false;
+    if (this.cloud && this.cloud.currentUser) return false;
+    const raw = this.readRawLocalSave();
+    if (raw && raw.saveOwnerUid) return false;
+
+    const now = Date.now();
+    const deadline = Number(this.guestDeadlineAt) || (now + this.GUEST_RETENTION_MS);
+    const lastActive = Number(this.guestLastActiveAt) || now;
+    if (now >= deadline || (now - lastActive >= this.GUEST_RETENTION_MS)) {
+      this.clearRetainedMqttPlayer(this.myPlayerId);
+      this.resetToFreshGuestState(true);
+      this.save();
+      this.updateGuestRetentionUI();
+      if (showAlertToast) {
+        this.showToast('🗑️ A regisztráció nélküli haladásod 3 napos határideje lejárt, ezért törölve lett! Regisztrálj a végleges mentéshez.', 6000);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  getGuestRemainingInfo() {
+    const now = Date.now();
+    const deadline = Number(this.guestDeadlineAt) || (now + this.GUEST_RETENTION_MS);
+    const remMs = Math.max(0, deadline - now);
+    const totalMin = Math.floor(remMs / 60000);
+    const days = Math.floor(totalMin / 1440);
+    const hours = Math.floor((totalMin % 1440) / 60);
+    const mins = totalMin % 60;
+    const longStr = days > 0
+      ? `${days} nap ${hours} óra`
+      : (hours > 0 ? `${hours} óra ${mins} perc` : `${mins} perc`);
+    const shortStr = days > 0
+      ? `${days}n ${hours}ó`
+      : (hours > 0 ? `${hours}ó ${mins}p` : `${mins}p`);
+    return { remMs, longStr, shortStr };
+  }
+
+  updateGuestRetentionUI() {
+    const loggedIn = !!(this.cloud && this.cloud.currentUser);
+    const rem = this.getGuestRemainingInfo();
+
+    document.querySelectorAll('.guest-rem-text').forEach((el) => {
+      el.textContent = rem.longStr;
+    });
+    document.querySelectorAll('.guest-rem-short').forEach((el) => {
+      el.textContent = rem.shortStr;
+    });
+
+    const floatBar = document.getElementById('guest-retention-float');
+    if (floatBar) {
+      floatBar.style.display = (!loggedIn && !this.guestNoticeDismissed) ? 'flex' : 'none';
+    }
+
+    for (const id of ['lb-retention-note-pc', 'lb-retention-note-mobile']) {
+      const note = document.getElementById(id);
+      if (note) {
+        note.classList.toggle('is-guest', !loggedIn);
+        note.classList.toggle('is-protected', loggedIn);
+        if (loggedIn) {
+          note.innerHTML = '🛡️ Védett fiók • Csak te törölheted';
+        } else {
+          note.innerHTML = `⏳ <strong>${rem.shortStr}</strong> múlva törlődik • Kód / Regisztráció`;
+        }
+      }
+    }
+
+    const authNotice = document.getElementById('auth-retention-notice');
+    if (authNotice) {
+      authNotice.classList.toggle('is-guest', !loggedIn);
+      authNotice.classList.toggle('is-protected', loggedIn);
+      if (loggedIn) {
+        authNotice.innerHTML = '🛡️ <strong>Regisztrált fiók aktív:</strong> A rendszer nem törli a haladásod — <strong>kizárólag te törölheted</strong>.';
+      } else {
+        const extTag = this.guestExtendedByManual ? ' <em>(kóddal hosszabbítva)</em>' : '';
+        authNotice.innerHTML = `⏳ <strong>Vendég korlát (3 nap):</strong> Haladásod <strong>${rem.longStr}</strong> múlva törlődik${extTag}. <strong>Másolás</strong> = +3 nap (inaktívan törlődik). <strong>Regisztráció</strong> = védett fiók, csak te törölheted!`;
+      }
+    }
   }
 
   applySaveData(data, { isLiveReload = false, ownerUid = null } = {}) {
@@ -4884,10 +5100,15 @@ class IdleBreakoutGame {
 
       this.money = data.money ?? 0;
       this.level = data.level ?? 1;
+      const loadNow = Date.now();
+      this.guestCreatedAt = Number(data.guestCreatedAt) || Number(data.lastSavedAt) || loadNow;
+      this.guestDeadlineAt = Number(data.guestDeadlineAt) || (this.guestCreatedAt + this.GUEST_RETENTION_MS);
+      this.guestLastActiveAt = loadNow;
+      this.guestExtendedByManual = !!data.guestExtendedByManual;
       this.bb = data.bb ?? 0;
       this.bossTokens = data.bossTokens ?? 0;
       this.rebirthCount = data.rebirthCount ?? 0;
-      this.rebirthMultiplier = Math.pow(1.25, this.rebirthCount);
+      this.rebirthMultiplier = this.getRebirthMultiplier();
       this.clickUpgradeLevel = Math.min(this.MAX_CLICK_LEVEL, data.clickUpgradeLevel ?? 1);
       this.clickPower = this.clickUpgradeLevel;
       this.pierceSpeedUpgradeLevel = Math.min(this.MAX_PIERCE_SPEED_LEVEL, data.pierceSpeedUpgradeLevel ?? 0);
@@ -5020,6 +5241,11 @@ class IdleBreakoutGame {
   }
 
   resetToFreshGuestState(refreshUI = true) {
+    const now = Date.now();
+    this.guestCreatedAt = now;
+    this.guestDeadlineAt = now + this.GUEST_RETENTION_MS;
+    this.guestLastActiveAt = now;
+    this.guestExtendedByManual = false;
     this.money = 0;
     this.level = 1;
     this.bb = 0;
@@ -5457,9 +5683,10 @@ class IdleBreakoutGame {
           this.mqttConnected = true;
           this.updateLeaderboardConnUI(true);
 
-          // Feliratkozás az összes játékos állapotára és szinkron kérésekre
+          // Feliratkozás az összes játékos állapotára, szinkron kérésekre és fejlesztői szabályokra
           client.subscribe('shirelix/idle_breakout_v4/players/+', { qos: 0 });
           client.subscribe('shirelix/idle_breakout_v4/sync', { qos: 0 });
+          client.subscribe('shirelix/idle_breakout_v4/admin/rules', { qos: 0 });
 
           // Ha már be van jelentkezve, takarítsuk le az esetleges korábbi vendég/duplikált MQTT topicokat:
           if (this.cloud && this.cloud.currentUser) {
@@ -5563,6 +5790,11 @@ class IdleBreakoutGame {
                 // Új játékos csatlakozott a hálózathoz! Küldjük el neki azonnal a saját állapotunkat:
                 this.broadcastMyStatus();
               }
+            } else if (topic === 'shirelix/idle_breakout_v4/admin/rules') {
+              if (str && str.trim()) {
+                const rulesData = JSON.parse(str);
+                this.applyIncomingAdminRules(rulesData, 'mqtt');
+              }
             }
           } catch (err) {
             console.error('MQTT message error:', err);
@@ -5657,6 +5889,130 @@ class IdleBreakoutGame {
     } catch (e) {}
   }
 
+  escapeHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  getDefaultAdminRules() {
+    return {
+      version: 1,
+      updatedAt: 0,
+      hideDefaultName: false,
+      hideGuests: false,
+      hideOffline: false,
+      whitelistOnly: false,
+      filterLocalSelf: false,
+      bannedIds: [],
+      bannedNames: [],
+      whitelistNames: [],
+      overrides: {},
+      customPlayers: []
+    };
+  }
+
+  normalizeAdminRules(raw) {
+    const def = this.getDefaultAdminRules();
+    if (!raw || typeof raw !== 'object') return def;
+    const normList = (arr) => Array.isArray(arr)
+      ? [...new Set(arr.map(x => String(x || '').trim()).filter(Boolean))]
+      : [];
+    const customPlayers = Array.isArray(raw.customPlayers)
+      ? raw.customPlayers
+          .filter(cp => cp && cp.id)
+          .map(cp => ({
+            id: String(cp.id),
+            name: String(cp.name || 'Játékos').slice(0, 14),
+            rebirths: Math.max(0, Number(cp.rebirths) || 0),
+            level: Math.max(1, Number(cp.level) || 1),
+            bricks: Math.max(0, Number(cp.bricks) || 0),
+            isOnline: cp.isOnline !== false
+          }))
+      : [];
+    const overrides = (raw.overrides && typeof raw.overrides === 'object') ? { ...raw.overrides } : {};
+    return {
+      version: 1,
+      updatedAt: Number(raw.updatedAt) || 0,
+      hideDefaultName: !!raw.hideDefaultName,
+      hideGuests: !!raw.hideGuests,
+      hideOffline: !!raw.hideOffline,
+      whitelistOnly: !!raw.whitelistOnly,
+      filterLocalSelf: !!raw.filterLocalSelf,
+      bannedIds: normList(raw.bannedIds),
+      bannedNames: normList(raw.bannedNames).map(s => s.toLowerCase()),
+      whitelistNames: normList(raw.whitelistNames).map(s => s.toLowerCase()),
+      overrides,
+      customPlayers
+    };
+  }
+
+  loadLocalAdminRules() {
+    try {
+      const raw = localStorage.getItem('idle_breakout_dev_lb_rules');
+      return this.normalizeAdminRules(raw ? JSON.parse(raw) : null);
+    } catch (e) {
+      return this.getDefaultAdminRules();
+    }
+  }
+
+  saveAdminRulesLocally() {
+    try {
+      localStorage.setItem('idle_breakout_dev_lb_rules', JSON.stringify(this.lbAdminRules));
+    } catch (e) {}
+  }
+
+  applyIncomingAdminRules(raw, source = 'remote') {
+    if (!raw || typeof raw !== 'object') return;
+    const incoming = this.normalizeAdminRules(raw);
+    const curUpdated = (this.lbAdminRules && this.lbAdminRules.updatedAt) || 0;
+    if (incoming.updatedAt > curUpdated) {
+      this.lbAdminRules = incoming;
+      this.saveAdminRulesLocally();
+      this.renderLeaderboard();
+      const devModal = document.getElementById('dev-leaderboard-modal');
+      if (devModal && devModal.classList.contains('open')) {
+        this.renderDevLeaderboardPanel();
+      }
+    }
+  }
+
+  async syncAdminRulesGlobally(showToast = true) {
+    this.lbAdminRules.updatedAt = Date.now();
+    this.saveAdminRulesLocally();
+    this.renderLeaderboard();
+    this.renderDevLeaderboardPanel();
+
+    let mqttSent = false;
+    if (this.mqttClient && this.mqttConnected) {
+      try {
+        this.mqttClient.publish(
+          'shirelix/idle_breakout_v4/admin/rules',
+          JSON.stringify(this.lbAdminRules),
+          { retain: true, qos: 0 }
+        );
+        mqttSent = true;
+      } catch (e) {}
+    }
+
+    let cloudRes = { ok: false };
+    if (this.cloud && this.cloud.db) {
+      cloudRes = await this.cloud.saveAdminRulesToCloud(this.lbAdminRules);
+    }
+
+    if (showToast) {
+      if (cloudRes.ok || mqttSent) {
+        const dest = [mqttSent ? 'MQTT' : null, cloudRes.ok ? 'Firestore' : null].filter(Boolean).join(' + ');
+        this.showToast(`🛠️ Szabályok alkalmazva és szinkronizálva (${dest})!`, 2600);
+      } else {
+        this.showToast('🛠️ Szabályok elmentve helyben! (Kapcsolódás után szinkronizálódik)', 2600);
+      }
+    }
+  }
+
   getDeduplicatedRemotePlayers(myUid = null) {
     const now = Date.now();
     const clientToUid = {};
@@ -5668,13 +6024,18 @@ class IdleBreakoutGame {
     }
 
     const byKey = new Map();
-    const mergeInto = (groupKey, rp) => {
+    const mergeInto = (groupKey, rp, rawKey = null) => {
       const existing = byKey.get(groupKey);
       const rpOnline = (now - (rp.ts || 0)) < 25000;
+      const keysToAdd = [rawKey, rp.id, rp.uid, rp.docId, rp.clientId].filter(Boolean);
       if (!existing) {
         byKey.set(groupKey, {
           id: rp.uid || rp.id,
           uid: rp.uid || null,
+          docId: rp.docId || null,
+          clientId: rp.clientId || null,
+          fromFirestore: !!rp.fromFirestore,
+          rawKeys: [...new Set(keysToAdd)],
           name: rp.name || 'Játékos',
           rebirths: Number(rp.rebirths) || 0,
           level: Number(rp.level) || 1,
@@ -5684,6 +6045,13 @@ class IdleBreakoutGame {
         });
         return;
       }
+
+      for (const k of keysToAdd) {
+        if (!existing.rawKeys.includes(k)) existing.rawKeys.push(k);
+      }
+      if (!existing.docId && rp.docId) existing.docId = rp.docId;
+      if (!existing.clientId && rp.clientId) existing.clientId = rp.clientId;
+      if (rp.fromFirestore) existing.fromFirestore = true;
 
       const rReb = Number(rp.rebirths) || 0;
       const rLvl = Number(rp.level) || 1;
@@ -5710,6 +6078,7 @@ class IdleBreakoutGame {
     for (const pid in this.remotePlayers) {
       const rp = this.remotePlayers[pid];
       if (!rp) continue;
+      if (!rp.uid && !rp.fromFirestore && (now - (rp.ts || 0) >= this.GUEST_RETENTION_MS)) continue;
       if (isCloudReady && !rp.fromFirestore && (now - (rp.ts || 0) > 120000)) continue;
       const resolvedUid = rp.uid || clientToUid[rp.id] || clientToUid[pid] || null;
       if (pid === this.myPlayerId || rp.id === this.myPlayerId || rp.clientId === this.myPlayerId) continue;
@@ -5725,7 +6094,7 @@ class IdleBreakoutGame {
       } else {
         groupKey = `id:${rp.id || pid}`;
       }
-      mergeInto(groupKey, { ...rp, uid: resolvedUid });
+      mergeInto(groupKey, { ...rp, uid: resolvedUid }, pid);
     }
 
     // Ha ugyanahhoz az egyéni névhez létezik UID-s és régi UID nélküli bejegyzés is, vonjuk össze őket:
@@ -5756,37 +6125,149 @@ class IdleBreakoutGame {
     return [...byKey.values()];
   }
 
-  renderLeaderboard() {
-    // Összeállítjuk a teljes listát: a helyi játékos + az összes duplikációmentesített valós játékos
-    const entries = [];
-    const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
+  getEntryMatchIds(entry) {
+    const ids = [entry.uid, entry.id, entry.docId, entry.clientId, ...(entry.rawKeys || [])].filter(Boolean);
+    return [...new Set(ids.map(String))];
+  }
 
-    // Helyi játékos (mindig benne van!)
-    entries.push({
-      id: this.myPlayerId,
+  applyEntryOverride(entry) {
+    const overrides = (this.lbAdminRules && this.lbAdminRules.overrides) || {};
+    const candidates = [
+      entry.uid,
+      entry.id,
+      entry.docId,
+      ...(entry.rawKeys || []),
+      entry.name ? `name:${entry.name.trim().toLowerCase()}` : null
+    ].filter(Boolean);
+
+    for (const key of candidates) {
+      const ov = overrides[key];
+      if (ov && typeof ov === 'object') {
+        return {
+          ...entry,
+          name: ov.name ? String(ov.name).slice(0, 14) : entry.name,
+          rebirths: ov.rebirths !== undefined ? Math.max(0, Number(ov.rebirths) || 0) : entry.rebirths,
+          level: ov.level !== undefined ? Math.max(1, Number(ov.level) || 1) : entry.level,
+          _hasOverride: true,
+          _overrideKey: key
+        };
+      }
+    }
+    return entry;
+  }
+
+  getEntryFilterReason(entry) {
+    const rules = this.lbAdminRules || this.getDefaultAdminRules();
+    const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
+    const matchIds = this.getEntryMatchIds(entry);
+    const cleanLower = (entry.name || '').trim().toLowerCase();
+    const origLower = (entry._origName || entry.name || '').trim().toLowerCase();
+
+    for (const id of matchIds) {
+      if (rules.bannedIds.includes(id)) return 'Tiltott ID/UID';
+    }
+    if (rules.bannedNames.includes(cleanLower) || rules.bannedNames.includes(origLower)) {
+      return 'Tiltott név';
+    }
+
+    if (entry.isPlayer && !rules.filterLocalSelf) {
+      return null;
+    }
+
+    if (rules.hideDefaultName && (!cleanLower || cleanLower === 'játékos')) {
+      return 'Alap „Játékos”';
+    }
+
+    if (rules.hideGuests) {
+      const isCloudAcc = !!(entry.uid || entry.fromFirestore || entry.isCustom || (entry.isPlayer && myUid));
+      if (!isCloudAcc) return 'Vendég fiók';
+    }
+
+    if (rules.hideOffline && !entry.isOnline && !entry.isCustom) {
+      return 'Offline';
+    }
+
+    if (rules.whitelistOnly) {
+      const wl = rules.whitelistNames || [];
+      const inWl = wl.includes(cleanLower) ||
+        wl.includes(origLower) ||
+        matchIds.some(id => wl.includes(id.toLowerCase()));
+      if (!inWl) return 'Nincs Whitelisten';
+    }
+
+    return null;
+  }
+
+  getRawLeaderboardRoster() {
+    const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
+    const raw = [];
+
+    raw.push({
+      id: myUid || this.myPlayerId,
+      uid: myUid,
+      clientId: this.myPlayerId,
+      fromFirestore: !!myUid,
+      rawKeys: [this.myPlayerId, myUid].filter(Boolean),
       name: this.playerName || 'Játékos',
+      _origName: this.playerName || 'Játékos',
       rebirths: this.rebirthCount,
       level: this.level,
       bricks: this.totalBricksDestroyed,
       ts: Date.now(),
       isPlayer: true,
-      isOnline: true
+      isOnline: true,
+      isCustom: false
     });
 
-    // Távoli valós játékosok (azonos UID / kliens-ID / egyéni név alapján összevonva)
     const remoteList = this.getDeduplicatedRemotePlayers(myUid);
     for (const rp of remoteList) {
-      entries.push({
+      raw.push({
         id: rp.id,
+        uid: rp.uid,
+        docId: rp.docId,
+        clientId: rp.clientId,
+        fromFirestore: !!rp.fromFirestore,
+        rawKeys: rp.rawKeys || [rp.id],
         name: rp.name,
+        _origName: rp.name,
         rebirths: rp.rebirths,
         level: rp.level,
         bricks: rp.bricks,
         ts: rp.ts,
         isPlayer: false,
-        isOnline: !!rp.isOnline
+        isOnline: !!rp.isOnline,
+        isCustom: false
       });
     }
+
+    const customs = (this.lbAdminRules && this.lbAdminRules.customPlayers) || [];
+    for (const cp of customs) {
+      raw.push({
+        id: cp.id,
+        uid: cp.id,
+        rawKeys: [cp.id],
+        name: cp.name,
+        _origName: cp.name,
+        rebirths: cp.rebirths,
+        level: cp.level,
+        bricks: cp.bricks || 0,
+        ts: Date.now(),
+        isPlayer: false,
+        isOnline: cp.isOnline !== false,
+        isCustom: true
+      });
+    }
+
+    return raw.map(e => {
+      const overridden = this.applyEntryOverride(e);
+      overridden._filterReason = this.getEntryFilterReason(overridden);
+      return overridden;
+    });
+  }
+
+  renderLeaderboard() {
+    const roster = this.getRawLeaderboardRoster();
+    const entries = roster.filter(e => !e._filterReason);
 
     // Rangsorolás: Rebirth csökkenő, azon belül Szint csökkenő, azon belül Kiütött blokkok csökkenő
     entries.sort((a, b) => {
@@ -5795,7 +6276,8 @@ class IdleBreakoutGame {
       return (b.bricks || 0) - (a.bricks || 0);
     });
 
-    const playerRank = entries.findIndex(e => e.isPlayer) + 1;
+    const playerIdx = entries.findIndex(e => e.isPlayer);
+    const playerRank = playerIdx >= 0 ? `#${playerIdx + 1}` : '#--';
 
     for (const prefix of ['', '-mobile']) {
       const rebEl = document.getElementById(`lb-player-rebirths${prefix}`);
@@ -5803,12 +6285,25 @@ class IdleBreakoutGame {
       const rnkEl = document.getElementById(`lb-player-rank${prefix}`);
       if (rebEl) rebEl.textContent = this.rebirthCount;
       if (lvlEl) lvlEl.textContent = this.level;
-      if (rnkEl) rnkEl.textContent = `#${playerRank}`;
+      if (rnkEl) rnkEl.textContent = playerRank;
+    }
+
+    // Mindig csak a TOP 10 látszik + ha a helyi játékos nincs a TOP 10-ben, közvetlenül utána ő (pl. #16, #50, #163)
+    const displayRows = entries.slice(0, 10).map((entry, idx) => ({
+      entry,
+      rank: idx + 1,
+      pinnedAfterTop10: false
+    }));
+    if (playerIdx >= 10) {
+      displayRows.push({
+        entry: entries[playerIdx],
+        rank: playerIdx + 1,
+        pinnedAfterTop10: true
+      });
     }
 
     const now = Date.now();
-    let rowsHtml = entries.map((entry, idx) => {
-      const rank = idx + 1;
+    let rowsHtml = displayRows.map(({ entry, rank, pinnedAfterTop10 }) => {
       let medal = `#${rank}`;
       let rankClass = '';
       if (rank === 1) { medal = '🥇 1'; rankClass = 'rank-top1'; }
@@ -5816,6 +6311,7 @@ class IdleBreakoutGame {
       else if (rank === 3) { medal = '🥉 3'; rankClass = 'rank-top3'; }
 
       const meClass = entry.isPlayer ? 'player-row-me' : '';
+      const pinnedClass = pinnedAfterTop10 ? 'player-pinned-after-top10' : '';
       const meBadge = entry.isPlayer ? '<span class="badge-me">TE</span>' : '';
 
       // Online státusz: ha 25 másodpercen belül küldött jelet
@@ -5824,10 +6320,14 @@ class IdleBreakoutGame {
         ? '<span class="live-dot online" title="Élőben online">🟢</span>'
         : '<span class="live-dot offline" title="Offline (mentett pontszám)">⚪</span>';
 
-      return `
-        <div class="leaderboard-row ${rankClass} ${meClass}">
+      const dividerHtml = (pinnedAfterTop10 && rank > 11)
+        ? '<div class="leaderboard-gap-divider">• • •</div>'
+        : '';
+
+      return `${dividerHtml}
+        <div class="leaderboard-row ${rankClass} ${meClass} ${pinnedClass}">
           <span class="col-rank">${medal}</span>
-          <span class="col-name">${dotHtml}${entry.name}${meBadge}</span>
+          <span class="col-name">${dotHtml}${this.escapeHtml(entry.name)}${meBadge}</span>
           <span class="col-reb">${entry.rebirths}</span>
           <span class="col-lvl">${entry.level}</span>
         </div>
@@ -5847,6 +6347,554 @@ class IdleBreakoutGame {
     const mobileList = document.getElementById('leaderboard-list-mobile');
     if (pcList) pcList.innerHTML = rowsHtml;
     if (mobileList) mobileList.innerHTML = rowsHtml;
+
+    const devModal = document.getElementById('dev-leaderboard-modal');
+    if (devModal && devModal.classList.contains('open')) {
+      this.renderDevLeaderboardPanel();
+    }
+  }
+
+  // --- Fejlesztői Ranglista Kezelő Felület ---
+  isDevUnlocked() {
+    try {
+      return sessionStorage.getItem('idle_breakout_dev_unlocked') === '1';
+    } catch (e) {
+      return !!this._devSessionUnlocked;
+    }
+  }
+
+  getDevPin() {
+    try {
+      return localStorage.getItem('idle_breakout_dev_pin') || '2026';
+    } catch (e) {
+      return '2026';
+    }
+  }
+
+  openDevPanel() {
+    const modal = document.getElementById('dev-leaderboard-modal');
+    if (!modal) return;
+    const pinErr = document.getElementById('dev-pin-error');
+    const pinIn = document.getElementById('dev-pin-input');
+    if (pinErr) { pinErr.textContent = ''; pinErr.style.display = 'none'; }
+    if (pinIn) pinIn.value = '';
+    this.updateDevLockView();
+    modal.classList.add('open');
+    if (!this.isDevUnlocked() && pinIn) {
+      setTimeout(() => pinIn.focus(), 60);
+    }
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
+  updateDevLockView() {
+    const unlocked = this.isDevUnlocked();
+    const gate = document.getElementById('dev-auth-gate');
+    const body = document.getElementById('dev-panel-body');
+    const lockBtn = document.getElementById('btn-dev-lock');
+    if (gate) gate.style.display = unlocked ? 'none' : 'flex';
+    if (body) body.style.display = unlocked ? 'flex' : 'none';
+    if (lockBtn) lockBtn.style.display = unlocked ? 'inline-flex' : 'none';
+    if (unlocked) {
+      this.renderDevLeaderboardPanel();
+    }
+  }
+
+  initDevPanel() {
+    const modal = document.getElementById('dev-leaderboard-modal');
+    const closeBtn = document.getElementById('btn-close-dev');
+    const closeFooter = document.getElementById('btn-close-dev-footer');
+    const lockBtn = document.getElementById('btn-dev-lock');
+
+    for (const id of ['btn-open-dev-pc', 'btn-open-dev-mobile']) {
+      const btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', () => this.openDevPanel());
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        this.openDevPanel();
+      }
+    });
+
+    const closeModal = () => {
+      if (modal) modal.classList.remove('open');
+      this.devEditTarget = null;
+      const editBox = document.getElementById('dev-edit-box');
+      if (editBox) editBox.style.display = 'none';
+    };
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeFooter) closeFooter.addEventListener('click', closeModal);
+
+    if (lockBtn) {
+      lockBtn.addEventListener('click', () => {
+        this._devSessionUnlocked = false;
+        try { sessionStorage.removeItem('idle_breakout_dev_unlocked'); } catch (e) {}
+        this.updateDevLockView();
+      });
+    }
+
+    const pinForm = document.getElementById('dev-pin-form');
+    if (pinForm) {
+      pinForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const pinIn = document.getElementById('dev-pin-input');
+        const pinErr = document.getElementById('dev-pin-error');
+        const entered = (pinIn ? pinIn.value : '').trim();
+        if (entered === this.getDevPin()) {
+          this._devSessionUnlocked = true;
+          try { sessionStorage.setItem('idle_breakout_dev_unlocked', '1'); } catch (err) {}
+          if (pinErr) { pinErr.textContent = ''; pinErr.style.display = 'none'; }
+          this.updateDevLockView();
+          if (window.soundEngine) window.soundEngine.playLevelUp();
+        } else {
+          if (pinErr) {
+            pinErr.textContent = 'Hibás fejlesztői PIN kód!';
+            pinErr.style.display = 'block';
+          }
+        }
+      });
+    }
+
+    // Tab switching
+    const switchDevTab = (tab) => {
+      this.activeDevTab = tab;
+      const isPlayers = (tab === 'players');
+      const pPane = document.getElementById('dev-tab-players');
+      const rPane = document.getElementById('dev-tab-rules');
+      const pBtn = document.getElementById('btn-dev-tab-players');
+      const rBtn = document.getElementById('btn-dev-tab-rules');
+      if (pPane) pPane.style.display = isPlayers ? 'flex' : 'none';
+      if (rPane) rPane.style.display = isPlayers ? 'none' : 'flex';
+      if (pBtn) pBtn.classList.toggle('active', isPlayers);
+      if (rBtn) rBtn.classList.toggle('active', !isPlayers);
+      this.renderDevLeaderboardPanel();
+    };
+    const tabP = document.getElementById('btn-dev-tab-players');
+    const tabR = document.getElementById('btn-dev-tab-rules');
+    if (tabP) tabP.addEventListener('click', () => switchDevTab('players'));
+    if (tabR) tabR.addEventListener('click', () => switchDevTab('rules'));
+
+    // Quick toolbar actions
+    const pruneBtn = document.getElementById('btn-dev-prune-cache');
+    const syncBtn = document.getElementById('btn-dev-sync-now');
+    if (pruneBtn) pruneBtn.addEventListener('click', () => this.devPruneStaleEntries());
+    if (syncBtn) syncBtn.addEventListener('click', () => this.syncAdminRulesGlobally(true));
+
+    // Add manual custom player
+    const addForm = document.getElementById('dev-add-player-form');
+    if (addForm) {
+      addForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.devAddCustomPlayer();
+      });
+    }
+
+    // Edit drawer save/cancel
+    const saveEditBtn = document.getElementById('btn-dev-save-edit');
+    const cancelEditBtn = document.getElementById('btn-dev-cancel-edit');
+    if (saveEditBtn) saveEditBtn.addEventListener('click', () => this.devSaveEditEntry());
+    if (cancelEditBtn) {
+      cancelEditBtn.addEventListener('click', () => {
+        this.devEditTarget = null;
+        const box = document.getElementById('dev-edit-box');
+        if (box) box.style.display = 'none';
+      });
+    }
+
+    // Rule checkboxes
+    const bindRuleToggle = (elId, prop) => {
+      const cb = document.getElementById(elId);
+      if (cb) {
+        cb.addEventListener('change', () => {
+          this.lbAdminRules[prop] = !!cb.checked;
+          if (prop === 'whitelistOnly' && cb.checked && this.lbAdminRules.whitelistNames.length === 0) {
+            const myClean = (this.playerName || '').trim().toLowerCase();
+            if (myClean && myClean !== 'játékos') {
+              this.lbAdminRules.whitelistNames.push(myClean);
+            }
+          }
+          this.syncAdminRulesGlobally(true);
+        });
+      }
+    };
+    bindRuleToggle('dev-rule-hide-default', 'hideDefaultName');
+    bindRuleToggle('dev-rule-hide-guests', 'hideGuests');
+    bindRuleToggle('dev-rule-hide-offline', 'hideOffline');
+    bindRuleToggle('dev-rule-whitelist-only', 'whitelistOnly');
+    bindRuleToggle('dev-rule-filter-self', 'filterLocalSelf');
+
+    // Whitelist & Banlist manual additions
+    const addWlBtn = document.getElementById('btn-dev-add-whitelist');
+    const wlInput = document.getElementById('dev-whitelist-input');
+    const doAddWl = () => {
+      const val = (wlInput ? wlInput.value : '').trim().toLowerCase();
+      if (!val) return;
+      if (!this.lbAdminRules.whitelistNames.includes(val)) {
+        this.lbAdminRules.whitelistNames.push(val);
+      }
+      if (wlInput) wlInput.value = '';
+      this.syncAdminRulesGlobally(true);
+    };
+    if (addWlBtn) addWlBtn.addEventListener('click', doAddWl);
+    if (wlInput) wlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAddWl(); } });
+
+    const addBanBtn = document.getElementById('btn-dev-add-ban');
+    const banInput = document.getElementById('dev-ban-input');
+    const doAddBan = () => {
+      const val = (banInput ? banInput.value : '').trim();
+      if (!val) return;
+      const lower = val.toLowerCase();
+      if (!this.lbAdminRules.bannedNames.includes(lower)) {
+        this.lbAdminRules.bannedNames.push(lower);
+      }
+      if (!this.lbAdminRules.bannedIds.includes(val)) {
+        this.lbAdminRules.bannedIds.push(val);
+      }
+      if (banInput) banInput.value = '';
+      this.syncAdminRulesGlobally(true);
+    };
+    if (addBanBtn) addBanBtn.addEventListener('click', doAddBan);
+    if (banInput) banInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAddBan(); } });
+
+    // PIN change & Reset all rules
+    const savePinBtn = document.getElementById('btn-dev-save-pin');
+    const newPinInput = document.getElementById('dev-new-pin-input');
+    if (savePinBtn && newPinInput) {
+      savePinBtn.addEventListener('click', () => {
+        const val = (newPinInput.value || '').trim();
+        if (val.length < 3) {
+          this.showToast('⚠️ A PIN legalább 3 karakter legyen!', 2600);
+          return;
+        }
+        try { localStorage.setItem('idle_breakout_dev_pin', val); } catch (e) {}
+        newPinInput.value = '';
+        this.showToast('🔑 Új fejlesztői PIN elmentve!', 2600);
+      });
+    }
+
+    const resetRulesBtn = document.getElementById('btn-dev-reset-rules');
+    if (resetRulesBtn) {
+      resetRulesBtn.addEventListener('click', () => {
+        if (!confirm('Biztosan törlöd az összes tiltást, engedélyezőlistát és felülírást?')) return;
+        this.lbAdminRules = this.getDefaultAdminRules();
+        this.syncAdminRulesGlobally(true);
+      });
+    }
+  }
+
+  devAddCustomPlayer() {
+    const nameIn = document.getElementById('dev-add-name');
+    const rebIn = document.getElementById('dev-add-reb');
+    const lvlIn = document.getElementById('dev-add-lvl');
+    const name = (nameIn ? nameIn.value : '').trim().slice(0, 14);
+    if (!name) {
+      this.showToast('⚠️ Adj meg egy játékosnevet!', 2200);
+      return;
+    }
+    const rebirths = Math.max(0, parseInt(rebIn ? rebIn.value : '0', 10) || 0);
+    const level = Math.max(1, parseInt(lvlIn ? lvlIn.value : '1', 10) || 1);
+    this.lbAdminRules.customPlayers.push({
+      id: 'custom_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5),
+      name,
+      rebirths,
+      level,
+      bricks: level * 100,
+      isOnline: true
+    });
+    if (nameIn) nameIn.value = '';
+    this.syncAdminRulesGlobally(true);
+  }
+
+  devOpenEditDrawer(entry) {
+    this.devEditTarget = entry;
+    const box = document.getElementById('dev-edit-box');
+    const lbl = document.getElementById('dev-edit-target-label');
+    const nIn = document.getElementById('dev-edit-name');
+    const rIn = document.getElementById('dev-edit-reb');
+    const lIn = document.getElementById('dev-edit-lvl');
+    if (lbl) lbl.textContent = `${entry.name} (${entry.isPlayer ? 'TE' : (entry.isCustom ? 'Kézi' : 'Távoli')})`;
+    if (nIn) nIn.value = entry.name || 'Játékos';
+    if (rIn) rIn.value = entry.rebirths ?? 0;
+    if (lIn) lIn.value = entry.level ?? 1;
+    if (box) box.style.display = 'flex';
+  }
+
+  async devSaveEditEntry() {
+    const entry = this.devEditTarget;
+    if (!entry) return;
+    const nIn = document.getElementById('dev-edit-name');
+    const rIn = document.getElementById('dev-edit-reb');
+    const lIn = document.getElementById('dev-edit-lvl');
+    const newName = (nIn ? nIn.value : entry.name).trim().slice(0, 14) || entry.name;
+    const newReb = Math.max(0, parseInt(rIn ? rIn.value : entry.rebirths, 10) || 0);
+    const newLvl = Math.max(1, parseInt(lIn ? lIn.value : entry.level, 10) || 1);
+
+    if (entry.isPlayer) {
+      const lvlChanged = newLvl !== this.level;
+      this.rebirthCount = newReb;
+      this.rebirthMultiplier = this.getRebirthMultiplier();
+      this.level = newLvl;
+      this.setPlayerNameDirect(newName);
+      if (lvlChanged) this.generateLevel(this.level);
+      this.updateHUD();
+      this.save();
+      this.broadcastMyStatus();
+      if (this.cloud && this.cloud.currentUser) {
+        this.cloud.saveToCloud(true);
+      }
+    } else if (entry.isCustom) {
+      const cp = this.lbAdminRules.customPlayers.find(c => c.id === entry.id);
+      if (cp) {
+        cp.name = newName;
+        cp.rebirths = newReb;
+        cp.level = newLvl;
+      }
+    } else {
+      const ovKey = entry.uid || entry.id || `name:${(entry._origName || entry.name).trim().toLowerCase()}`;
+      this.lbAdminRules.overrides[ovKey] = {
+        name: newName,
+        rebirths: newReb,
+        level: newLvl
+      };
+      if (this.cloud && (entry.docId || entry.uid)) {
+        await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
+          name: newName,
+          rebirths: newReb,
+          level: newLvl,
+          ts: Date.now()
+        });
+      }
+    }
+
+    this.devEditTarget = null;
+    const box = document.getElementById('dev-edit-box');
+    if (box) box.style.display = 'none';
+    await this.syncAdminRulesGlobally(true);
+  }
+
+  async devBanOrUnbanEntry(entry) {
+    const isBanned = entry._filterReason === 'Tiltott ID/UID' || entry._filterReason === 'Tiltott név';
+    const matchIds = this.getEntryMatchIds(entry);
+    const cleanLower = (entry._origName || entry.name || '').trim().toLowerCase();
+
+    if (isBanned) {
+      this.lbAdminRules.bannedIds = this.lbAdminRules.bannedIds.filter(id => !matchIds.includes(id));
+      this.lbAdminRules.bannedNames = this.lbAdminRules.bannedNames.filter(n => n !== cleanLower);
+    } else {
+      for (const id of matchIds) {
+        if (!this.lbAdminRules.bannedIds.includes(id)) this.lbAdminRules.bannedIds.push(id);
+      }
+      if (cleanLower && cleanLower !== 'játékos' && !this.lbAdminRules.bannedNames.includes(cleanLower)) {
+        this.lbAdminRules.bannedNames.push(cleanLower);
+      }
+      if (!entry.isPlayer && !entry.isCustom) {
+        for (const k of matchIds) {
+          this.clearRetainedMqttPlayer(k);
+        }
+      }
+    }
+    await this.syncAdminRulesGlobally(true);
+  }
+
+  async devToggleWhitelistEntry(entry) {
+    const cleanLower = (entry._origName || entry.name || '').trim().toLowerCase();
+    const targetKey = (cleanLower && cleanLower !== 'játékos') ? cleanLower : String(entry.uid || entry.id || '').toLowerCase();
+    if (!targetKey) return;
+    const idx = this.lbAdminRules.whitelistNames.indexOf(targetKey);
+    if (idx >= 0) {
+      this.lbAdminRules.whitelistNames.splice(idx, 1);
+    } else {
+      this.lbAdminRules.whitelistNames.push(targetKey);
+    }
+    await this.syncAdminRulesGlobally(true);
+  }
+
+  async devDeleteEntry(entry) {
+    if (entry.isPlayer) {
+      this.showToast('ℹ️ A saját (TE) sorodat Tiltással vagy „Saját sorom szűrése” kapcsolóval tudod elrejteni.', 3200);
+      return;
+    }
+    if (entry.isCustom) {
+      this.lbAdminRules.customPlayers = this.lbAdminRules.customPlayers.filter(c => c.id !== entry.id);
+      await this.syncAdminRulesGlobally(true);
+      return;
+    }
+
+    const keys = this.getEntryMatchIds(entry);
+    for (const k of keys) {
+      this.clearRetainedMqttPlayer(k);
+      if (this.remotePlayers && this.remotePlayers[k]) {
+        delete this.remotePlayers[k];
+      }
+    }
+    if (this.remotePlayers) {
+      for (const pid of Object.keys(this.remotePlayers)) {
+        const rp = this.remotePlayers[pid];
+        if (rp && (keys.includes(pid) || keys.includes(rp.id) || (rp.uid && keys.includes(rp.uid)))) {
+          delete this.remotePlayers[pid];
+        }
+      }
+      try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+    }
+
+    let cloudNote = '';
+    if (this.cloud && this.cloud.db) {
+      const res = await this.cloud.adminDeleteLeaderboardDocs([entry.docId, entry.uid, entry.id].filter(Boolean));
+      if (res.deleted > 0) cloudNote = ' (+ Firestore törölve)';
+      else if (res.permissionDenied) {
+        // Ha a Firestore szabály tiltja más dokumentumának törlését, automatikusan ID-tiltással biztosítjuk, hogy ne jöjjön vissza!
+        for (const k of keys) {
+          if (!this.lbAdminRules.bannedIds.includes(k)) this.lbAdminRules.bannedIds.push(k);
+        }
+        cloudNote = ' (Firestore jogosultság hiányában globális elrejtés aktiválva!)';
+        await this.syncAdminRulesGlobally(false);
+      }
+    }
+
+    this.renderLeaderboard();
+    this.renderDevLeaderboardPanel();
+    this.showToast(`🗑️ „${this.escapeHtml(entry.name)}” eltávolítva${cloudNote}`, 3200);
+  }
+
+  async devPruneStaleEntries() {
+    const now = Date.now();
+    let pruned = 0;
+    const toDeleteFirestore = [];
+    for (const k of Object.keys(this.remotePlayers)) {
+      const rp = this.remotePlayers[k];
+      const isOld = !rp || (now - (rp.ts || 0) > 25000);
+      if (isOld || (rp.name || '').trim().toLowerCase() === 'játékos') {
+        this.clearRetainedMqttPlayer(k);
+        if (rp && rp.clientId) this.clearRetainedMqttPlayer(rp.clientId);
+        if (rp && rp.docId) toDeleteFirestore.push(rp.docId);
+        delete this.remotePlayers[k];
+        pruned++;
+      }
+    }
+    try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+    if (this.cloud && toDeleteFirestore.length > 0) {
+      await this.cloud.adminDeleteLeaderboardDocs(toDeleteFirestore);
+    }
+    this.renderLeaderboard();
+    this.renderDevLeaderboardPanel();
+    this.showToast(`🧹 ${pruned} régi / alapértelmezett cache bejegyzés megtisztítva!`, 3000);
+  }
+
+  renderDevLeaderboardPanel() {
+    if (!this.isDevUnlocked()) return;
+    const roster = this.getRawLeaderboardRoster();
+    roster.sort((a, b) => {
+      if (b.rebirths !== a.rebirths) return b.rebirths - a.rebirths;
+      if (b.level !== a.level) return b.level - a.level;
+      return (b.bricks || 0) - (a.bricks || 0);
+    });
+    const visibleCount = roster.filter(e => !e._filterReason).length;
+    const countEl = document.getElementById('dev-count-summary');
+    if (countEl) countEl.textContent = `${visibleCount}/${roster.length}`;
+
+    // Players list
+    const listEl = document.getElementById('dev-players-list');
+    if (listEl) {
+      listEl.innerHTML = roster.map((entry, idx) => {
+        const srcBadge = entry.isPlayer
+          ? '<span class="dev-src-tag src-te">TE</span>'
+          : (entry.isCustom
+              ? '<span class="dev-src-tag src-custom">KÉZI</span>'
+              : (entry.fromFirestore
+                  ? '<span class="dev-src-tag src-cloud">☁️ FELHŐ</span>'
+                  : '<span class="dev-src-tag src-mqtt">📡 MQTT</span>'));
+        const dot = entry.isOnline ? '🟢' : '⚪';
+        const statusBadge = entry._filterReason
+          ? `<span class="dev-vis-tag vis-hidden">🚫 ${this.escapeHtml(entry._filterReason)}</span>`
+          : '<span class="dev-vis-tag vis-shown">✅ Látható</span>';
+        const wlCheckKey = (entry._origName || entry.name || '').trim().toLowerCase();
+        const inWl = (this.lbAdminRules.whitelistNames || []).includes(wlCheckKey);
+        const isBanned = entry._filterReason === 'Tiltott ID/UID' || entry._filterReason === 'Tiltott név';
+        const idText = entry.uid || entry.id || '-';
+
+        return `
+          <div class="dev-player-card ${entry._filterReason ? 'is-filtered' : ''}" data-dev-idx="${idx}">
+            <div class="dev-pc-info">
+              <div class="dev-pc-top">
+                <span class="dev-pc-name">${dot} <strong>${this.escapeHtml(entry.name)}</strong> ${srcBadge} ${statusBadge}</span>
+                <span class="dev-pc-stats">REB: <strong>${entry.rebirths}</strong> | SZINT: <strong>${entry.level}</strong></span>
+              </div>
+              <div class="dev-pc-id">ID/UID: <code>${this.escapeHtml(String(idText).slice(0, 26))}</code></div>
+            </div>
+            <div class="dev-pc-actions">
+              <button type="button" class="dev-act-btn act-edit" data-act="edit" title="Név / Rebirth / Szint szerkesztése">✏️</button>
+              <button type="button" class="dev-act-btn ${inWl ? 'act-wl-on' : 'act-wl'}" data-act="wl" title="Engedélyezőlistára tesz / levesz">${inWl ? '✅ WL' : '+ WL'}</button>
+              <button type="button" class="dev-act-btn ${isBanned ? 'act-unban' : 'act-ban'}" data-act="ban" title="${isBanned ? 'Tiltás feloldása' : 'Tiltás és elrejtés'}">${isBanned ? '🔓 Felold' : '🚫 Tilt'}</button>
+              ${!entry.isPlayer ? '<button type="button" class="dev-act-btn act-del" data-act="del" title="Törlés (MQTT/Cache/Firestore)">🗑️</button>' : ''}
+            </div>
+          </div>
+        `;
+      }).join('') || '<div class="leaderboard-empty-hint">Nincs észlelt játékos.</div>';
+
+      listEl.querySelectorAll('.dev-player-card').forEach((card) => {
+        const idx = parseInt(card.getAttribute('data-dev-idx'), 10);
+        const entry = roster[idx];
+        if (!entry) return;
+        card.querySelectorAll('.dev-act-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const act = btn.getAttribute('data-act');
+            if (act === 'edit') this.devOpenEditDrawer(entry);
+            else if (act === 'wl') this.devToggleWhitelistEntry(entry);
+            else if (act === 'ban') this.devBanOrUnbanEntry(entry);
+            else if (act === 'del') this.devDeleteEntry(entry);
+          });
+        });
+      });
+    }
+
+    // Rule checkboxes
+    const rules = this.lbAdminRules;
+    const setCb = (id, val) => { const el = document.getElementById(id); if (el) el.checked = !!val; };
+    setCb('dev-rule-hide-default', rules.hideDefaultName);
+    setCb('dev-rule-hide-guests', rules.hideGuests);
+    setCb('dev-rule-hide-offline', rules.hideOffline);
+    setCb('dev-rule-whitelist-only', rules.whitelistOnly);
+    setCb('dev-rule-filter-self', rules.filterLocalSelf);
+
+    // Chips: Whitelist
+    const wlWrap = document.getElementById('dev-whitelist-chips');
+    if (wlWrap) {
+      wlWrap.innerHTML = (rules.whitelistNames || []).map((w) =>
+        `<span class="dev-chip wl-chip">${this.escapeHtml(w)} <button type="button" class="dev-chip-x" data-wl="${this.escapeHtml(w)}">✕</button></span>`
+      ).join('') || '<span class="dev-empty-chips">Üres engedélyezőlista</span>';
+      wlWrap.querySelectorAll('.dev-chip-x').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const val = btn.getAttribute('data-wl');
+          this.lbAdminRules.whitelistNames = this.lbAdminRules.whitelistNames.filter(x => x !== val);
+          this.syncAdminRulesGlobally(true);
+        });
+      });
+    }
+
+    // Chips: Banlist (Names + IDs)
+    const banWrap = document.getElementById('dev-ban-chips');
+    if (banWrap) {
+      const chips = [
+        ...(rules.bannedNames || []).map(n => ({ kind: 'name', val: n, label: `Név: ${n}` })),
+        ...(rules.bannedIds || []).map(id => ({ kind: 'id', val: id, label: `ID: ${String(id).slice(0, 14)}` }))
+      ];
+      banWrap.innerHTML = chips.map((c) =>
+        `<span class="dev-chip ban-chip">${this.escapeHtml(c.label)} <button type="button" class="dev-chip-x" data-kind="${c.kind}" data-val="${this.escapeHtml(c.val)}">✕</button></span>`
+      ).join('') || '<span class="dev-empty-chips">Nincs tiltott név vagy ID</span>';
+      banWrap.querySelectorAll('.dev-chip-x').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const kind = btn.getAttribute('data-kind');
+          const val = btn.getAttribute('data-val');
+          if (kind === 'name') {
+            this.lbAdminRules.bannedNames = this.lbAdminRules.bannedNames.filter(x => x !== val);
+          } else {
+            this.lbAdminRules.bannedIds = this.lbAdminRules.bannedIds.filter(x => x !== val);
+          }
+          this.syncAdminRulesGlobally(true);
+        });
+      });
+    }
   }
 
   // --- Battle Pass System ---

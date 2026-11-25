@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=5.3">
+  <link rel="stylesheet" href="css/style.css?v=6.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
@@ -36,6 +36,7 @@
   <!-- Left Sidebar: LEADERBOARD (PC Only) -->
   <aside id="leaderboard-sidebar" class="desktop-sidebar leaderboard-sidebar">
     <div class="sidebar-header">
+      <button id="btn-open-dev-pc" class="dev-trigger-btn" type="button" title="Fejlesztői Ranglista Kezelő (Ctrl+Shift+D)">🛠️</button>
       <div class="sidebar-title"><span class="sidebar-icon">🏆</span> RANGLISTA</div>
       <div class="sidebar-subtitle">Arcade Globális Bajnokság</div>
       <div id="lb-conn-status-pc" class="lb-conn-status" title="Valós idejű multiplayer kapcsolat"><span class="conn-dot"></span> ÉLŐ SZINKRON</div>
@@ -64,6 +65,7 @@
         <span>🎖️ HELYEZÉS: <strong id="lb-player-rank">#--</strong></span>
       </div>
       <button id="lb-auth-status-pc" class="lb-auth-status-bar" type="button" title="Fiók / Felhőmentés megnyitása">👤 Vendég mód ➔ <u>Belépés / Mentés</u></button>
+      <button id="lb-retention-note-pc" class="lb-retention-note is-guest" type="button" title="3 napos vendég határidő részletei">⏳ 3 nap múlva törlődik • Regisztrálj!</button>
     </div>
 
     <div class="leaderboard-table-header">
@@ -206,6 +208,15 @@
     <main id="arena-wrapper">
       <canvas id="game-canvas"></canvas>
       <div id="offline-toast" class="offline-toast"></div>
+      <div id="guest-retention-float" class="guest-retention-float" style="display: none;">
+        <span class="guest-float-text">
+          ⚠️ <strong>Vendég mód:</strong> haladásod <strong class="guest-rem-short">3n</strong> múlva törlődik (kivéve regisztráció vagy kód másolás)!
+        </span>
+        <div class="guest-float-actions">
+          <button id="btn-guest-float-auth" class="guest-float-btn" type="button">🔑 Regisztráció / Kód</button>
+          <button id="btn-guest-float-close" class="guest-float-x" type="button" aria-label="Figyelmeztetés bezárása">✕</button>
+        </div>
+      </div>
     </main>
 
   </div>
@@ -261,96 +272,129 @@
 
 </div>
 
-<!-- Mobile Modal: LEADERBOARD -->
-<div id="leaderboard-modal" class="overlay-backdrop">
-  <div class="retro-modal-window modal-mobile-responsive">
-    <div class="modal-header-row">
-      <div class="modal-title-box">🏆 RANGLISTA</div>
-      <div id="lb-conn-status-mobile" class="lb-conn-status" title="Valós idejű multiplayer kapcsolat"><span class="conn-dot"></span> ÉLŐ SZINKRON</div>
-      <div class="modal-header-actions">
-        <button id="btn-modal-lb-info" class="retro-info-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Ranglista esemény infó">i</button>
-        <button id="btn-close-leaderboard" class="retro-modal-x-btn">✕</button>
+<!-- Mobile Modal: LEADERBOARD (Dedicated Mobile Design) -->
+<div id="leaderboard-modal" class="overlay-backdrop mobile-sheet-backdrop">
+  <div class="retro-modal-window modal-mobile-responsive mobile-sheet-window mobile-lb-sheet">
+    <div class="mobile-sheet-header mobile-lb-header">
+      <div class="mobile-sheet-title-wrap">
+        <div class="mobile-sheet-title">🏆 RANGLISTA</div>
+        <div id="lb-conn-status-mobile" class="lb-conn-status" title="Valós idejű multiplayer kapcsolat"><span class="conn-dot"></span> ÉLŐ SZINKRON</div>
+      </div>
+      <div class="modal-header-actions mobile-sheet-actions">
+        <button id="btn-open-dev-mobile" class="dev-trigger-btn mobile-dev-btn" type="button" title="Fejlesztői Ranglista Kezelő">🛠️</button>
+        <button id="btn-switch-lb-to-bp" class="mobile-switch-pill bp-pill" type="button" title="Váltás Battle Pass nézetre">🎖️ BATTLE PASS ➔</button>
+        <button id="btn-modal-lb-info" class="retro-info-i-btn mobile-sheet-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Ranglista esemény infó">i</button>
+        <button id="btn-close-leaderboard" class="retro-modal-x-btn mobile-sheet-x-btn">✕</button>
       </div>
     </div>
 
-    <div class="player-profile-card">
-      <div class="player-profile-row" id="player-name-edit-row-mobile">
-        <label for="player-name-input-mobile" class="profile-label">NÉV:</label>
-        <input type="text" id="player-name-input-mobile" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
-        <button id="btn-save-name-mobile" class="retro-btn mini-save-btn">OK</button>
+    <div class="mobile-sheet-body mobile-lb-body">
+      <div class="mobile-sheet-aside mobile-lb-aside">
+        <div class="player-profile-card mobile-profile-card">
+          <div class="player-profile-row" id="player-name-edit-row-mobile">
+            <label for="player-name-input-mobile" class="profile-label">NÉV:</label>
+            <input type="text" id="player-name-input-mobile" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
+            <button id="btn-save-name-mobile" class="retro-btn mini-save-btn">OK</button>
+          </div>
+          <div class="player-profile-locked-row" id="player-name-locked-row-mobile" style="display: none;">
+            <span class="profile-label">NÉV:</span>
+            <strong id="player-locked-name-mobile" class="player-locked-name">Játékos</strong>
+          </div>
+          <div class="player-stats-mini mobile-stats-grid">
+            <span class="mobile-stat-chip">⭐ REB <strong id="lb-player-rebirths-mobile">0</strong></span>
+            <span class="mobile-stat-chip">🚩 SZINT <strong id="lb-player-level-mobile">1</strong></span>
+            <span class="mobile-stat-chip">🎖️ HELY <strong id="lb-player-rank-mobile">#--</strong></span>
+          </div>
+          <button id="lb-auth-status-mobile" class="lb-auth-status-bar mobile-auth-pill" type="button" title="Fiók / Felhőmentés megnyitása">👤 Vendég mód ➔ <u>Belépés / Mentés</u></button>
+          <button id="lb-retention-note-mobile" class="lb-retention-note mobile-retention-note is-guest" type="button" title="3 napos vendég határidő részletei">⏳ 3 nap múlva törlődik • Regisztrálj!</button>
+        </div>
+
+        <div class="mobile-dec24-mini-card">
+          <div class="mobile-dec24-top">🎄 DEC. 24-IG: <strong class="dec24-countdown-text">-- nap --:--:--</strong></div>
+          <div class="mobile-dec24-sub">🏆 A TOP 1 ingyen megkapja a Prémium Battle Pass-t!</div>
+        </div>
       </div>
-      <div class="player-profile-locked-row" id="player-name-locked-row-mobile" style="display: none;">
-        <span class="profile-label">NÉV:</span>
-        <strong id="player-locked-name-mobile" class="player-locked-name">Játékos</strong>
+
+      <div class="mobile-sheet-main mobile-lb-main">
+        <div class="leaderboard-table-header mobile-lb-table-header">
+          <span class="col-rank">#</span>
+          <span class="col-name">JÁTÉKOS</span>
+          <span class="col-reb">REB</span>
+          <span class="col-lvl">SZINT</span>
+        </div>
+
+        <div class="leaderboard-table-body mobile-lb-list" id="leaderboard-list-mobile">
+          <!-- Dynamically filled with ranked players -->
+        </div>
       </div>
-      <div class="player-stats-mini">
-        <span>⭐ REB: <strong id="lb-player-rebirths-mobile">0</strong></span>
-        <span>🚩 SZINT: <strong id="lb-player-level-mobile">1</strong></span>
-        <span>🎖️ HELYEZÉS: <strong id="lb-player-rank-mobile">#--</strong></span>
-      </div>
-      <button id="lb-auth-status-mobile" class="lb-auth-status-bar" type="button" title="Fiók / Felhőmentés megnyitása">👤 Vendég mód ➔ <u>Belépés / Mentés</u></button>
     </div>
 
-    <div class="leaderboard-table-header">
-      <span class="col-rank">#</span>
-      <span class="col-name">JÁTÉKOS</span>
-      <span class="col-reb">REB</span>
-      <span class="col-lvl">SZINT</span>
-    </div>
-
-    <div class="leaderboard-table-body" id="leaderboard-list-mobile">
-      <!-- Dynamically filled with ranked players -->
-    </div>
-
-    <div class="modal-footer">
-      <button id="btn-close-leaderboard-footer" class="close-btn">BEZÁRÁS</button>
+    <div class="modal-footer mobile-sheet-footer">
+      <span class="mobile-footer-hint">🌐 Élő szinkron aktív • Duplikációmentes toplista</span>
+      <button id="btn-close-leaderboard-footer" class="close-btn mobile-close-btn">BEZÁRÁS</button>
     </div>
   </div>
 </div>
 
-<!-- Mobile Modal: BATTLE PASS -->
-<div id="battlepass-modal" class="overlay-backdrop">
-  <div class="retro-modal-window modal-mobile-responsive bp-modal-window">
-    <div class="modal-header-row">
-      <div class="modal-title-box">🎖️ BATTLE PASS (30 STAGE)</div>
-      <div class="modal-header-actions">
-        <button id="btn-modal-bp-info" class="retro-info-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Battle Pass esemény infó">i</button>
-        <button id="btn-close-battlepass" class="retro-modal-x-btn">✕</button>
+<!-- Mobile Modal: BATTLE PASS (Dedicated Mobile Design) -->
+<div id="battlepass-modal" class="overlay-backdrop mobile-sheet-backdrop">
+  <div class="retro-modal-window modal-mobile-responsive mobile-sheet-window mobile-bp-sheet bp-modal-window">
+    <div class="mobile-sheet-header mobile-bp-header">
+      <div class="mobile-sheet-title-wrap">
+        <div class="mobile-sheet-title">🎖️ BATTLE PASS</div>
+        <span class="mobile-bp-season-pill">30 STAGE • SZEZON</span>
+      </div>
+      <div class="modal-header-actions mobile-sheet-actions">
+        <button id="btn-switch-bp-to-lb" class="mobile-switch-pill lb-pill" type="button" title="Váltás Ranglista nézetre">🏆 RANGLISTA ➔</button>
+        <button id="btn-modal-bp-info" class="retro-info-i-btn mobile-sheet-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Battle Pass esemény infó">i</button>
+        <button id="btn-close-battlepass" class="retro-modal-x-btn mobile-sheet-x-btn">✕</button>
       </div>
     </div>
 
-    <div class="bp-progress-card">
-      <div class="bp-stage-indicator">
-        <span>Fokozat: <strong id="bp-current-stage-mobile" class="highlight-stage">Stage 1/30</strong></span>
-        <span>Törött blokk: <strong id="bp-total-bricks-mobile">0</strong></span>
-      </div>
-      <div class="bp-progress-bar-wrap">
-        <div class="bp-progress-bar-fill" id="bp-progress-fill-mobile" style="width: 0%;"></div>
-        <span class="bp-progress-bar-text" id="bp-progress-text-mobile">0 / 5,000</span>
+    <div class="mobile-sheet-body mobile-bp-body">
+      <div class="mobile-sheet-aside mobile-bp-aside">
+        <div class="bp-progress-card mobile-bp-progress-card">
+          <div class="bp-stage-indicator mobile-bp-stage-indicator">
+            <span>Fokozat: <strong id="bp-current-stage-mobile" class="highlight-stage">Stage 1/30</strong></span>
+            <span>Törött blokk: <strong id="bp-total-bricks-mobile">0</strong></span>
+          </div>
+          <div class="bp-progress-bar-wrap mobile-bp-bar-wrap">
+            <div class="bp-progress-bar-fill" id="bp-progress-fill-mobile" style="width: 0%;"></div>
+            <span class="bp-progress-bar-text" id="bp-progress-text-mobile">0 / 5,000</span>
+          </div>
+
+          <div class="bp-tab-row mobile-bp-tab-row">
+            <button id="btn-bp-tab-stages-mobile" class="bp-tab-btn active">🎁 SZINTEK (1-30)</button>
+            <button id="btn-bp-tab-armory-mobile" class="bp-tab-btn">🎨 NORMÁL LABDÁK</button>
+          </div>
+
+          <div class="bp-premium-banner mobile-bp-premium-banner">
+            <button id="btn-unlock-premium-mobile" class="retro-btn bp-premium-btn mobile-bp-premium-btn" title="Prémium vásárlása PayPalon keresztül">
+              💳 PRÉMIUM (4 999 FT)
+            </button>
+          </div>
+        </div>
+
+        <div class="mobile-dec24-mini-card mobile-bp-dec24">
+          <div class="mobile-dec24-top">🎄 DEC. 24-IG: <strong class="dec24-countdown-text">-- nap --:--:--</strong></div>
+          <div class="mobile-dec24-sub">🏆 A TOP 1 játékos ingyen megnyeri a Prémium Battle Pass-t!</div>
+        </div>
       </div>
 
-      <div class="bp-premium-banner">
-        <button id="btn-unlock-premium-mobile" class="retro-btn bp-premium-btn" title="Prémium vásárlása PayPalon keresztül">
-          💳 PRÉMIUM VÁSÁRLÁSA (4 999 FT)
-        </button>
-      </div>
+      <div class="mobile-sheet-main mobile-bp-main">
+        <div class="bp-stages-scroll mobile-bp-stages-scroll" id="bp-stages-container-mobile">
+          <!-- Dynamically filled with 30 stages -->
+        </div>
 
-      <div class="bp-tab-row">
-        <button id="btn-bp-tab-stages-mobile" class="bp-tab-btn active">SZINTEK (1-30)</button>
-        <button id="btn-bp-tab-armory-mobile" class="bp-tab-btn">🎨 NORMÁL LABDÁK</button>
+        <div class="bp-armory-scroll mobile-bp-armory-scroll" id="bp-armory-container-mobile" style="display: none;">
+          <!-- Dynamically filled with player's Normal Balls and skin/effect selectors -->
+        </div>
       </div>
     </div>
 
-    <div class="bp-stages-scroll" id="bp-stages-container-mobile">
-      <!-- Dynamically filled with 30 stages -->
-    </div>
-
-    <div class="bp-armory-scroll" id="bp-armory-container-mobile" style="display: none;">
-      <!-- Dynamically filled with player's Normal Balls and skin/effect selectors -->
-    </div>
-
-    <div class="modal-footer">
-      <button id="btn-close-battlepass-footer" class="close-btn">BEZÁRÁS</button>
+    <div class="modal-footer mobile-sheet-footer">
+      <span class="mobile-footer-hint">⚡ Törj blokkokat a szintekért • Testreszabás a Normál labdákhoz</span>
+      <button id="btn-close-battlepass-footer" class="close-btn mobile-close-btn">BEZÁRÁS</button>
     </div>
   </div>
 </div>
@@ -443,13 +487,14 @@
 <div id="rebirth-modal" class="overlay-backdrop">
   <div class="rebirth-dialog-box">
     <div class="rebirth-dialog-title">REBIRTH (ÚJJÁSZÜLETÉS)</div>
+    <div id="rebirth-status-banner" class="rebirth-status-banner"></div>
     <div class="rebirth-desc-text">
       Elért szinted: <span id="rebirth-current-lvl" class="rebirth-highlight">25</span> (Szükséges minimum: <span id="rebirth-required-lvl" style="font-weight: bold;">25</span>)<br><br>
       Jutalmak az újjászületésért:<br>
       ⭐ <strong style="color: #d97706;">+1 BB (Breakout Badge)</strong><br>
-      💰 <strong>Jövedelem szorzó:</strong> <span id="rebirth-current-mult">1.00x</span> ➔ <span id="rebirth-next-mult" class="rebirth-highlight" style="color: #22c55e;">1.25x</span> (+25% pénz!)<br>
+      💰 <strong>Jövedelem szorzó:</strong> <span id="rebirth-current-mult">1.00x</span> ➔ <span id="rebirth-next-mult" class="rebirth-highlight" style="color: #22c55e;">1.15x</span> (+15% pénz!)<br>
       🎱 <strong>Max labdaférőhely:</strong> <span id="rebirth-slots-info" style="color: #2563eb; font-weight: bold;">15 ➔ 15</span><br>
-      🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.13% ➔ 0.13%</span><br>
+      🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.125% ➔ 0.127%</span><br>
       ⚡ <strong>Kritikus kattintás:</strong> <span id="rebirth-crit-info" style="color: #38bdf8; font-weight: bold;">5% ➔ 6%</span><br><br>
       <small style="color: #555; display: block; border-top: 1px dashed #888; padding-top: 6px;">
         (Újra az 1. szintről kezdesz 0 labdával, de a BB/BT valutád, a BB/BT fejlesztéseid, a Battle Pass haladásod, a játékosneved, a pénzszorzód és a labdaférőhelyed megmaradnak!)
@@ -466,103 +511,262 @@
 <!-- Cloud Login & Account Modal (Bejelentkezés Fül) -->
 <div id="auth-modal" class="overlay-backdrop">
   <div class="retro-modal-window auth-modal-window">
-    <div class="modal-header-row">
+    <div class="modal-header-row auth-modal-header">
       <div class="modal-title-box">👤 BEJELENTKEZÉS ÉS FELHŐMENTÉS</div>
       <button id="btn-close-auth" class="retro-modal-x-btn" type="button">✕</button>
     </div>
 
     <div class="auth-modal-scroll">
-      <div id="auth-config-warning" class="auth-config-warning" style="display: none;">
-        ⚠️ <strong>Firebase még nincs beállítva!</strong><br>
-        A felhőalapú bejelentkezéshez másold be a saját Firebase kulcsodat a <code>js/firebase-config.js</code> fájlba! (Alul addig is használható a Mentési Kód export/import.)
-      </div>
-
-      <div id="auth-error-box" class="auth-error-box" style="display: none;"></div>
-
-      <!-- Guest View: Login / Register Tabs -->
-      <div id="auth-guest-view" class="auth-panel-section">
-        <div class="auth-tabs-row">
-          <button id="btn-auth-tab-login" class="bp-tab-btn active" type="button">🔑 BEJELENTKEZÉS</button>
-          <button id="btn-auth-tab-register" class="bp-tab-btn" type="button">✨ REGISZTRÁCIÓ</button>
+      <div class="auth-main-pane">
+        <div id="auth-config-warning" class="auth-config-warning" style="display: none;">
+          ⚠️ <strong>Firebase még nincs beállítva!</strong>
+          A felhőalapú bejelentkezéshez másold be a kulcsodat a <code>js/firebase-config.js</code> fájlba!
         </div>
 
-        <form id="auth-login-form" class="auth-form">
-          <div class="auth-field-group">
-            <label for="auth-login-email">E-mail cím:</label>
-            <input type="email" id="auth-login-email" class="auth-input" placeholder="pelda@gmail.com" required autocomplete="email">
-          </div>
-          <div class="auth-field-group">
-            <label for="auth-login-password">Jelszó:</label>
-            <input type="password" id="auth-login-password" class="auth-input" placeholder="Jelszó..." required autocomplete="current-password">
-          </div>
-          <button id="btn-auth-submit-login" type="submit" class="retro-btn auth-submit-btn">🔑 BELÉPÉS ÉS FOLYTATÁS</button>
-          <div class="auth-hint-text">Ha egy másik gépen már játszottál ezzel a fiókkal, belépéskor onnan folytathatod a haladásod!</div>
-        </form>
+        <div id="auth-error-box" class="auth-error-box" style="display: none;"></div>
 
-        <form id="auth-register-form" class="auth-form" style="display: none;">
-          <div class="auth-field-group">
-            <label for="auth-reg-name">Játékosnév (Ranglistára):</label>
-            <input type="text" id="auth-reg-name" class="auth-input" maxlength="14" placeholder="Pl. Shirelix" autocomplete="nickname">
+        <!-- Guest View: Login / Register Tabs -->
+        <div id="auth-guest-view" class="auth-panel-section">
+          <div class="auth-tabs-row">
+            <button id="btn-auth-tab-login" class="bp-tab-btn active" type="button">🔑 BEJELENTKEZÉS</button>
+            <button id="btn-auth-tab-register" class="bp-tab-btn" type="button">✨ REGISZTRÁCIÓ</button>
           </div>
-          <div class="auth-field-group">
-            <label for="auth-reg-email">E-mail cím:</label>
-            <input type="email" id="auth-reg-email" class="auth-input" placeholder="pelda@gmail.com" required autocomplete="email">
-          </div>
-          <div class="auth-field-group">
-            <label for="auth-reg-password">Jelszó (min. 6 karakter):</label>
-            <input type="password" id="auth-reg-password" class="auth-input" minlength="6" placeholder="Legalább 6 karakter..." required autocomplete="new-password">
-          </div>
-          <button id="btn-auth-submit-register" type="submit" class="retro-btn auth-submit-btn" style="background: #22c55e;">✨ FIÓK LÉTREHOZÁSA ÉS MENTÉS</button>
-          <div class="auth-hint-text">A jelenlegi gépen elért haladásod automatikusan mentésre kerül az új fiókodba!</div>
-        </form>
-      </div>
 
-      <!-- Logged-in View -->
-      <div id="auth-logged-in-view" class="auth-panel-section" style="display: none;">
-        <div class="auth-status-card">
-          <div class="auth-status-header">🟢 BEJELENTKEZVE</div>
-          <div class="auth-status-line"><strong>Játékosnév:</strong> <span id="auth-user-name">-</span></div>
-          <div class="auth-status-line"><strong>E-mail:</strong> <span id="auth-user-email">-</span></div>
-          <div class="auth-status-line"><strong>Haladás:</strong> <span id="auth-user-stats">-</span></div>
-          <div class="auth-status-line"><strong>Utolsó felhőmentés:</strong> <span id="auth-cloud-sync-time">-</span></div>
+          <form id="auth-login-form" class="auth-form">
+            <div class="auth-fields-split">
+              <div class="auth-field-group">
+                <label for="auth-login-email">E-mail cím:</label>
+                <input type="email" id="auth-login-email" class="auth-input" placeholder="pelda@gmail.com" required autocomplete="email">
+              </div>
+              <div class="auth-field-group">
+                <label for="auth-login-password">Jelszó:</label>
+                <input type="password" id="auth-login-password" class="auth-input" placeholder="Jelszó..." required autocomplete="current-password">
+              </div>
+            </div>
+            <button id="btn-auth-submit-login" type="submit" class="retro-btn auth-submit-btn">🔑 BELÉPÉS ÉS FOLYTATÁS</button>
+            <div class="auth-hint-text">Másik gépen elért haladásod automatikusan folytatható belépéskor!</div>
+          </form>
+
+          <form id="auth-register-form" class="auth-form" style="display: none;">
+            <div class="auth-fields-split">
+              <div class="auth-field-group">
+                <label for="auth-reg-name">Játékosnév:</label>
+                <input type="text" id="auth-reg-name" class="auth-input" maxlength="14" placeholder="Pl. Shirelix" autocomplete="nickname">
+              </div>
+              <div class="auth-field-group">
+                <label for="auth-reg-email">E-mail cím:</label>
+                <input type="email" id="auth-reg-email" class="auth-input" placeholder="pelda@gmail.com" required autocomplete="email">
+              </div>
+            </div>
+            <div class="auth-field-group">
+              <label for="auth-reg-password">Jelszó (min. 6 karakter):</label>
+              <input type="password" id="auth-reg-password" class="auth-input" minlength="6" placeholder="Legalább 6 karakter..." required autocomplete="new-password">
+            </div>
+            <button id="btn-auth-submit-register" type="submit" class="retro-btn auth-submit-btn" style="background: #22c55e;">✨ FIÓK LÉTREHOZÁSA ÉS MENTÉS</button>
+            <div class="auth-hint-text">A jelenlegi haladásod automatikusan mentésre kerül az új fiókodba!</div>
+          </form>
         </div>
 
-        <div class="auth-actions-grid">
-          <button id="btn-cloud-save-now" type="button" class="retro-btn" style="background: #22c55e; flex: 1;">☁️ MENTÉS MOST</button>
-          <button id="btn-cloud-load-now" type="button" class="retro-btn" style="background: #38bdf8; flex: 1;">🔄 BETÖLTÉS FELHŐBŐL</button>
-        </div>
-        <button id="btn-auth-logout" type="button" class="retro-btn" style="background: #ef4444; color: #fff; width: 100%;">🚪 KIJELENTKEZÉS</button>
-        <button id="btn-auth-delete-open" type="button" class="retro-btn auth-delete-open-btn">🗑️ FIÓK TÖRLÉSE</button>
-
-        <div id="auth-delete-confirm-box" class="auth-delete-confirm-box" style="display: none;">
-          <div class="auth-delete-title">⚠️ Biztosan törlöd a fiókodat?</div>
-          <div class="auth-delete-desc">
-            Ez véglegesen törli a fiókodat, a felhőmentésedet, a ranglistás rekordodat és a helyi mentést is. <strong>Nem vonható vissza!</strong>
+        <!-- Logged-in View -->
+        <div id="auth-logged-in-view" class="auth-panel-section" style="display: none;">
+          <div class="auth-status-card">
+            <div class="auth-status-header">🟢 BEJELENTKEZVE</div>
+            <div class="auth-status-grid">
+              <div class="auth-status-line"><strong>Név:</strong> <span id="auth-user-name">-</span></div>
+              <div class="auth-status-line"><strong>Mentés:</strong> <span id="auth-cloud-sync-time">-</span></div>
+              <div class="auth-status-line auth-status-span2"><strong>E-mail:</strong> <span id="auth-user-email">-</span></div>
+              <div class="auth-status-line auth-status-span2"><strong>Haladás:</strong> <span id="auth-user-stats">-</span></div>
+            </div>
           </div>
-          <div id="auth-delete-password-wrap" class="auth-field-group" style="display: none;">
-            <label for="auth-delete-password">Biztonsági jelszó megerősítés:</label>
-            <input type="password" id="auth-delete-password" class="auth-input" placeholder="Add meg a jelszavad..." autocomplete="current-password">
+
+          <div class="auth-actions-grid">
+            <button id="btn-cloud-save-now" type="button" class="retro-btn auth-action-btn" style="background: #22c55e; flex: 1;">☁️ MENTÉS MOST</button>
+            <button id="btn-cloud-load-now" type="button" class="retro-btn auth-action-btn" style="background: #38bdf8; flex: 1;">🔄 BETÖLTÉS FELHŐBŐL</button>
           </div>
           <div class="auth-actions-grid">
-            <button id="btn-auth-delete-confirm" type="button" class="retro-btn auth-delete-confirm-btn">✅ IGEN, VÉGLEGESEN TÖRLÖM</button>
-            <button id="btn-auth-delete-cancel" type="button" class="retro-btn auth-delete-cancel-btn">❌ MÉGSE</button>
+            <button id="btn-auth-logout" type="button" class="retro-btn auth-action-btn" style="background: #ef4444; color: #fff; flex: 1;">🚪 KIJELENTKEZÉS</button>
+            <button id="btn-auth-delete-open" type="button" class="retro-btn auth-action-btn auth-delete-open-btn" style="flex: 1;">🗑️ FIÓK TÖRLÉSE</button>
+          </div>
+
+          <div id="auth-delete-confirm-box" class="auth-delete-confirm-box" style="display: none;">
+            <div class="auth-delete-title">⚠️ Biztosan törlöd a fiókodat?</div>
+            <div class="auth-delete-desc">
+              Véglegesen törli a fiókodat, a felhőmentést, a ranglista rekordod és a helyi mentést is. <strong>Nem vonható vissza!</strong>
+            </div>
+            <div id="auth-delete-password-wrap" class="auth-field-group" style="display: none;">
+              <label for="auth-delete-password">Biztonsági jelszó:</label>
+              <input type="password" id="auth-delete-password" class="auth-input" placeholder="Add meg a jelszavad..." autocomplete="current-password">
+            </div>
+            <div class="auth-actions-grid">
+              <button id="btn-auth-delete-confirm" type="button" class="retro-btn auth-delete-confirm-btn">✅ IGEN, TÖRLÖM</button>
+              <button id="btn-auth-delete-cancel" type="button" class="retro-btn auth-delete-cancel-btn">❌ MÉGSE</button>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Offline Backup Code Section -->
       <div class="auth-backup-box">
-        <div class="auth-backup-title">📋 Tartalék Mentési Kód (Offline / Kézi átvitel)</div>
-        <div class="auth-backup-row">
-          <input type="text" id="auth-backup-code-input" class="auth-input" placeholder="Másold ide a mentési kódot (IB4:...)...">
-          <button id="btn-export-save-code" type="button" class="retro-btn auth-mini-btn">MÁSOLÁS</button>
-          <button id="btn-import-save-code" type="button" class="retro-btn auth-mini-btn" style="background: #fde047;">BETÖLTÉS</button>
+        <div class="auth-backup-title">📋 Tartalék Mentési Kód</div>
+        <div id="auth-retention-notice" class="auth-retention-notice is-guest">
+          ⏳ <strong>Vendég korlát (3 nap):</strong> Haladásod <strong class="guest-rem-text">3 nap</strong> múlva törlődik. <strong>Másolás</strong> = +3 nap hosszabbítás (inaktívan törlődik). <strong>Regisztráció</strong> = védett fiók, csak te törölheted!
+        </div>
+        <input type="text" id="auth-backup-code-input" class="auth-input" placeholder="Másold ide a mentési kódot (IB4:...)...">
+        <div class="auth-backup-btns">
+          <button id="btn-export-save-code" type="button" class="retro-btn auth-mini-btn">📋 MÁSOLÁS</button>
+          <button id="btn-import-save-code" type="button" class="retro-btn auth-mini-btn" style="background: #fde047;">📥 BETÖLTÉS</button>
         </div>
       </div>
     </div>
 
-    <div class="modal-footer">
+    <div class="modal-footer auth-modal-footer">
       <button id="btn-close-auth-footer" class="close-btn" type="button">BEZÁRÁS</button>
+    </div>
+  </div>
+</div>
+
+<!-- Developer Interface Modal: LEADERBOARD CONTROL PANEL -->
+<div id="dev-leaderboard-modal" class="overlay-backdrop dev-modal-backdrop">
+  <div class="retro-modal-window dev-modal-window">
+    <div class="mobile-sheet-header dev-modal-header">
+      <div class="mobile-sheet-title-wrap">
+        <div class="mobile-sheet-title">🛠️ FEJLESZTŐI FELÜLET</div>
+        <span id="dev-sync-badge" class="dev-sync-pill">🌍 GLOBÁLIS KEZELŐ</span>
+      </div>
+      <div class="modal-header-actions">
+        <button id="btn-dev-lock" class="mobile-switch-pill dev-lock-pill" type="button" title="Fejlesztői felület zárolása" style="display: none;">🔒 Zárolás</button>
+        <button id="btn-close-dev" class="retro-modal-x-btn mobile-sheet-x-btn" type="button">✕</button>
+      </div>
+    </div>
+
+    <!-- PIN Lock Gate -->
+    <div id="dev-auth-gate" class="dev-auth-gate">
+      <div class="dev-lock-card">
+        <div class="dev-lock-icon">🔐</div>
+        <div class="dev-lock-title">FEJLESZTŐI HOZZÁFÉRÉS</div>
+        <p class="dev-lock-desc">Add meg a fejlesztői kódot a ranglista szereplőinek globális szabályozásához, tiltásához és szerkesztéséhez.</p>
+        <div id="dev-pin-error" class="auth-error-box" style="display: none;"></div>
+        <form id="dev-pin-form" class="dev-pin-form">
+          <input type="password" id="dev-pin-input" class="auth-input" placeholder="Fejlesztői PIN (alap: 2026)..." autocomplete="off">
+          <button id="btn-dev-unlock" type="submit" class="retro-btn dev-unlock-btn">🔓 FELOLDÁS</button>
+        </form>
+        <div class="dev-lock-hint">Gyorsbillentyű PC-n: <code>Ctrl + Shift + D</code> • Alap PIN: <strong>2026</strong></div>
+      </div>
+    </div>
+
+    <!-- Unlocked Control Body -->
+    <div id="dev-panel-body" class="dev-panel-body" style="display: none;">
+      <div class="dev-toolbar-row">
+        <div class="dev-tabs-group">
+          <button id="btn-dev-tab-players" class="bp-tab-btn active" type="button">👥 JÁTÉKOSOK (<span id="dev-count-summary">0/0</span>)</button>
+          <button id="btn-dev-tab-rules" class="bp-tab-btn" type="button">⚙️ SZABÁLYOK & LISTÁK</button>
+        </div>
+        <div class="dev-quick-actions">
+          <button id="btn-dev-prune-cache" class="retro-btn dev-tool-btn" type="button" title="Offline és duplikált cache/MQTT maradványok takarítása">🧹 TISZTÍTÁS</button>
+          <button id="btn-dev-sync-now" class="retro-btn dev-tool-btn sync-accent" type="button" title="Szabályok azonnali kiküldése minden kliensnek">📡 SZINKRON</button>
+        </div>
+      </div>
+
+      <!-- Tab 1: Player Roster Control -->
+      <div id="dev-tab-players" class="dev-tab-pane">
+        <form id="dev-add-player-form" class="dev-add-bar">
+          <span class="dev-add-label">➕ ÚJ / KÉZI:</span>
+          <input type="text" id="dev-add-name" class="auth-input dev-sm-input" maxlength="14" placeholder="Játékosnév...">
+          <input type="number" id="dev-add-reb" class="auth-input dev-num-input" min="0" value="0" placeholder="Reb" title="Rebirth szám">
+          <input type="number" id="dev-add-lvl" class="auth-input dev-num-input" min="1" value="1" placeholder="Szint" title="Szint">
+          <button id="btn-dev-add-player" type="submit" class="retro-btn dev-add-btn">HOZZÁAD</button>
+        </form>
+
+        <div id="dev-edit-box" class="dev-edit-drawer" style="display: none;">
+          <div class="dev-edit-title">✏️ Szerkesztés: <strong id="dev-edit-target-label">-</strong></div>
+          <div class="dev-edit-fields">
+            <label>Név: <input type="text" id="dev-edit-name" class="auth-input dev-sm-input" maxlength="14"></label>
+            <label>Reb: <input type="number" id="dev-edit-reb" class="auth-input dev-num-input" min="0"></label>
+            <label>Szint: <input type="number" id="dev-edit-lvl" class="auth-input dev-num-input" min="1"></label>
+            <button id="btn-dev-save-edit" class="retro-btn dev-save-edit-btn" type="button">💾 MENTÉS</button>
+            <button id="btn-dev-cancel-edit" class="retro-btn dev-cancel-edit-btn" type="button">MÉGSE</button>
+          </div>
+        </div>
+
+        <div id="dev-players-list" class="dev-players-scroll">
+          <!-- Dynamically rendered player moderation cards -->
+        </div>
+      </div>
+
+      <!-- Tab 2: Global Rules, Whitelist & Banlist -->
+      <div id="dev-tab-rules" class="dev-tab-pane dev-rules-scroll" style="display: none;">
+        <div class="dev-rules-grid">
+          <label class="dev-toggle-card">
+            <input type="checkbox" id="dev-rule-hide-default">
+            <div>
+              <strong>🚫 Alap „Játékos” név elrejtése</strong>
+              <span>A név nélküli / alapértelmezett „Játékos” nevűek ne jelenjenek meg a ranglistán.</span>
+            </div>
+          </label>
+          <label class="dev-toggle-card">
+            <input type="checkbox" id="dev-rule-hide-guests">
+            <div>
+              <strong>☁️ Csak regisztrált (Felhős) fiókok</strong>
+              <span>Minden vendég (bejelentkezés nélküli) játékos elrejtése a toplistáról.</span>
+            </div>
+          </label>
+          <label class="dev-toggle-card">
+            <input type="checkbox" id="dev-rule-hide-offline">
+            <div>
+              <strong>🟢 Csak online játékosok</strong>
+              <span>Elrejti az offline / régóta nem aktív szereplőket.</span>
+            </div>
+          </label>
+          <label class="dev-toggle-card">
+            <input type="checkbox" id="dev-rule-whitelist-only">
+            <div>
+              <strong>✅ Csak Engedélyezőlista (Whitelist mód)</strong>
+              <span>KIZÁRÓLAG az alábbi Engedélyezőlistán szereplő nevek/ID-k látszanak!</span>
+            </div>
+          </label>
+          <label class="dev-toggle-card">
+            <input type="checkbox" id="dev-rule-filter-self">
+            <div>
+              <strong>🪞 Saját sorom (TE) is szűrve legyen</strong>
+              <span>Ha tiltva vagy vendég módban vagy, a saját helyi sorodra is érvényes a szabály.</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="dev-lists-split">
+          <div class="dev-list-box">
+            <div class="dev-list-title">✅ Engedélyezőlista (Whitelist)</div>
+            <div class="dev-list-input-row">
+              <input type="text" id="dev-whitelist-input" class="auth-input dev-sm-input" placeholder="Név vagy UID...">
+              <button id="btn-dev-add-whitelist" class="retro-btn dev-add-btn" type="button">+ FELVESZ</button>
+            </div>
+            <div id="dev-whitelist-chips" class="dev-chips-wrap"></div>
+          </div>
+
+          <div class="dev-list-box ban-box">
+            <div class="dev-list-title">🚫 Tiltólista (Banlist)</div>
+            <div class="dev-list-input-row">
+              <input type="text" id="dev-ban-input" class="auth-input dev-sm-input" placeholder="Tiltandó név vagy UID...">
+              <button id="btn-dev-add-ban" class="retro-btn dev-ban-add-btn" type="button">+ TILTÁS</button>
+            </div>
+            <div id="dev-ban-chips" class="dev-chips-wrap"></div>
+          </div>
+        </div>
+
+        <div class="dev-security-row">
+          <div class="dev-pin-change">
+            <span>🔑 Új fejlesztői PIN:</span>
+            <input type="password" id="dev-new-pin-input" class="auth-input dev-sm-input" maxlength="20" placeholder="Új PIN...">
+            <button id="btn-dev-save-pin" class="retro-btn dev-tool-btn" type="button">PIN MENTÉSE</button>
+          </div>
+          <button id="btn-dev-reset-rules" class="retro-btn dev-danger-btn" type="button">♻️ ÖSSZES SZABÁLY TÖRLÉSE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer dev-modal-footer">
+      <span class="mobile-footer-hint">🌍 A tiltások, nevek és szűrők MQTT + Firestore útján szinkronizálódnak</span>
+      <button id="btn-close-dev-footer" class="close-btn mobile-close-btn" type="button">BEZÁRÁS</button>
     </div>
   </div>
 </div>
@@ -573,9 +777,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/mqtt.min.js"></script>
 <script src="js/firebase-config.js?v=4.5"></script>
-<script src="js/cloud.js?v=5.3"></script>
+<script src="js/cloud.js?v=5.6"></script>
 <script src="js/audio.js?v=4.8"></script>
-<script src="js/game.js?v=5.3"></script>
+<script src="js/game.js?v=6.0"></script>
 
 </body>
 </html>
