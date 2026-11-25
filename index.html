@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=4.9">
+  <link rel="stylesheet" href="css/style.css?v=5.3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
@@ -49,10 +49,14 @@
 
     <!-- Player Profile Strip -->
     <div class="player-profile-card">
-      <div class="player-profile-row">
+      <div class="player-profile-row" id="player-name-edit-row-pc">
         <label for="player-name-input-pc" class="profile-label">NÉV:</label>
         <input type="text" id="player-name-input-pc" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
         <button id="btn-save-name-pc" class="retro-btn mini-save-btn">OK</button>
+      </div>
+      <div class="player-profile-locked-row" id="player-name-locked-row-pc" style="display: none;">
+        <span class="profile-label">NÉV:</span>
+        <strong id="player-locked-name-pc" class="player-locked-name">Játékos</strong>
       </div>
       <div class="player-stats-mini">
         <span>⭐ REB: <strong id="lb-player-rebirths">0</strong></span>
@@ -270,10 +274,14 @@
     </div>
 
     <div class="player-profile-card">
-      <div class="player-profile-row">
+      <div class="player-profile-row" id="player-name-edit-row-mobile">
         <label for="player-name-input-mobile" class="profile-label">NÉV:</label>
         <input type="text" id="player-name-input-mobile" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
         <button id="btn-save-name-mobile" class="retro-btn mini-save-btn">OK</button>
+      </div>
+      <div class="player-profile-locked-row" id="player-name-locked-row-mobile" style="display: none;">
+        <span class="profile-label">NÉV:</span>
+        <strong id="player-locked-name-mobile" class="player-locked-name">Játékos</strong>
       </div>
       <div class="player-stats-mini">
         <span>⭐ REB: <strong id="lb-player-rebirths-mobile">0</strong></span>
@@ -379,7 +387,7 @@
         <div class="money-balance-pill" data-currency-tip="money">💵 $<span id="upg-modal-money">0</span></div>
         <div class="token-exchange-bar">
           <span class="token-count-pill" data-currency-tip="bt">👑 <strong id="upg-boss-tokens">0</strong> BT</span>
-          <button id="btn-exchange-tokens-upg" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+          <button id="btn-exchange-tokens-upg" class="token-exchange-btn" disabled>10 BT ➔ +1 BB</button>
         </div>
         <div id="upgrades-discount-banner" class="discount-banner" style="display: none;"></div>
       </div>
@@ -404,7 +412,7 @@
         <div class="money-balance-pill" data-currency-tip="money">💵 $<span id="bb-modal-money">0</span></div>
         <div class="token-exchange-bar">
           <span class="token-count-pill" data-currency-tip="bt">👑 <strong id="bb-modal-boss-tokens">0</strong> BT</span>
-          <button id="btn-exchange-tokens-bb" class="token-exchange-btn" disabled>5 BT ➔ +1 BB</button>
+          <button id="btn-exchange-tokens-bb" class="token-exchange-btn" disabled>10 BT ➔ +1 BB</button>
         </div>
         <div class="bb-balance-pill" data-currency-tip="bb">⭐ <span id="bb-modal-balance">0</span> BB</div>
       </div>
@@ -565,9 +573,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/mqtt.min.js"></script>
 <script src="js/firebase-config.js?v=4.5"></script>
-<script src="js/cloud.js?v=5.0"></script>
+<script src="js/cloud.js?v=5.3"></script>
 <script src="js/audio.js?v=4.8"></script>
-<script src="js/game.js?v=5.0"></script>
+<script src="js/game.js?v=5.3"></script>
 
 </body>
 </html>

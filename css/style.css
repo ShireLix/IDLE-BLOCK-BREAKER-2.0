@@ -212,6 +212,27 @@ html, body {
   gap: 6px;
 }
 
+.player-profile-locked-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 8px;
+  min-height: 28px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1.5px solid rgba(22, 163, 74, 0.45);
+  border-radius: 7px;
+}
+
+.player-locked-name {
+  font-size: 16px;
+  color: #14532d;
+  letter-spacing: 0.4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .profile-label {
   font-size: 15px;
   font-weight: bold;

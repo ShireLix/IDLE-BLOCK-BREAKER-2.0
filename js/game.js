@@ -184,7 +184,7 @@ const NON_UPGRADABLE_POWERUPS = [
     key: 'gold_boss',
     icon: '👑',
     name: 'Gold Boss',
-    rarityBadge: '5.0 súly',
+    rarityBadge: '5.0 esély',
     desc: 'A következő Boss blokkot Gold Boss-szá alakítja, amely dupla ($) pénzt ad sebzéskor és legyőzéskor is.',
     statusFn: (game) => game.nextBossIsGold ? '✨ BEÉLESÍTVE: A következő Boss GOLD BOSS lesz!' : 'Blokktöréskor véletlenszerűen eshet.'
   },
@@ -192,7 +192,7 @@ const NON_UPGRADABLE_POWERUPS = [
     key: 'free_upgrade',
     icon: '🎁',
     name: 'Free Upgrade',
-    rarityBadge: '0.65 súly',
+    rarityBadge: '0.65 esély',
     desc: 'Véletlenszerűen +1 szintet ad egy még nem kimaxolt Power-up fejlesztésre (ha mind maxos: +5 BB).',
     statusFn: () => 'Azonnali jutalom eséskor.'
   },
@@ -488,8 +488,8 @@ class IdleBreakoutGame {
     this.money = 0;
     this.level = 1;
     this.bb = 0; // Breakout Badges
-    this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 5 Boss Token = 1 BB
-    this.BOSS_TOKEN_COST = 5;
+    this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 10 Boss Token = 1 BB
+    this.BOSS_TOKEN_COST = 10;
     this.MAX_MULTIPLY_BALLS = 15;
     this.MAX_GHOST_BALLS = 40;
     this.MAX_ROCKET_BALLS = 5;
@@ -541,7 +541,16 @@ class IdleBreakoutGame {
     this.remotePlayers = {};
     try {
       const savedRemote = localStorage.getItem('idle_breakout_remote_players');
-      if (savedRemote) this.remotePlayers = JSON.parse(savedRemote);
+      if (savedRemote) {
+        const parsed = JSON.parse(savedRemote);
+        const nowMs = Date.now();
+        for (const k in parsed) {
+          const rp = parsed[k];
+          if (rp && (rp.fromFirestore || (nowMs - (rp.ts || 0) <= 120000))) {
+            this.remotePlayers[k] = rp;
+          }
+        }
+      }
     } catch (e) {}
     this.mqttClient = null;
     this.mqttConnected = false;
@@ -2271,13 +2280,11 @@ class IdleBreakoutGame {
     return false;
   }
 
-  // --- Rebirth Ball Slot Limits (Alap: 15, 2.: 20, 4.: 25, 6.: 32, 8.: 40, 10.+: 50 max!) ---
+  // --- Rebirth Ball Slot Limits (0-3: 15, 4-6: 25, 7-15: 35, 15 után (16+): 50 max!) ---
   getMaxBalls(rebirthCount = this.rebirthCount) {
-    if (rebirthCount >= 10) return 50;
-    if (rebirthCount >= 8) return 40;
-    if (rebirthCount >= 6) return 32;
-    if (rebirthCount >= 4) return 25;
-    if (rebirthCount >= 2) return 20;
+    if (rebirthCount > 15) return 50;
+    if (rebirthCount > 6) return 35;
+    if (rebirthCount > 3) return 25;
     return 15;
   }
 
@@ -3981,7 +3988,7 @@ class IdleBreakoutGame {
     document.title = `LVL ${this.level} | $${this.formatNumber(Math.floor(this.money))} - Idle Breakout`;
   }
 
-  // --- Boss Token Exchange (5 Boss Token ➔ +1 BB) ---
+  // --- Boss Token Exchange (10 Boss Token ➔ +1 BB) ---
   updateBossTokenExchangeUI() {
     const canExchange = this.bossTokens >= this.BOSS_TOKEN_COST;
 
@@ -4006,7 +4013,7 @@ class IdleBreakoutGame {
     this.bb += 1;
 
     if (window.soundEngine) window.soundEngine.playLevelUp();
-    this.showToast('👑 <strong>5 Boss Token beváltva ➔ <span style="color:#fde047;">+1 BB!</span></strong>', 3000);
+    this.showToast(`👑 <strong>${this.BOSS_TOKEN_COST} Boss Token beváltva ➔ <span style="color:#fde047;">+1 BB!</span></strong>`, 3000);
     this.updateHUD();
     this.refreshOpenModals();
     this.save();
@@ -4275,7 +4282,7 @@ class IdleBreakoutGame {
         title: '⭐ Breakout Badge (BB)',
         body: `
           <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> Ritka, <strong>Rebirth után is megmaradó</strong> prémium valuta.</div>
-          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Rebirth-tel (+1 BB), 5 Boss Token beváltásával (5 BT ➔ 1 BB), vagy Lvl 5 Quick Time Money coinokkal.</div>
+          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Rebirth-tel (+1 BB), 10 Boss Token beváltásával (10 BT ➔ 1 BB), vagy Lvl 5 Quick Time Money coinokkal.</div>
           <div class="bb-phase-row"><strong>Mire jó?</strong> Tartós kattintás- és power-up fejlesztésekre a <strong>⚡ POWERUP UPGRADES</strong> menüben (1, 3, 5, 7, 10 BB).</div>
         `
       },
@@ -4284,7 +4291,7 @@ class IdleBreakoutGame {
         body: `
           <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> Különleges Boss valuta, amely <strong>Rebirth után is megmarad</strong>!</div>
           <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Minden Boss blokk legyőzése után automatikusan kapsz <strong>+1 BT</strong>-t.</div>
-          <div class="bb-phase-row"><strong>Mire jó?</strong> Beváltóható BB-re (<strong>5 BT ➔ 1 BB</strong>), illetve kimaxolt labdák (Poison, Ghost, Multiply, Rocket) különleges képességeinek fejlesztésére az <strong>UPGRADES</strong> menüben!</div>
+          <div class="bb-phase-row"><strong>Mire jó?</strong> Beváltóható BB-re (<strong>10 BT ➔ 1 BB</strong>), illetve kimaxolt labdák (Poison, Ghost, Multiply, Rocket) különleges képességeinek fejlesztésére az <strong>UPGRADES</strong> menüben!</div>
         `
       }
     };
@@ -4608,7 +4615,7 @@ class IdleBreakoutGame {
       });
     }
 
-    // Boss Token Exchange Buttons (5 Boss Token ➔ +1 BB)
+    // Boss Token Exchange Buttons (10 Boss Token ➔ +1 BB)
     for (const btnId of ['btn-exchange-tokens-upg', 'btn-exchange-tokens-bb']) {
       const exBtn = document.getElementById(btnId);
       if (exBtn) {
@@ -4988,6 +4995,10 @@ class IdleBreakoutGame {
         const mobileInput = document.getElementById('player-name-input-mobile');
         if (pcInput) pcInput.value = this.playerName;
         if (mobileInput) mobileInput.value = this.playerName;
+        const pcLocked = document.getElementById('player-locked-name-pc');
+        const mobLocked = document.getElementById('player-locked-name-mobile');
+        if (pcLocked) pcLocked.textContent = this.playerName;
+        if (mobLocked) mobLocked.textContent = this.playerName;
 
         this.createPerimeterBricks();
         this.generateLevel(this.level);
@@ -5065,6 +5076,10 @@ class IdleBreakoutGame {
     const mobileInput = document.getElementById('player-name-input-mobile');
     if (pcInput) pcInput.value = this.playerName;
     if (mobileInput) mobileInput.value = this.playerName;
+    const pcLocked = document.getElementById('player-locked-name-pc');
+    const mobLocked = document.getElementById('player-locked-name-mobile');
+    if (pcLocked) pcLocked.textContent = this.playerName;
+    if (mobLocked) mobLocked.textContent = this.playerName;
     this.renderLeaderboard();
     this.broadcastMyStatus();
   }
@@ -5365,6 +5380,7 @@ class IdleBreakoutGame {
     this.renderLeaderboard();
 
     const saveName = (inputEl) => {
+      if (this.cloud && this.cloud.currentUser) return;
       const val = (inputEl.value || '').trim();
       if (!val) return;
       this.playerName = val.slice(0, 14);
@@ -5492,6 +5508,11 @@ class IdleBreakoutGame {
                 const dLvl = Number(data.level) || 1;
                 const dBrk = Number(data.bricks) || 0;
                 const dTs = Number(data.ts) || Date.now();
+                const isCloudReady = !!(this.cloud && this.cloud.isReady && this.cloud.db);
+                if (isCloudReady && (!existing || !existing.fromFirestore) && (Date.now() - dTs > 120000)) {
+                  // Régi (>2 perc), Firestore-ban nem létező MQTT retain üzenet figyelmen kívül hagyása
+                  return;
+                }
 
                 let keepReb = dReb;
                 let keepLvl = dLvl;
@@ -5512,6 +5533,7 @@ class IdleBreakoutGame {
                   id: canonKey,
                   uid: data.uid || (existing && existing.uid) || null,
                   clientId: data.id || (existing && existing.clientId) || null,
+                  fromFirestore: !!(existing && existing.fromFirestore),
                   name: (data.name || (existing && existing.name) || 'Játékos').slice(0, 14),
                   rebirths: keepReb,
                   level: keepLvl,
@@ -5684,9 +5706,11 @@ class IdleBreakoutGame {
       if (rpOnline) existing.isOnline = true;
     };
 
+    const isCloudReady = !!(this.cloud && this.cloud.isReady && this.cloud.db);
     for (const pid in this.remotePlayers) {
       const rp = this.remotePlayers[pid];
       if (!rp) continue;
+      if (isCloudReady && !rp.fromFirestore && (now - (rp.ts || 0) > 120000)) continue;
       const resolvedUid = rp.uid || clientToUid[rp.id] || clientToUid[pid] || null;
       if (pid === this.myPlayerId || rp.id === this.myPlayerId || rp.clientId === this.myPlayerId) continue;
       if (myUid && (pid === myUid || resolvedUid === myUid)) continue;

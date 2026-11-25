@@ -641,6 +641,7 @@ class CloudAuthManager {
                 id: key,
                 uid: docUid,
                 clientId: d.id || null,
+                fromFirestore: true,
                 name: (d.name || 'Játékos').slice(0, 14),
                 rebirths: Number(d.rebirths) || 0,
                 level: Number(d.level) || 1,
@@ -685,7 +686,20 @@ class CloudAuthManager {
       }
     }
 
-    // Ranglista oldalsáv / modal kis státusz sáv
+    // Ranglista oldalsáv / modal kis státusz sáv & név mező zárolása bejelentkezve
+    const fullName = loggedIn
+      ? (this.game.playerName || this.currentUser.displayName || 'Játékos')
+      : (this.game.playerName || 'Játékos');
+
+    for (const suffix of ['-pc', '-mobile']) {
+      const editRow = document.getElementById(`player-name-edit-row${suffix}`);
+      const lockedRow = document.getElementById(`player-name-locked-row${suffix}`);
+      const lockedNameEl = document.getElementById(`player-locked-name${suffix}`);
+      if (editRow) editRow.style.display = loggedIn ? 'none' : 'flex';
+      if (lockedRow) lockedRow.style.display = loggedIn ? 'flex' : 'none';
+      if (lockedNameEl) lockedNameEl.textContent = fullName;
+    }
+
     for (const id of ['lb-auth-status-pc', 'lb-auth-status-mobile']) {
       const el = document.getElementById(id);
       if (el) {
