@@ -574,7 +574,7 @@ class IdleBreakoutGame {
       normal: {
         id: 'normal',
         name: 'NORMAL BALL',
-        shortDesc: '0.72x sebesség, 1x sebzés, Battle Pass testreszabható!',
+        shortDesc: '0.72x sebesség, 1x sebzés, Breaker Pass testreszabható!',
         color: '#ffee00',
         count: 0,
         baseCost: 25,
@@ -4396,7 +4396,7 @@ class IdleBreakoutGame {
         <strong class="dec24-countdown-text" style="font-size:18px; color:#ffffff;">${info.timerStr}</strong>
       </div>
       <div class="bb-phase-row unlocked" style="margin-top:4px; line-height:1.3;">
-        🏆 <strong>A Leaderboard TOP 1</strong> játékosa December 24-én <strong>INGYEN</strong> megkapja a <strong>Prémium Battle Pass-t</strong>!
+        🏆 <strong>A Leaderboard TOP 1</strong> játékosa December 24-én <strong>INGYEN</strong> megkapja a <strong>Prémium Breaker Pass-t</strong>!
       </div>
     `;
     this.activeTooltipKind = sourceId;
@@ -7000,7 +7000,7 @@ class IdleBreakoutGame {
       const checkoutModal = document.getElementById('premium-checkout-modal');
       if (checkoutModal) checkoutModal.classList.remove('open');
 
-      this.showToast('💳 PayPal megnyitva új ablakban! (A Prémium Battle Pass manuálisan nem aktiválható.)', 4000);
+      this.showToast('💳 PayPal megnyitva új ablakban! (A Prémium Breaker Pass manuálisan nem aktiválható.)', 4000);
     };
 
     const unlockPc = document.getElementById('btn-unlock-premium-pc');
@@ -7030,7 +7030,7 @@ class IdleBreakoutGame {
   }
 
   unlockBattlePassPremium() {
-    this.showToast('🔒 A Prémium Battle Pass közvetlenül nem aktiválható!', 3500);
+    this.showToast('🔒 A Prémium Breaker Pass közvetlenül nem aktiválható!', 3500);
     this.renderBattlePass();
   }
 
@@ -7200,7 +7200,7 @@ class IdleBreakoutGame {
       armoryHtml = `
         <div style="padding: 16px; text-align: center; color: #555; line-height: 1.4;">
           🎱 <strong>Még nincs egyetlen Normál labdád sem!</strong><br><br>
-          Vásárolj legalább 1 Normál labdát a fenti menüből ($25), hogy felruházhasd a Battle Pass-ből feloldott egyedi skinekkel és vizuális effektekkel!
+          Vásárolj legalább 1 Normál labdát a fenti menüből ($25), hogy felruházhasd a Breaker Pass-ből feloldott egyedi skinekkel és vizuális effektekkel!
         </div>
       `;
     } else {
