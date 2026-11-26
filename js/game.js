@@ -202,9 +202,9 @@ const NON_UPGRADABLE_POWERUPS = [
     name: 'GOLD LEVEL',
     rarityBadge: '0.08 esély (~0.6%) • Rebirth 15+',
     isGoldSpecial: true,
-    desc: 'Csak Rebirth 15 fölött van rá esély (~0,6% esély power-up dobásból)! A következő normál pálya minden egyes blokkja 500 és 2 000 közötti HP-t kap, és mindegyik 20x annyi pénzt ($) ad, mint alapból!',
+    desc: 'Csak Rebirth 15 fölött van rá esély (~0,6% esély power-up dobásból)! A következő normál pálya minden egyes blokkja 500–2 000 HP-s aranyblokk lesz (20x pénz), az aranyblokkok ⭐ BB-t és 👑 BT-t dobhatnak, teljesítéskor pedig garantált +15 ⭐ BB és +25 👑 BT a jutalom!',
     statusFn: (game) => {
-      if (game.isGoldLevelActive) return '🌟 JELENLEG AKTÍV A PÁLYÁN (20x pénz)!';
+      if (game.isGoldLevelActive) return '🌟 JELENLEG AKTÍV A PÁLYÁN (20x pénz + BB & BT)!';
       if (game.nextLevelIsGold) return '🌟 BEÉLESÍTVE: A következő normál pálya GOLD LEVEL lesz!';
       if (game.rebirthCount <= 15) return `🔒 ZÁROLVA: Rebirth 15 fölött érhető el (jelenleg: ${game.rebirthCount}/16)`;
       return '✅ Feloldva (Rebirth > 15): 0,08 esély (~0,6% a power-up esésekből)!';
@@ -1134,9 +1134,9 @@ class IdleBreakoutGame {
       this.nextLevelIsGold = false;
       this.isGoldLevelActive = true;
       delete this.activePowerUps['gold_level'];
-      this.activatePowerUp('gold_level_active', '🌟', 'GOLD LEVEL (20x $)', 'Minden blokk 500–2000 HP és 20x pénz ezen a pályán!', { mode: 'rounds', rounds: 1 });
+      this.activatePowerUp('gold_level_active', '🌟', 'GOLD LEVEL (20x $ + BB/BT)', '500–2000 HP, 20x pénz, aranyblokkokból BB/BT esély + teljesítéskor +15 BB & +25 BT!', { mode: 'rounds', rounds: 1 });
       if (!this.suppressAudioAndVisuals) {
-        this.showToast('🌟 <strong>GOLD LEVEL INDUL!</strong> Minden blokk 500–2000 HP-s aranyblokk és 20x pénzt ad!', 5000);
+        this.showToast('🌟 <strong>GOLD LEVEL INDUL!</strong> 500–2000 HP-s aranyblokkok: 20x pénz, BB/BT esés + teljesítéskor +15 ⭐ BB & +25 👑 BT!', 5000);
       }
     }
 
@@ -1366,8 +1366,25 @@ class IdleBreakoutGame {
           const prefix = brick.isGoldBoss ? '✨ GOLD BOSS' : '👑 BOSS';
           this.addFloatingText(`${prefix} BONUS: +$${this.formatNumber(bossBonus)} | +1 👑 BT!`, brick.x + brick.w / 2, brick.y + brick.h / 2 - 20);
         }
-      } else if (source !== 'piercing_special' && source !== 'shockwave' && source !== 'dot') {
-        this.rollPowerUpDrop(brick.x + brick.w / 2, brick.y + brick.h / 2);
+      } else {
+        if (brick.isGoldBrick) {
+          // Gold Level blokkokból plusz ⭐ BB és 👑 BT is eshet!
+          if (Math.random() < 0.15) {
+            this.bossTokens += 1;
+            if (!silent) {
+              this.addFloatingText('+1 👑 BT!', brick.x + brick.w / 2, brick.y + brick.h / 2 - 14, '#fbbf24');
+            }
+          }
+          if (Math.random() < 0.07) {
+            this.bb += 1;
+            if (!silent) {
+              this.addFloatingText('+1 ⭐ BB!', brick.x + brick.w / 2, brick.y + brick.h / 2 - 28, '#fde047');
+            }
+          }
+        }
+        if (source !== 'piercing_special' && source !== 'shockwave' && source !== 'dot') {
+          this.rollPowerUpDrop(brick.x + brick.w / 2, brick.y + brick.h / 2);
+        }
       }
 
       this.checkLevelClear();
@@ -1395,6 +1412,16 @@ class IdleBreakoutGame {
   checkLevelClear() {
     const remaining = this.bricks.filter(b => b.hp > 0).length;
     if (remaining === 0) {
+      const clearedGoldLevel = !!this.isGoldLevelActive;
+      if (clearedGoldLevel) {
+        const goldClearBB = 15;
+        const goldClearBT = 25;
+        this.bb += goldClearBB;
+        this.bossTokens += goldClearBT;
+        if (!this.suppressAudioAndVisuals) {
+          this.showToast(`🌟 <strong>GOLD LEVEL TELJESÍTVE!</strong> Bónusz: <span style="color:#fde047;">+${goldClearBB} ⭐ BB</span> és <span style="color:#fbbf24;">+${goldClearBT} 👑 BT</span>!`, 5500);
+        }
+      }
       this.level++;
       this.renderLeaderboard();
       this.broadcastMyStatus(); // Valós idejű szintfrissítés a hálózaton
@@ -1404,6 +1431,11 @@ class IdleBreakoutGame {
         window.soundEngine.playLevelUp();
       }
       this.generateLevel(this.level);
+      if (clearedGoldLevel && !this.suppressAudioAndVisuals) {
+        this.updateHUD();
+        this.refreshOpenModals();
+        this.save();
+      }
     }
   }
 
@@ -1686,8 +1718,8 @@ class IdleBreakoutGame {
 
       case 'gold_level': {
         this.nextLevelIsGold = true;
-        this.activatePowerUp('gold_level', '🌟', 'Gold Level', 'A következő normál pálya minden blokkja 500–2000 HP és 20x pénz lesz!', { mode: 'until_rebirth' });
-        this.showToast('🌟 <strong>GOLD LEVEL BEÉLESÍTVE!</strong> A következő normál pálya minden blokkja 500–2000 HP és 20x pénz lesz!', 4500);
+        this.activatePowerUp('gold_level', '🌟', 'Gold Level', 'A következő normál pálya minden blokkja 500–2000 HP, 20x pénz + ⭐ BB és 👑 BT jutalom lesz!', { mode: 'until_rebirth' });
+        this.showToast('🌟 <strong>GOLD LEVEL BEÉLESÍTVE!</strong> A következő normál pálya 20x pénzt, plusz ⭐ BB és 👑 BT jutalmat ad!', 4500);
         break;
       }
 
@@ -2287,10 +2319,10 @@ class IdleBreakoutGame {
       this.activatePowerUp('gold_boss', '👑', 'Gold Boss', 'A következő Boss blokk Gold Boss lesz (2x Boss pénz)!', { mode: 'until_rebirth' });
     }
     if (this.nextLevelIsGold && !this.activePowerUps['gold_level']) {
-      this.activatePowerUp('gold_level', '🌟', 'Gold Level', 'A következő normál pálya minden blokkja 500–2000 HP és 20x pénz lesz!', { mode: 'until_rebirth' });
+      this.activatePowerUp('gold_level', '🌟', 'Gold Level', 'A következő normál pálya minden blokkja 500–2000 HP, 20x pénz + ⭐ BB és 👑 BT jutalom lesz!', { mode: 'until_rebirth' });
     }
     if (this.isGoldLevelActive && !this.activePowerUps['gold_level_active']) {
-      this.activatePowerUp('gold_level_active', '🌟', 'GOLD LEVEL (20x $)', 'Minden blokk 500–2000 HP és 20x pénz ezen a pályán!', { mode: 'rounds', rounds: 1 });
+      this.activatePowerUp('gold_level_active', '🌟', 'GOLD LEVEL (20x $ + BB/BT)', '500–2000 HP, 20x pénz, aranyblokkokból BB/BT esély + teljesítéskor +15 BB & +25 BT!', { mode: 'rounds', rounds: 1 });
     }
   }
 
