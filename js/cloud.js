@@ -17,6 +17,8 @@ class CloudAuthManager {
     this.lastLbSyncMs = 0;
     this.lbSyncTimer = 0;
     this.lastLbSyncSig = '';
+    this.lastSyncedBb = null;
+    this.lastSyncedBt = null;
     this.activeTab = 'login'; // 'login' | 'register'
     this.suppressNextAuthLoad = false;
     this.leaderboardUnsub = null;
@@ -623,11 +625,14 @@ class CloudAuthManager {
     const bb = Math.max(0, Math.floor(Number(this.game.bb) || 0));
     const bt = Math.max(0, Math.floor(Number(this.game.bossTokens) || 0));
     const bpStage = (typeof this.game.getCurrentBattlePassStage === 'function') ? this.game.getCurrentBattlePassStage() : 1;
-    const sig = `${pName}|${reb}|${lvl}|${brk}|${mon}|${bb}|${bt}|${bpStage}|${uid || 'guest'}`;
+    const approxMoneySig = mon < 1000 ? Math.round(mon / 100) * 100 : Number(mon.toPrecision(2));
+    const sig = `${pName}|${reb}|${lvl}|${brk}|${approxMoneySig}|${bb}|${bt}|${bpStage}|${uid || 'guest'}`;
+    const bbBtChanged = (this.lastSyncedBb !== null && this.lastSyncedBb !== bb) || (this.lastSyncedBt !== null && this.lastSyncedBt !== bt);
 
     if (!force) {
-      if (now - this.lastLbSyncMs < 4000) return;
-      if (sig === this.lastLbSyncSig && now - this.lastLbSyncMs < 20000) return;
+      const minGap = bbBtChanged ? 1200 : 4000;
+      if (now - this.lastLbSyncMs < minGap) return;
+      if (!bbBtChanged && sig === this.lastLbSyncSig && now - this.lastLbSyncMs < 20000) return;
     }
 
     try {
@@ -648,6 +653,8 @@ class CloudAuthManager {
       }, { merge: true });
       this.lastLbSyncMs = now;
       this.lastLbSyncSig = sig;
+      this.lastSyncedBb = bb;
+      this.lastSyncedBt = bt;
     } catch (err) {
       // Csendes hibatűrés (pl. ha Firestore szabály később tiltja a vendégírást)
     }
@@ -778,11 +785,16 @@ class CloudAuthManager {
               ? (dReb > (existing.rebirths || 0) || (dReb === (existing.rebirths || 0) && dLvl >= (existing.level || 1)))
               : true;
 
+            const walletChanged = existing
+              ? (dBb !== existing.bb || dBt !== existing.bt || dMoney !== existing.money)
+              : false;
+
             const shouldAccept = !existing ||
               modifiedDocIds.has(doc.id) ||
               !existing._liveMqttInSession ||
               dAdminTs > (existing.adminUpdatedAt || 0) ||
               isHigherProgress ||
+              walletChanged ||
               (safeTs >= (existing.ts || 0) - 5000);
 
             if (shouldAccept) {

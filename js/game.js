@@ -1441,6 +1441,9 @@ class IdleBreakoutGame {
     if (this.isPowerUpActive('2x_money')) {
       reward *= 2;
     }
+    if (options.extraMoney > 0) {
+      reward += options.extraMoney;
+    }
 
     this.money += reward;
 
@@ -1448,7 +1451,10 @@ class IdleBreakoutGame {
 
     if (!silent) {
       if (reward >= 1 || brick.hp <= 0) {
-        this.addFloatingText(`+$${this.formatNumber(Math.max(1, Math.round(reward)))}`, brick.x + brick.w / 2, brick.y + brick.h / 2);
+        const moneyLabel = source === 'coin'
+          ? `+🪙$${this.formatNumber(Math.max(1, Math.round(reward)))}`
+          : `+$${this.formatNumber(Math.max(1, Math.round(reward)))}`;
+        this.addFloatingText(moneyLabel, brick.x + brick.w / 2, brick.y + brick.h / 2, source === 'coin' ? '#facc15' : undefined);
       }
       if (brick.isBoss && this.bossSparks.length < 30) {
         this.bossSparks.push({
@@ -1488,6 +1494,7 @@ class IdleBreakoutGame {
         bossBonus = Math.round(bossBonus);
         this.money += bossBonus;
         this.bossTokens += 1; // Minden Boss megölése után +1 Boss Token!
+        this.syncWalletChangeNow(false);
         if (!silent) {
           const prefix = brick.isGoldBoss ? '✨ GOLD BOSS' : '👑 BOSS';
           this.addFloatingText(`${prefix} BONUS: +$${this.formatNumber(bossBonus)} | +1 👑 BT!`, brick.x + brick.w / 2, brick.y + brick.h / 2 - 20);
@@ -1495,17 +1502,23 @@ class IdleBreakoutGame {
       } else {
         if (brick.isGoldBrick) {
           // Gold Level blokkokból plusz ⭐ BB és 👑 BT is eshet!
+          let goldWalletChanged = false;
           if (Math.random() < 0.15) {
             this.bossTokens += 1;
+            goldWalletChanged = true;
             if (!silent) {
               this.addFloatingText('+1 👑 BT!', brick.x + brick.w / 2, brick.y + brick.h / 2 - 14, '#fbbf24');
             }
           }
           if (Math.random() < 0.07) {
             this.bb += 1;
+            goldWalletChanged = true;
             if (!silent) {
               this.addFloatingText('+1 ⭐ BB!', brick.x + brick.w / 2, brick.y + brick.h / 2 - 28, '#fde047');
             }
+          }
+          if (goldWalletChanged) {
+            this.syncWalletChangeNow(false);
           }
         }
         if (source !== 'piercing_special' && source !== 'shockwave' && source !== 'dot') {
@@ -1900,6 +1913,7 @@ class IdleBreakoutGame {
       this.showToast('🎁 <strong>INGYENES FEJLESZTÉS:</strong> Minden maxon van ➔ <span style="color:#fde047;">+5 BB!</span>');
       this.updateHUD();
       this.save();
+      this.syncWalletChangeNow(true);
       return;
     }
 
@@ -2539,6 +2553,7 @@ class IdleBreakoutGame {
       const bbGain = 1; // Fix +1 BB minden begyűjtött coin után!
       this.bb += bbGain;
       bbBonusText = ` +${bbGain} BB ⭐`;
+      this.syncWalletChangeNow(false);
     }
 
     if (!this.suppressAudioAndVisuals && !document.hidden) {
@@ -2943,6 +2958,7 @@ class IdleBreakoutGame {
     this.renderPowerUpUpgradesModal();
     this.renderUpgradesMenu();
     this.save();
+    this.syncWalletChangeNow(true);
     if (this.cloud) this.cloud.saveToCloud(false);
   }
 
@@ -3006,6 +3022,7 @@ class IdleBreakoutGame {
     this.renderPowerUpUpgradesModal();
     this.renderUpgradesMenu();
     this.save();
+    this.syncWalletChangeNow(true);
     if (this.cloud) this.cloud.saveToCloud(false);
   }
 
@@ -3436,6 +3453,7 @@ class IdleBreakoutGame {
     this.updateHUD();
     this.renderLeaderboard();
     this.save();
+    this.syncWalletChangeNow(true);
 
     if (showToast) {
       const gainedMoney = Math.floor(this.money - startMoney);
@@ -3759,28 +3777,26 @@ class IdleBreakoutGame {
         this.spawnMultiplyChildren(ball);
       }
     } else if (ball.type === 'coin') {
-      // COIN BALL: mindig pontosan 1 sebzés + pénz ütközésenként + maxolás után BT/BB bányászat!
-      this.damageBrick(brick, 1, 'coin', { ball });
+      // COIN BALL: mindig pontosan 1 sebzés + pénz ütközésenként (egyetlen közös felugró pénz szöveggel) + maxolás után BT/BB bányászat!
       let coinBonus = this.getCoinBallRewardPerHit() * this.rebirthMultiplier;
       if (this.isPowerUpActive('2x_money')) {
         coinBonus *= 2;
       }
-      this.money += coinBonus;
+      this.damageBrick(brick, 1, 'coin', { ball, extraMoney: coinBonus });
 
       const silent = this.suppressAudioAndVisuals || document.hidden;
       const fxX = brick.x + brick.w / 2;
       const fxY = brick.y + brick.h / 2 - 14;
-      if (!silent) {
-        this.addFloatingText(`+🪙$${this.formatNumber(Math.max(1, Math.round(coinBonus)))}`, fxX, fxY, '#facc15');
-      }
 
       const thresholds = this.getCoinBallTokenThresholds();
       if (thresholds) {
+        let coinWalletChanged = false;
         this.coinBtHitCounter = (this.coinBtHitCounter || 0) + 1;
         this.coinBbHitCounter = (this.coinBbHitCounter || 0) + 1;
         while (this.coinBtHitCounter >= thresholds.btHits) {
           this.coinBtHitCounter -= thresholds.btHits;
           this.bossTokens += 1;
+          coinWalletChanged = true;
           if (!silent) {
             this.addFloatingText('+1 👑 BT (COIN)!', fxX, fxY - 14, '#fbbf24');
             if (window.soundEngine) window.soundEngine.playCoin();
@@ -3789,10 +3805,14 @@ class IdleBreakoutGame {
         while (this.coinBbHitCounter >= thresholds.bbHits) {
           this.coinBbHitCounter -= thresholds.bbHits;
           this.bb += 1;
+          coinWalletChanged = true;
           if (!silent) {
             this.addFloatingText('+1 ⭐ BB (COIN)!', fxX, fxY - 28, '#fde047');
             if (window.soundEngine) window.soundEngine.playLevelUp();
           }
+        }
+        if (coinWalletChanged) {
+          this.syncWalletChangeNow(false);
         }
       }
       if (!this.suppressAudioAndVisuals) {
@@ -4564,6 +4584,7 @@ class IdleBreakoutGame {
     this.updateHUD();
     this.refreshOpenModals();
     this.save();
+    this.syncWalletChangeNow(true);
   }
 
   formatNumber(num) {
@@ -4572,6 +4593,34 @@ class IdleBreakoutGame {
     if (num < 1_000_000) return (num / 1000).toFixed(1) + 'K';
     if (num < 1_000_000_000) return (num / 1_000_000).toFixed(1) + 'M';
     return (num / 1_000_000_000).toFixed(1) + 'B';
+  }
+
+  formatApproxMoney(num) {
+    const v = Math.max(0, Number(num) || 0);
+    if (v === 0) return '~$0';
+    if (v < 1000) {
+      const rounded = v < 100 ? Math.round(v / 10) * 10 : Math.round(v / 50) * 50;
+      return `~$${Math.max(10, rounded)}`;
+    }
+    if (v < 1_000_000) {
+      const k = v / 1000;
+      return `~$${v >= 100_000 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, '')}K`;
+    }
+    if (v < 1_000_000_000) {
+      const m = v / 1_000_000;
+      return `~$${v >= 100_000_000 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, '')}M`;
+    }
+    if (v < 1_000_000_000_000) {
+      const b = v / 1_000_000_000;
+      return `~$${v >= 100_000_000_000 ? Math.round(b) : b.toFixed(1).replace(/\.0$/, '')}B`;
+    }
+    return `~$${(v / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}T`;
+  }
+
+  estimateApproxMoney(level, rebirths) {
+    const lvl = Math.max(1, Number(level) || 1);
+    const mult = this.getRebirthMultiplier(Math.max(0, Number(rebirths) || 0));
+    return Math.round(((lvl * lvl * 42) + (Math.floor(lvl / 10) * 18000)) * mult * 1.8);
   }
 
   refreshOpenModals() {
@@ -6721,8 +6770,11 @@ class IdleBreakoutGame {
             } else if (topic === 'shirelix/idle_breakout_v4/sync') {
               const ping = JSON.parse(str);
               if (ping && ping.sender && ping.sender !== this.myPlayerId) {
-                // Új játékos csatlakozott a hálózathoz! Küldjük el neki azonnal a saját állapotunkat:
+                // Új játékos csatlakozott a hálózathoz vagy a fejlesztő élő szinkront kért! Küldjük el azonnal az állapotunkat:
                 this.broadcastMyStatus();
+                if (ping.reason === 'dev_sync' && this.cloud) {
+                  this.cloud.syncLeaderboardToCloud(true);
+                }
               }
             } else if (topic === 'shirelix/idle_breakout_v4/admin/rules') {
               if (str && str.trim()) {
@@ -6840,6 +6892,35 @@ class IdleBreakoutGame {
     } catch (e) {}
   }
 
+  syncWalletChangeNow(immediate = false) {
+    if (immediate) {
+      if (this._walletSyncTimer) {
+        clearTimeout(this._walletSyncTimer);
+        this._walletSyncTimer = null;
+      }
+      this.broadcastMyStatus();
+      if (this.cloud) this.cloud.syncLeaderboardToCloud(false);
+      return;
+    }
+    if (this._walletSyncTimer) return;
+    this._walletSyncTimer = setTimeout(() => {
+      this._walletSyncTimer = null;
+      this.broadcastMyStatus();
+      if (this.cloud) this.cloud.syncLeaderboardToCloud(false);
+    }, 600);
+  }
+
+  requestLivePeersSync() {
+    if (!this.mqttClient || !this.mqttConnected) return;
+    try {
+      this.mqttClient.publish('shirelix/idle_breakout_v4/sync', JSON.stringify({
+        sender: this.myPlayerId,
+        reason: 'dev_sync',
+        ts: Date.now()
+      }), { qos: 0 });
+    } catch (e) {}
+  }
+
   escapeHtml(str) {
     return String(str ?? '')
       .replace(/&/g, '&amp;')
@@ -6889,6 +6970,9 @@ class IdleBreakoutGame {
     const overrides = (raw.overrides && typeof raw.overrides === 'object') ? { ...raw.overrides } : {};
     const currencyGifts = {};
     const giftEntries = [];
+    const optSet = (v) => (v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v)))
+      ? Math.max(0, Math.floor(Number(v)))
+      : null;
     if (raw.currencyGifts && typeof raw.currencyGifts === 'object') {
       for (const k of Object.keys(raw.currencyGifts)) {
         const g = raw.currencyGifts[k];
@@ -6900,6 +6984,9 @@ class IdleBreakoutGame {
             addBB: Math.trunc(Number(g.addBB) || 0),
             addBT: Math.trunc(Number(g.addBT) || 0),
             addMoney: Math.trunc(Number(g.addMoney) || 0),
+            setBB: optSet(g.setBB),
+            setBT: optSet(g.setBT),
+            setMoney: optSet(g.setMoney),
             issuedAt: Number(g.issuedAt) || 0
           }]);
         }
@@ -7010,6 +7097,9 @@ class IdleBreakoutGame {
     let giftedBB = 0;
     let giftedBT = 0;
     let giftedMoney = 0;
+    let setBBVal = null;
+    let setBTVal = null;
+    let setMoneyVal = null;
 
     for (const cmd of cmdList) {
       if (!cmd || !cmd.cmdId) continue;
@@ -7059,17 +7149,29 @@ class IdleBreakoutGame {
       const addBB = Math.trunc(Number(cmd.addBB) || 0);
       const addBT = Math.trunc(Number(cmd.addBT) || 0);
       const addMoney = Math.trunc(Number(cmd.addMoney) || 0);
-      if (addBB !== 0) {
+      if (cmd.setBB !== null && cmd.setBB !== undefined) {
+        this.bb = Math.max(0, Math.floor(Number(cmd.setBB) || 0));
+        setBBVal = this.bb;
+        changed = true;
+      } else if (addBB !== 0) {
         this.bb = Math.max(0, this.bb + addBB);
         giftedBB += addBB;
         changed = true;
       }
-      if (addBT !== 0) {
+      if (cmd.setBT !== null && cmd.setBT !== undefined) {
+        this.bossTokens = Math.max(0, Math.floor(Number(cmd.setBT) || 0));
+        setBTVal = this.bossTokens;
+        changed = true;
+      } else if (addBT !== 0) {
         this.bossTokens = Math.max(0, this.bossTokens + addBT);
         giftedBT += addBT;
         changed = true;
       }
-      if (addMoney !== 0) {
+      if (cmd.setMoney !== null && cmd.setMoney !== undefined) {
+        this.money = Math.max(0, Math.floor(Number(cmd.setMoney) || 0));
+        setMoneyVal = this.money;
+        changed = true;
+      } else if (addMoney !== 0) {
         this.money = Math.max(0, this.money + addMoney);
         giftedMoney += addMoney;
         changed = true;
@@ -7091,9 +7193,12 @@ class IdleBreakoutGame {
       if (window.soundEngine) window.soundEngine.playCoin();
       const parts = [];
       if (statEdited) parts.push(`Rebirth ${this.rebirthCount} | Szint ${this.level}`);
-      if (giftedBB !== 0) parts.push(`${giftedBB > 0 ? '+' : ''}${this.formatNumber(giftedBB)} ⭐ BB`);
-      if (giftedBT !== 0) parts.push(`${giftedBT > 0 ? '+' : ''}${this.formatNumber(giftedBT)} 👑 BT`);
-      if (giftedMoney !== 0) parts.push(`${giftedMoney > 0 ? '+' : '-'}$${this.formatNumber(Math.abs(giftedMoney))}`);
+      if (setBBVal !== null) parts.push(`⭐ BB = ${setBBVal.toLocaleString('hu-HU')}`);
+      else if (giftedBB !== 0) parts.push(`${giftedBB > 0 ? '+' : ''}${this.formatNumber(giftedBB)} ⭐ BB`);
+      if (setBTVal !== null) parts.push(`👑 BT = ${setBTVal.toLocaleString('hu-HU')}`);
+      else if (giftedBT !== 0) parts.push(`${giftedBT > 0 ? '+' : ''}${this.formatNumber(giftedBT)} 👑 BT`);
+      if (setMoneyVal !== null) parts.push(`💵 Pénz = $${this.formatNumber(setMoneyVal)}`);
+      else if (giftedMoney !== 0) parts.push(`${giftedMoney > 0 ? '+' : '-'}$${this.formatNumber(Math.abs(giftedMoney))}`);
       this.showToast(`🛠️ Fejlesztő frissítette az állapotod: ${parts.join(' • ')}!`, 5000);
     }
     return changed;
@@ -7587,6 +7692,7 @@ class IdleBreakoutGame {
     if (body) body.style.display = unlocked ? 'flex' : 'none';
     if (lockBtn) lockBtn.style.display = unlocked ? 'inline-flex' : 'none';
     if (unlocked) {
+      this.requestLivePeersSync();
       this.renderDevLeaderboardPanel();
     }
   }
@@ -7612,6 +7718,8 @@ class IdleBreakoutGame {
     const closeModal = () => {
       if (modal) modal.classList.remove('open');
       this.devEditTarget = null;
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
       const editBox = document.getElementById('dev-edit-box');
       if (editBox) editBox.style.display = 'none';
     };
@@ -7652,6 +7760,8 @@ class IdleBreakoutGame {
     // Tab switching
     const switchDevTab = (tab) => {
       this.activeDevTab = tab;
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
       const isPlayers = (tab === 'players');
       const pPane = document.getElementById('dev-tab-players');
       const rPane = document.getElementById('dev-tab-rules');
@@ -7672,7 +7782,12 @@ class IdleBreakoutGame {
     const pruneBtn = document.getElementById('btn-dev-prune-cache');
     const syncBtn = document.getElementById('btn-dev-sync-now');
     if (pruneBtn) pruneBtn.addEventListener('click', () => this.devPruneStaleEntries());
-    if (syncBtn) syncBtn.addEventListener('click', () => this.syncAdminRulesGlobally(true));
+    if (syncBtn) {
+      syncBtn.addEventListener('click', () => {
+        this.requestLivePeersSync();
+        this.syncAdminRulesGlobally(true);
+      });
+    }
 
     // Add manual custom player
     const addForm = document.getElementById('dev-add-player-form');
@@ -7997,6 +8112,451 @@ class IdleBreakoutGame {
     await this.syncAdminRulesGlobally(!hasCurrencyGift);
   }
 
+  parseDevNumericInput(rawStr, allowRelative = true) {
+    let s = String(rawStr ?? '').trim().toLowerCase().replace(/[\s$~]/g, '');
+    if (!s) return null;
+    let sign = null;
+    if (allowRelative && (s[0] === '+' || s[0] === '-')) {
+      sign = s[0];
+      s = s.slice(1).trim();
+    }
+    if (!s) return null;
+
+    let mult = 1;
+    const lastCh = s[s.length - 1];
+    if (lastCh === 'k') { mult = 1e3; s = s.slice(0, -1); }
+    else if (lastCh === 'm') { mult = 1e6; s = s.slice(0, -1); }
+    else if (lastCh === 'b') { mult = 1e9; s = s.slice(0, -1); }
+    else if (lastCh === 't') { mult = 1e12; s = s.slice(0, -1); }
+
+    s = s.replace(/,/g, '.');
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
+    const num = Number(s) * mult;
+    if (!Number.isFinite(num)) return null;
+
+    if (sign === '+') return { mode: 'delta', value: Math.trunc(num) };
+    if (sign === '-') return { mode: 'delta', value: -Math.trunc(num) };
+    return { mode: 'set', value: Math.max(0, Math.floor(num)) };
+  }
+
+  devStartInlineEdit(targetEl, entry, field) {
+    if (!targetEl || !entry || !field) return;
+    if (targetEl.querySelector('.dev-inline-input')) {
+      const existingInput = targetEl.querySelector('.dev-inline-input');
+      if (existingInput) existingInput.focus();
+      return;
+    }
+    if (typeof this._cancelActiveInlineEdit === 'function') {
+      try { this._cancelActiveInlineEdit(); } catch (e) {}
+    }
+
+    const isName = (field === 'name');
+    const hostEl = isName ? targetEl : targetEl.querySelector('.dev-stat-val');
+    if (!hostEl) return;
+
+    const origHtml = hostEl.innerHTML;
+    const origStyle = hostEl.getAttribute('style') || '';
+
+    let initVal = '';
+    let placeholder = '';
+    let maxLenAttr = '';
+    if (field === 'name') {
+      initVal = entry.name || 'Játékos';
+      placeholder = 'Név (max 12)';
+      maxLenAttr = 'maxlength="12"';
+    } else if (field === 'bb') {
+      initVal = (entry.bb !== null && entry.bb !== undefined) ? String(Math.max(0, Math.floor(Number(entry.bb) || 0))) : '';
+      placeholder = 'pl. 50 / +10';
+    } else if (field === 'bt') {
+      initVal = (entry.bt !== null && entry.bt !== undefined) ? String(Math.max(0, Math.floor(Number(entry.bt) || 0))) : '';
+      placeholder = 'pl. 25 / +5';
+    } else if (field === 'money') {
+      initVal = (entry.money !== null && entry.money !== undefined) ? String(Math.max(0, Math.floor(Number(entry.money) || 0))) : '';
+      placeholder = 'pl. 500k / +1m';
+    } else if (field === 'rebirths') {
+      initVal = String(Math.max(0, Math.floor(Number(entry.rebirths) || 0)));
+      placeholder = 'pl. 5 / +1';
+    } else if (field === 'level') {
+      initVal = String(Math.max(1, Math.floor(Number(entry.level) || 1)));
+      placeholder = 'pl. 100 / +10';
+    }
+
+    let finished = false;
+    const restoreOnly = () => {
+      if (!isName) targetEl.classList.remove('is-editing');
+      hostEl.innerHTML = origHtml;
+      if (origStyle) hostEl.setAttribute('style', origStyle);
+      else hostEl.removeAttribute('style');
+    };
+
+    this._devInlineEditActive = true;
+    this._cancelActiveInlineEdit = () => {
+      if (finished) return;
+      finished = true;
+      restoreOnly();
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
+    };
+
+    if (!isName) targetEl.classList.add('is-editing');
+    hostEl.removeAttribute('style');
+    hostEl.innerHTML = `
+      <span class="dev-inline-edit-wrap ${isName ? 'is-name-edit' : ''}">
+        <input type="text" class="dev-inline-input" ${maxLenAttr} placeholder="${this.escapeHtml(placeholder)}" />
+        <button type="button" class="dev-inline-btn ok" title="Mentés (Enter)">✓</button>
+        <button type="button" class="dev-inline-btn cancel" title="Mégse (Esc)">✕</button>
+      </span>
+    `;
+
+    const wrap = hostEl.querySelector('.dev-inline-edit-wrap');
+    const inp = hostEl.querySelector('.dev-inline-input');
+    const okBtn = hostEl.querySelector('.dev-inline-btn.ok');
+    const cancelBtn = hostEl.querySelector('.dev-inline-btn.cancel');
+    if (!inp) {
+      restoreOnly();
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
+      return;
+    }
+    inp.value = initVal;
+
+    const commit = () => {
+      if (finished) return;
+      finished = true;
+      const val = inp.value;
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
+      this.devCommitInlineField(entry, field, val);
+    };
+
+    const cancel = () => {
+      if (finished) return;
+      finished = true;
+      restoreOnly();
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
+    };
+
+    if (wrap) wrap.addEventListener('click', (e) => e.stopPropagation());
+    if (okBtn) {
+      okBtn.addEventListener('mousedown', (e) => e.preventDefault());
+      okBtn.addEventListener('click', (e) => { e.stopPropagation(); commit(); });
+    }
+    if (cancelBtn) {
+      cancelBtn.addEventListener('mousedown', (e) => e.preventDefault());
+      cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cancel(); });
+    }
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancel();
+      }
+    });
+    inp.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (!finished && document.activeElement !== okBtn && document.activeElement !== cancelBtn) {
+          cancel();
+        }
+      }, 150);
+    });
+
+    inp.focus();
+    inp.select();
+  }
+
+  async devCommitInlineField(entry, field, rawValue) {
+    this._devInlineEditActive = false;
+    this._cancelActiveInlineEdit = null;
+    if (!entry || !field) {
+      this.renderDevLeaderboardPanel();
+      return;
+    }
+
+    const curName = String(entry.name || 'Játékos').slice(0, 12);
+    const curReb = Math.max(0, Math.floor(Number(entry.rebirths) || 0));
+    const curLvl = Math.max(1, Math.floor(Number(entry.level) || 1));
+
+    let newName = curName;
+    let newReb = curReb;
+    let newLvl = curLvl;
+    let parsedNum = null;
+
+    if (field === 'name') {
+      const trimmed = String(rawValue ?? '').trim();
+      if (!trimmed) {
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+      if (trimmed.length > 12) {
+        this.showToast('⚠️ A név legfeljebb 12 karakter lehet!', 2400);
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+      newName = trimmed;
+      if (newName === curName) {
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+    } else if (field === 'rebirths') {
+      parsedNum = this.parseDevNumericInput(rawValue, true);
+      if (!parsedNum) {
+        this.showToast('⚠️ Érvénytelen szám! (pl. 10 vagy +2)', 2400);
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+      newReb = parsedNum.mode === 'delta'
+        ? Math.max(0, Math.min(999999, curReb + parsedNum.value))
+        : Math.max(0, Math.min(999999, parsedNum.value));
+      if (newReb === curReb) {
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+    } else if (field === 'level') {
+      parsedNum = this.parseDevNumericInput(rawValue, true);
+      if (!parsedNum) {
+        this.showToast('⚠️ Érvénytelen szám! (pl. 100 vagy +10)', 2400);
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+      newLvl = parsedNum.mode === 'delta'
+        ? Math.max(1, Math.min(999999, curLvl + parsedNum.value))
+        : Math.max(1, Math.min(999999, parsedNum.value));
+      if (newLvl === curLvl) {
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+    } else if (field === 'bb' || field === 'bt' || field === 'money') {
+      parsedNum = this.parseDevNumericInput(rawValue, true);
+      if (!parsedNum) {
+        this.showToast('⚠️ Érvénytelen összeg! (pl. 50, +10, 500k)', 2600);
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+      if (parsedNum.mode === 'delta' && parsedNum.value === 0) {
+        this.renderDevLeaderboardPanel();
+        return;
+      }
+    } else {
+      this.renderDevLeaderboardPanel();
+      return;
+    }
+
+    // Régi statikus felülírások törlése, hogy ne akadályozzák az új értéket:
+    if (this.lbAdminRules && this.lbAdminRules.overrides) {
+      for (const k of [
+        entry.uid,
+        entry.id,
+        entry.docId,
+        ...(entry.rawKeys || []),
+        entry._origName ? `name:${entry._origName.trim().toLowerCase()}` : null,
+        `name:${newName.trim().toLowerCase()}`
+      ].filter(Boolean)) {
+        delete this.lbAdminRules.overrides[k];
+      }
+    }
+
+    if (entry.isPlayer) {
+      let toastMsg = '';
+      if (field === 'name') {
+        this.setPlayerNameDirect(newName);
+        toastMsg = `✏️ Saját név módosítva: <strong>${this.escapeHtml(newName)}</strong>`;
+      } else if (field === 'rebirths') {
+        this.rebirthCount = newReb;
+        this.rebirthMultiplier = this.getRebirthMultiplier();
+        toastMsg = `🔄 Saját Rebirth: <strong>${newReb}</strong>`;
+      } else if (field === 'level') {
+        const differs = newLvl !== this.level;
+        this.level = newLvl;
+        if (differs) this.generateLevel(this.level);
+        toastMsg = `🚩 Saját Szint: <strong>${newLvl}</strong>`;
+      } else if (field === 'bb') {
+        this.bb = parsedNum.mode === 'delta' ? Math.max(0, this.bb + parsedNum.value) : Math.max(0, parsedNum.value);
+        toastMsg = `⭐ Saját BB = <strong>${this.bb.toLocaleString('hu-HU')}</strong>`;
+      } else if (field === 'bt') {
+        this.bossTokens = parsedNum.mode === 'delta' ? Math.max(0, this.bossTokens + parsedNum.value) : Math.max(0, parsedNum.value);
+        toastMsg = `👑 Saját BT = <strong>${this.bossTokens.toLocaleString('hu-HU')}</strong>`;
+      } else if (field === 'money') {
+        this.money = parsedNum.mode === 'delta' ? Math.max(0, this.money + parsedNum.value) : Math.max(0, parsedNum.value);
+        toastMsg = `💵 Saját Pénz = <strong>$${this.formatNumber(this.money)}</strong>`;
+      }
+
+      this.updateHUD();
+      this.refreshOpenModals();
+      this.save();
+      this.broadcastMyStatus();
+      if (this.cloud) {
+        await this.cloud.syncLeaderboardToCloud(true);
+        if (this.cloud.currentUser) {
+          await this.cloud.saveToCloud(true);
+        }
+      }
+      if (window.soundEngine) window.soundEngine.playCoin();
+      if (toastMsg) this.showToast(toastMsg, 3200);
+      this.renderDevLeaderboardPanel();
+      return;
+    }
+
+    if (entry.isCustom) {
+      const cp = this.lbAdminRules.customPlayers.find(c => c.id === entry.id);
+      if (cp) {
+        cp.name = newName;
+        cp.rebirths = newReb;
+        cp.level = newLvl;
+      }
+      await this.syncAdminRulesGlobally(true);
+      return;
+    }
+
+    // Távoli játékos szerkesztése
+    const now = Date.now();
+    const matchIds = this.getEntryMatchIds(entry);
+    const origLower = (entry._origName || entry.name || '').trim().toLowerCase();
+
+    if (field === 'name' || field === 'rebirths' || field === 'level') {
+      if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
+        this.lbAdminRules.playerCommands = {};
+      }
+      const cmdKey = entry.uid || entry.docId || entry.id || `name:${origLower}`;
+      this.lbAdminRules.playerCommands[cmdKey] = {
+        cmdId: 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+        targetIds: matchIds,
+        targetNameLower: origLower,
+        name: newName,
+        rebirths: newReb,
+        level: newLvl,
+        issuedAt: now
+      };
+
+      const cmdKeys = Object.keys(this.lbAdminRules.playerCommands);
+      if (cmdKeys.length > 80) {
+        cmdKeys
+          .sort((a, b) => (this.lbAdminRules.playerCommands[a].issuedAt || 0) - (this.lbAdminRules.playerCommands[b].issuedAt || 0))
+          .slice(0, cmdKeys.length - 80)
+          .forEach(k => delete this.lbAdminRules.playerCommands[k]);
+      }
+
+      if (this.remotePlayers) {
+        for (const pid of Object.keys(this.remotePlayers)) {
+          const rp = this.remotePlayers[pid];
+          if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
+            rp.name = newName;
+            rp.rebirths = newReb;
+            rp.level = newLvl;
+            rp.ts = now;
+            rp.adminUpdatedAt = now;
+          }
+        }
+        try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+      }
+
+      if (this.cloud && (entry.docId || entry.uid)) {
+        await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
+          name: newName,
+          rebirths: newReb,
+          level: newLvl,
+          ts: now
+        });
+      }
+
+      this.showToast(`✅ ${this.escapeHtml(entry.name)} frissítve!`, 2800);
+      await this.syncAdminRulesGlobally(false);
+      return;
+    }
+
+    // BB / BT / Pénz közvetlen beállítása vagy módosítása (külön currencyGifts ágban — nem nulláz semmilyen statot!)
+    if (!this.lbAdminRules.currencyGifts || typeof this.lbAdminRules.currencyGifts !== 'object') {
+      this.lbAdminRules.currencyGifts = {};
+    }
+    const giftId = 'gift_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    const giftPayload = {
+      cmdId: giftId,
+      targetIds: matchIds,
+      targetNameLower: origLower,
+      addBB: 0,
+      addBT: 0,
+      addMoney: 0,
+      setBB: null,
+      setBT: null,
+      setMoney: null,
+      issuedAt: now
+    };
+
+    let resolvedVal = null;
+    let toastMsg = '';
+    if (field === 'bb') {
+      if (parsedNum.mode === 'set') {
+        giftPayload.setBB = parsedNum.value;
+        resolvedVal = parsedNum.value;
+        toastMsg = `⭐ ${this.escapeHtml(entry.name)} BB beállítva: ${resolvedVal.toLocaleString('hu-HU')}!`;
+      } else {
+        giftPayload.addBB = parsedNum.value;
+        if (entry.bb !== null && entry.bb !== undefined) {
+          resolvedVal = Math.max(0, Math.floor(Number(entry.bb) || 0) + parsedNum.value);
+        }
+        toastMsg = `🎁 ${this.escapeHtml(entry.name)}: ${parsedNum.value > 0 ? '+' : ''}${parsedNum.value.toLocaleString('hu-HU')} ⭐ BB!`;
+      }
+    } else if (field === 'bt') {
+      if (parsedNum.mode === 'set') {
+        giftPayload.setBT = parsedNum.value;
+        resolvedVal = parsedNum.value;
+        toastMsg = `👑 ${this.escapeHtml(entry.name)} BT beállítva: ${resolvedVal.toLocaleString('hu-HU')}!`;
+      } else {
+        giftPayload.addBT = parsedNum.value;
+        if (entry.bt !== null && entry.bt !== undefined) {
+          resolvedVal = Math.max(0, Math.floor(Number(entry.bt) || 0) + parsedNum.value);
+        }
+        toastMsg = `🎁 ${this.escapeHtml(entry.name)}: ${parsedNum.value > 0 ? '+' : ''}${parsedNum.value.toLocaleString('hu-HU')} 👑 BT!`;
+      }
+    } else if (field === 'money') {
+      if (parsedNum.mode === 'set') {
+        giftPayload.setMoney = parsedNum.value;
+        resolvedVal = parsedNum.value;
+        toastMsg = `💵 ${this.escapeHtml(entry.name)} pénze beállítva: $${this.formatNumber(resolvedVal)}!`;
+      } else {
+        giftPayload.addMoney = parsedNum.value;
+        if (entry.money !== null && entry.money !== undefined) {
+          resolvedVal = Math.max(0, Math.floor(Number(entry.money) || 0) + parsedNum.value);
+        }
+        toastMsg = `🎁 ${this.escapeHtml(entry.name)}: ${parsedNum.value > 0 ? '+' : '-'}$${this.formatNumber(Math.abs(parsedNum.value))}!`;
+      }
+    }
+
+    this.lbAdminRules.currencyGifts[giftId] = giftPayload;
+    const giftKeys = Object.keys(this.lbAdminRules.currencyGifts);
+    if (giftKeys.length > 80) {
+      giftKeys
+        .sort((a, b) => (this.lbAdminRules.currencyGifts[a].issuedAt || 0) - (this.lbAdminRules.currencyGifts[b].issuedAt || 0))
+        .slice(0, giftKeys.length - 80)
+        .forEach(k => delete this.lbAdminRules.currencyGifts[k]);
+    }
+
+    if (resolvedVal !== null && this.remotePlayers) {
+      for (const pid of Object.keys(this.remotePlayers)) {
+        const rp = this.remotePlayers[pid];
+        if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
+          rp[field] = resolvedVal;
+          rp.ts = now;
+          rp.adminUpdatedAt = now;
+        }
+      }
+      try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+    }
+
+    if (resolvedVal !== null && this.cloud && (entry.docId || entry.uid)) {
+      await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
+        [field]: resolvedVal,
+        ts: now
+      });
+    }
+
+    if (toastMsg) this.showToast(toastMsg, 3500);
+    await this.syncAdminRulesGlobally(false);
+  }
+
   async devBanOrUnbanEntry(entry) {
     const isBanned = entry._filterReason === 'Tiltott ID/UID' || entry._filterReason === 'Tiltott név';
     const matchIds = this.getEntryMatchIds(entry);
@@ -8126,9 +8686,10 @@ class IdleBreakoutGame {
     const countEl = document.getElementById('dev-count-summary');
     if (countEl) countEl.textContent = `${visibleCount}/${roster.length}`;
 
-    // Players list
+    // Players list (ne írjuk felül a DOM-ot, amíg egy kártyán belüli mezőt épp ír a fejlesztő)
     const listEl = document.getElementById('dev-players-list');
-    if (listEl) {
+    const isInlineEditing = !!(listEl && (this._devInlineEditActive || listEl.querySelector('.dev-inline-input')));
+    if (listEl && !isInlineEditing) {
       listEl.innerHTML = roster.map((entry, idx) => {
         const srcBadge = entry.isPlayer
           ? '<span class="dev-src-tag src-te">TE</span>'
@@ -8145,9 +8706,25 @@ class IdleBreakoutGame {
         const inWl = (this.lbAdminRules.whitelistNames || []).includes(wlCheckKey);
         const isBanned = entry._filterReason === 'Tiltott ID/UID' || entry._filterReason === 'Tiltott név';
         const idText = entry.uid || entry.id || '-';
-        const moneyTxt = (entry.money !== null && entry.money !== undefined) ? `$${this.formatNumber(entry.money)}` : '—';
-        const bbTxt = (entry.bb !== null && entry.bb !== undefined) ? this.formatNumber(entry.bb) : '—';
-        const btTxt = (entry.bt !== null && entry.bt !== undefined) ? this.formatNumber(entry.bt) : '—';
+        const hasSyncedMoney = (entry.money !== null && entry.money !== undefined);
+        const moneyAmount = hasSyncedMoney ? entry.money : this.estimateApproxMoney(entry.level, entry.rebirths);
+        const moneyTxt = this.formatApproxMoney(moneyAmount);
+        const moneyTitle = (hasSyncedMoney
+          ? 'Közelítő pénz (szinkronizálva)'
+          : 'Becsült közelítő pénz (szint + rebirth alapján)')
+          + (entry.isCustom ? '' : ' • Kattints az átíráshoz (pl. 500k vagy +100k)');
+        const hasExactBb = (entry.bb !== null && entry.bb !== undefined);
+        const hasExactBt = (entry.bt !== null && entry.bt !== undefined);
+        const bbTxt = hasExactBb ? Math.max(0, Math.floor(Number(entry.bb) || 0)).toLocaleString('hu-HU') : '—';
+        const btTxt = hasExactBt ? Math.max(0, Math.floor(Number(entry.bt) || 0)).toLocaleString('hu-HU') : '—';
+        const bbTitle = (hasExactBb
+          ? 'Pontos szinkronizált BB egyenleg'
+          : 'Pontos BB — frissítés után szinkronizál')
+          + (entry.isCustom ? '' : ' • Kattints az átíráshoz (pl. 50 vagy +10)');
+        const btTitle = (hasExactBt
+          ? 'Pontos szinkronizált BT egyenleg'
+          : 'Pontos BT — frissítés után szinkronizál')
+          + (entry.isCustom ? '' : ' • Kattints az átíráshoz (pl. 25 vagy +5)');
         const rebMultTxt = this.getRebirthMultiplier(entry.rebirths || 0).toFixed(2);
         const brkTxt = this.formatNumber(entry.bricks || 0);
         const bpStg = entry.bpStage || this.getCurrentBattlePassStage(entry.bricks || 0);
@@ -8157,27 +8734,27 @@ class IdleBreakoutGame {
         return `
           <div class="dev-player-card ${entry._filterReason ? 'is-filtered' : ''}" data-dev-idx="${idx}">
             <div class="dev-pc-top">
-              <span class="dev-pc-name">${dot} <strong>${this.escapeHtml(entry.name)}</strong> ${srcBadge}</span>
+              <span class="dev-pc-name">${dot} <strong class="dev-pc-name-editable" data-edit-field="name" title="Kattints a név átírásához">${this.escapeHtml(entry.name)}</strong> ${srcBadge}</span>
               ${statusBadge}
             </div>
             <div class="dev-pc-stat-grid">
-              <div class="dev-stat-chip chip-money">
+              <div class="dev-stat-chip chip-money ${entry.isCustom ? '' : 'is-editable'}" ${entry.isCustom ? '' : 'data-edit-field="money"'} title="${moneyTitle}">
                 <span class="dev-stat-lbl">💵 PÉNZ</span>
-                <span class="dev-stat-val">${moneyTxt}</span>
+                <span class="dev-stat-val"${hasSyncedMoney ? '' : ' style="opacity:0.85;"'}>${moneyTxt}</span>
               </div>
-              <div class="dev-stat-chip chip-bb">
+              <div class="dev-stat-chip chip-bb ${entry.isCustom ? '' : 'is-editable'}" ${entry.isCustom ? '' : 'data-edit-field="bb"'} title="${bbTitle}">
                 <span class="dev-stat-lbl">⭐ BB</span>
                 <span class="dev-stat-val">${bbTxt}</span>
               </div>
-              <div class="dev-stat-chip chip-bt">
+              <div class="dev-stat-chip chip-bt ${entry.isCustom ? '' : 'is-editable'}" ${entry.isCustom ? '' : 'data-edit-field="bt"'} title="${btTitle}">
                 <span class="dev-stat-lbl">👑 BT</span>
                 <span class="dev-stat-val">${btTxt}</span>
               </div>
-              <div class="dev-stat-chip chip-reb">
+              <div class="dev-stat-chip chip-reb is-editable" data-edit-field="rebirths" title="Kattints a Rebirth átírásához (pl. 10 vagy +1)">
                 <span class="dev-stat-lbl">🔄 REB (${rebMultTxt}x)</span>
                 <span class="dev-stat-val">${this.formatLeaderboardStat(entry.rebirths)}</span>
               </div>
-              <div class="dev-stat-chip chip-lvl">
+              <div class="dev-stat-chip chip-lvl is-editable" data-edit-field="level" title="Kattints a Szint átírásához (pl. 100 vagy +10)">
                 <span class="dev-stat-lbl">🚩 SZINT</span>
                 <span class="dev-stat-val">${this.formatLeaderboardStat(entry.level)}</span>
               </div>
@@ -8191,7 +8768,7 @@ class IdleBreakoutGame {
               <span>${seenTxt}</span>
             </div>
             <div class="dev-pc-actions">
-              <button type="button" class="dev-act-btn act-edit" data-act="edit" title="Név / Rebirth / Szint / BB / BT / Pénz">✏️ Szerk</button>
+              <button type="button" class="dev-act-btn act-edit" data-act="edit" title="Összes mező egyszerre">✏️ Szerk</button>
               <button type="button" class="dev-act-btn ${inWl ? 'act-wl-on' : 'act-wl'}" data-act="wl" title="Engedélyezőlistára tesz / levesz">${inWl ? '✅ WL' : '+ WL'}</button>
               <button type="button" class="dev-act-btn ${isBanned ? 'act-unban' : 'act-ban'}" data-act="ban" title="${isBanned ? 'Tiltás feloldása' : 'Tiltás és elrejtés'}">${isBanned ? '🔓 Felold' : '🚫 Tilt'}</button>
               ${!entry.isPlayer ? '<button type="button" class="dev-act-btn act-del" data-act="del" title="Törlés (MQTT/Cache/Firestore)">🗑️</button>' : ''}
@@ -8204,6 +8781,13 @@ class IdleBreakoutGame {
         const idx = parseInt(card.getAttribute('data-dev-idx'), 10);
         const entry = roster[idx];
         if (!entry) return;
+        card.querySelectorAll('[data-edit-field]').forEach((el) => {
+          el.addEventListener('click', (e) => {
+            if (e.target && e.target.closest('.dev-inline-edit-wrap')) return;
+            const field = el.getAttribute('data-edit-field');
+            if (field) this.devStartInlineEdit(el, entry, field);
+          });
+        });
         card.querySelectorAll('.dev-act-btn').forEach((btn) => {
           btn.addEventListener('click', () => {
             const act = btn.getAttribute('data-act');
@@ -8743,6 +9327,7 @@ class IdleBreakoutGame {
     this.updateHUD();
     this.renderBattlePass();
     this.save();
+    this.syncWalletChangeNow(true);
     if (this.cloud) this.cloud.saveToCloud(false);
   }
 }
