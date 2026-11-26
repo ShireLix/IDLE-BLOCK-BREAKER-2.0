@@ -6827,6 +6827,7 @@ class IdleBreakoutGame {
       whitelistNames: [],
       overrides: {},
       playerCommands: {},
+      currencyGifts: {},
       customPlayers: []
     };
   }
@@ -6850,28 +6851,59 @@ class IdleBreakoutGame {
           }))
       : [];
     const overrides = (raw.overrides && typeof raw.overrides === 'object') ? { ...raw.overrides } : {};
+    const currencyGifts = {};
+    const giftEntries = [];
+    if (raw.currencyGifts && typeof raw.currencyGifts === 'object') {
+      for (const k of Object.keys(raw.currencyGifts)) {
+        const g = raw.currencyGifts[k];
+        if (g && typeof g === 'object' && g.cmdId) {
+          giftEntries.push([k, {
+            cmdId: String(g.cmdId),
+            targetIds: normList(g.targetIds),
+            targetNameLower: String(g.targetNameLower || '').trim().toLowerCase(),
+            addBB: Math.trunc(Number(g.addBB) || 0),
+            addBT: Math.trunc(Number(g.addBT) || 0),
+            addMoney: Math.trunc(Number(g.addMoney) || 0),
+            issuedAt: Number(g.issuedAt) || 0
+          }]);
+        }
+      }
+    }
+
     const playerCommands = {};
     if (raw.playerCommands && typeof raw.playerCommands === 'object') {
       const entries = [];
       for (const k of Object.keys(raw.playerCommands)) {
         const c = raw.playerCommands[k];
         if (c && typeof c === 'object' && c.cmdId) {
-          const parsedReb = (c.rebirths === null || c.rebirths === undefined)
-            ? null
-            : Math.max(0, Math.min(999999, Math.floor(Number(c.rebirths) || 0)));
-          const parsedLvl = (c.level === null || c.level === undefined)
-            ? null
-            : Math.max(1, Math.min(999999, Math.floor(Number(c.level) || 1)));
+          const isNullGift = (c.rebirths === null || c.rebirths === undefined) && (c.level === null || c.level === undefined);
+          const cAddBB = Math.trunc(Number(c.addBB) || 0);
+          const cAddBT = Math.trunc(Number(c.addBT) || 0);
+          const cAddMoney = Math.trunc(Number(c.addMoney) || 0);
+          if (isNullGift) {
+            if (cAddBB !== 0 || cAddBT !== 0 || cAddMoney !== 0) {
+              giftEntries.push([c.cmdId, {
+                cmdId: String(c.cmdId),
+                targetIds: normList(c.targetIds),
+                targetNameLower: String(c.targetNameLower || '').trim().toLowerCase(),
+                addBB: cAddBB,
+                addBT: cAddBT,
+                addMoney: cAddMoney,
+                issuedAt: Number(c.issuedAt) || 0
+              }]);
+            }
+            continue;
+          }
           entries.push([k, {
             cmdId: String(c.cmdId),
             targetIds: normList(c.targetIds),
             targetNameLower: String(c.targetNameLower || '').trim().toLowerCase(),
             name: c.name ? String(c.name).trim().slice(0, 12) : '',
-            rebirths: parsedReb,
-            level: parsedLvl,
-            addBB: Math.trunc(Number(c.addBB) || 0),
-            addBT: Math.trunc(Number(c.addBT) || 0),
-            addMoney: Math.trunc(Number(c.addMoney) || 0),
+            rebirths: Math.max(0, Math.min(999999, Math.floor(Number(c.rebirths) || 0))),
+            level: Math.max(1, Math.min(999999, Math.floor(Number(c.level) || 1))),
+            addBB: cAddBB,
+            addBT: cAddBT,
+            addMoney: cAddMoney,
             issuedAt: Number(c.issuedAt) || 0
           }]);
         }
@@ -6881,6 +6913,12 @@ class IdleBreakoutGame {
         playerCommands[k] = v;
       }
     }
+
+    giftEntries.sort((a, b) => (a[1].issuedAt || 0) - (b[1].issuedAt || 0));
+    for (const [k, v] of giftEntries.slice(-80)) {
+      currencyGifts[k] = v;
+    }
+
     return {
       version: 2,
       updatedAt: Number(raw.updatedAt) || 0,
@@ -6894,6 +6932,7 @@ class IdleBreakoutGame {
       whitelistNames: normList(raw.whitelistNames).map(s => s.toLowerCase()),
       overrides,
       playerCommands,
+      currencyGifts,
       customPlayers
     };
   }
@@ -6915,7 +6954,13 @@ class IdleBreakoutGame {
 
   processPendingAdminCommands(reloadContext = null) {
     const cmdsObj = (this.lbAdminRules && this.lbAdminRules.playerCommands) || {};
-    const cmdList = Object.values(cmdsObj).sort((a, b) => (a.issuedAt || 0) - (b.issuedAt || 0));
+    const giftsObj = (this.lbAdminRules && this.lbAdminRules.currencyGifts) || {};
+    const cmdList = [
+      ...Object.values(cmdsObj).map(c => (c && typeof c === 'object' ? { ...c, _kind: 'stat' } : null)),
+      ...Object.values(giftsObj).map(g => (g && typeof g === 'object' ? { ...g, _kind: 'gift' } : null))
+    ]
+      .filter(Boolean)
+      .sort((a, b) => (a.issuedAt || 0) - (b.issuedAt || 0));
     if (cmdList.length === 0) return false;
 
     const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
@@ -6951,26 +6996,28 @@ class IdleBreakoutGame {
       }
       try { localStorage.setItem('idle_breakout_applied_admin_cmds', JSON.stringify(this.appliedAdminCmdIds)); } catch (e) {}
 
-      if (cmd.rebirths !== null && cmd.rebirths !== undefined) {
-        this.rebirthCount = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
-        this.rebirthMultiplier = this.getRebirthMultiplier();
-        statEdited = true;
-        changed = true;
-      }
-      if (cmd.level !== null && cmd.level !== undefined) {
-        const newLvl = Math.max(1, Math.min(999999, Math.floor(Number(cmd.level) || 1)));
-        const lvlChanged = newLvl !== this.level;
-        this.level = newLvl;
-        if (lvlChanged && this.width && this.height) {
-          this.generateLevel(this.level);
+      if (cmd._kind === 'stat') {
+        if (cmd.rebirths !== null && cmd.rebirths !== undefined) {
+          this.rebirthCount = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
+          this.rebirthMultiplier = this.getRebirthMultiplier();
+          statEdited = true;
+          changed = true;
         }
-        statEdited = true;
-        changed = true;
-      }
-      if (cmd.name) {
-        this.setPlayerNameDirect(cmd.name);
-        statEdited = true;
-        changed = true;
+        if (cmd.level !== null && cmd.level !== undefined) {
+          const newLvl = Math.max(1, Math.min(999999, Math.floor(Number(cmd.level) || 1)));
+          const lvlChanged = newLvl !== this.level;
+          this.level = newLvl;
+          if (lvlChanged && this.width && this.height) {
+            this.generateLevel(this.level);
+          }
+          statEdited = true;
+          changed = true;
+        }
+        if (cmd.name) {
+          this.setPlayerNameDirect(cmd.name);
+          statEdited = true;
+          changed = true;
+        }
       }
 
       const addBB = Math.trunc(Number(cmd.addBB) || 0);
@@ -7715,23 +7762,26 @@ class IdleBreakoutGame {
     const btIn = document.getElementById('dev-edit-add-bt');
     const moneyIn = document.getElementById('dev-edit-add-money');
 
-    const rawName = (nIn ? nIn.value : entry.name).trim();
-    if (rawName.length > 12) {
-      this.showToast('⚠️ A név legfeljebb 12 karakter lehet!', 2400);
-      return;
-    }
-    const newName = rawName.slice(0, 12) || String(entry.name || 'Játékos').slice(0, 12);
-    const newReb = Math.max(0, Math.min(999999, Math.floor(parseInt(rIn ? rIn.value : entry.rebirths, 10) || 0)));
-    const newLvl = Math.max(1, Math.min(999999, Math.floor(parseInt(lIn ? lIn.value : entry.level, 10) || 1)));
-    const addBB = Math.trunc(Number(bbIn ? bbIn.value : 0) || 0);
-    const addBT = Math.trunc(Number(btIn ? btIn.value : 0) || 0);
-    const addMoney = Math.trunc(Number(moneyIn ? moneyIn.value : 0) || 0);
-
     const init = this.devEditInitial || {
       name: entry.name || 'Játékos',
       rebirths: Number(entry.rebirths) || 0,
       level: Number(entry.level) || 1
     };
+
+    const rawName = (nIn ? nIn.value : entry.name).trim();
+    if (rawName.length > 12) {
+      this.showToast('⚠️ A név legfeljebb 12 karakter lehet!', 2400);
+      return;
+    }
+    const newName = rawName.slice(0, 12) || String(init.name || entry.name || 'Játékos').slice(0, 12);
+    const parsedReb = rIn ? parseInt(rIn.value, 10) : NaN;
+    const parsedLvl = lIn ? parseInt(lIn.value, 10) : NaN;
+    const newReb = Number.isNaN(parsedReb) ? init.rebirths : Math.max(0, Math.min(999999, parsedReb));
+    const newLvl = Number.isNaN(parsedLvl) ? init.level : Math.max(1, Math.min(999999, parsedLvl));
+    const addBB = Math.trunc(Number(bbIn ? bbIn.value : 0) || 0);
+    const addBT = Math.trunc(Number(btIn ? btIn.value : 0) || 0);
+    const addMoney = Math.trunc(Number(moneyIn ? moneyIn.value : 0) || 0);
+
     const nameChanged = newName !== init.name;
     const rebChanged = newReb !== init.rebirths;
     const lvlChanged = newLvl !== init.level;
@@ -7752,12 +7802,18 @@ class IdleBreakoutGame {
     }
 
     if (entry.isPlayer) {
-      const levelDiffers = newLvl !== this.level;
-      this.rebirthCount = newReb;
-      this.rebirthMultiplier = this.getRebirthMultiplier();
-      this.level = newLvl;
-      this.setPlayerNameDirect(newName);
-      if (levelDiffers) this.generateLevel(this.level);
+      if (rebChanged) {
+        this.rebirthCount = newReb;
+        this.rebirthMultiplier = this.getRebirthMultiplier();
+      }
+      if (lvlChanged) {
+        const levelDiffers = newLvl !== this.level;
+        this.level = newLvl;
+        if (levelDiffers) this.generateLevel(this.level);
+      }
+      if (nameChanged) {
+        this.setPlayerNameDirect(newName);
+      }
       if (addBB !== 0) this.bb = Math.max(0, this.bb + addBB);
       if (addBT !== 0) this.bossTokens = Math.max(0, this.bossTokens + addBT);
       if (addMoney !== 0) this.money = Math.max(0, this.money + addMoney);
@@ -7790,32 +7846,30 @@ class IdleBreakoutGame {
       const now = Date.now();
       const matchIds = this.getEntryMatchIds(entry);
       const origLower = (entry._origName || entry.name || '').trim().toLowerCase();
-      if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
-        this.lbAdminRules.playerCommands = {};
-      }
-      const cmdId = 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6);
-      this.lbAdminRules.playerCommands[cmdId] = {
-        cmdId,
-        targetIds: matchIds,
-        targetNameLower: origLower,
-        name: nameChanged ? newName : '',
-        rebirths: rebChanged ? newReb : null,
-        level: lvlChanged ? newLvl : null,
-        addBB,
-        addBT,
-        addMoney,
-        issuedAt: now
-      };
-
-      const cmdKeys = Object.keys(this.lbAdminRules.playerCommands);
-      if (cmdKeys.length > 80) {
-        cmdKeys
-          .sort((a, b) => (this.lbAdminRules.playerCommands[a].issuedAt || 0) - (this.lbAdminRules.playerCommands[b].issuedAt || 0))
-          .slice(0, cmdKeys.length - 80)
-          .forEach(k => delete this.lbAdminRules.playerCommands[k]);
-      }
 
       if (nameChanged || rebChanged || lvlChanged) {
+        if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
+          this.lbAdminRules.playerCommands = {};
+        }
+        const cmdKey = entry.uid || entry.docId || entry.id || `name:${origLower}`;
+        this.lbAdminRules.playerCommands[cmdKey] = {
+          cmdId: 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+          targetIds: matchIds,
+          targetNameLower: origLower,
+          name: newName,
+          rebirths: newReb,
+          level: newLvl,
+          issuedAt: now
+        };
+
+        const cmdKeys = Object.keys(this.lbAdminRules.playerCommands);
+        if (cmdKeys.length > 80) {
+          cmdKeys
+            .sort((a, b) => (this.lbAdminRules.playerCommands[a].issuedAt || 0) - (this.lbAdminRules.playerCommands[b].issuedAt || 0))
+            .slice(0, cmdKeys.length - 80)
+            .forEach(k => delete this.lbAdminRules.playerCommands[k]);
+        }
+
         if (this.remotePlayers) {
           for (const pid of Object.keys(this.remotePlayers)) {
             const rp = this.remotePlayers[pid];
@@ -7841,6 +7895,28 @@ class IdleBreakoutGame {
       }
 
       if (hasCurrencyGift) {
+        if (!this.lbAdminRules.currencyGifts || typeof this.lbAdminRules.currencyGifts !== 'object') {
+          this.lbAdminRules.currencyGifts = {};
+        }
+        const giftId = 'gift_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+        this.lbAdminRules.currencyGifts[giftId] = {
+          cmdId: giftId,
+          targetIds: matchIds,
+          targetNameLower: origLower,
+          addBB,
+          addBT,
+          addMoney,
+          issuedAt: now
+        };
+
+        const giftKeys = Object.keys(this.lbAdminRules.currencyGifts);
+        if (giftKeys.length > 80) {
+          giftKeys
+            .sort((a, b) => (this.lbAdminRules.currencyGifts[a].issuedAt || 0) - (this.lbAdminRules.currencyGifts[b].issuedAt || 0))
+            .slice(0, giftKeys.length - 80)
+            .forEach(k => delete this.lbAdminRules.currencyGifts[k]);
+        }
+
         const giftParts = [];
         if (addBB !== 0) giftParts.push(`${addBB > 0 ? '+' : ''}${this.formatNumber(addBB)} ⭐ BB`);
         if (addBT !== 0) giftParts.push(`${addBT > 0 ? '+' : ''}${this.formatNumber(addBT)} 👑 BT`);
