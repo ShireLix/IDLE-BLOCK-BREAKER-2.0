@@ -4666,6 +4666,11 @@ header.top-bar {
   flex: 0 0 68px;
 }
 
+.dev-money-input {
+  width: 112px !important;
+  flex: 0 0 112px;
+}
+
 .dev-add-btn {
   height: 28px;
   padding: 0 10px;
@@ -4706,6 +4711,15 @@ header.top-bar {
   gap: 8px;
   flex-wrap: wrap;
   font-size: 13px;
+}
+
+.dev-edit-currency-row {
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.22);
+}
+
+.dev-edit-actions-row {
+  justify-content: flex-end;
 }
 
 .dev-edit-fields label {

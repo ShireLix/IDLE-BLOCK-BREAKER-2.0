@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=7.0">
+  <link rel="stylesheet" href="css/style.css?v=7.1">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
@@ -723,12 +723,19 @@
         </form>
 
         <div id="dev-edit-box" class="dev-edit-drawer" style="display: none;">
-          <div class="dev-edit-title">✏️ Szerkesztés: <strong id="dev-edit-target-label">-</strong></div>
+          <div class="dev-edit-title">✏️ Szerkesztés & Jutalmazás: <strong id="dev-edit-target-label">-</strong></div>
           <div class="dev-edit-fields">
             <label>Név: <input type="text" id="dev-edit-name" class="auth-input dev-sm-input"></label>
             <label>Reb: <input type="number" id="dev-edit-reb" class="auth-input dev-num-input" min="0"></label>
             <label>Szint: <input type="number" id="dev-edit-lvl" class="auth-input dev-num-input" min="1"></label>
-            <button id="btn-dev-save-edit" class="retro-btn dev-save-edit-btn" type="button">💾 MENTÉS</button>
+          </div>
+          <div class="dev-edit-fields dev-edit-currency-row" id="dev-edit-currency-row">
+            <label>+⭐ BB: <input type="number" id="dev-edit-add-bb" class="auth-input dev-num-input" value="0" step="1" title="Hozzáadandó Black Brick"></label>
+            <label>+👑 BT: <input type="number" id="dev-edit-add-bt" class="auth-input dev-num-input" value="0" step="1" title="Hozzáadandó Boss Token"></label>
+            <label>+$ Pénz: <input type="number" id="dev-edit-add-money" class="auth-input dev-money-input" value="0" step="1" title="Hozzáadandó pénz"></label>
+          </div>
+          <div class="dev-edit-fields dev-edit-actions-row">
+            <button id="btn-dev-save-edit" class="retro-btn dev-save-edit-btn" type="button">💾 MENTÉS / KÜLDÉS</button>
             <button id="btn-dev-cancel-edit" class="retro-btn dev-cancel-edit-btn" type="button">MÉGSE</button>
           </div>
         </div>
@@ -820,7 +827,7 @@
 <script src="js/firebase-config.js?v=4.5"></script>
 <script src="js/cloud.js?v=6.0"></script>
 <script src="js/audio.js?v=4.8"></script>
-<script src="js/game.js?v=7.6"></script>
+<script src="js/game.js?v=7.7"></script>
 
 </body>
 </html>

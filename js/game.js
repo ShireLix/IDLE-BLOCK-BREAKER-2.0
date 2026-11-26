@@ -6852,19 +6852,33 @@ class IdleBreakoutGame {
     const overrides = (raw.overrides && typeof raw.overrides === 'object') ? { ...raw.overrides } : {};
     const playerCommands = {};
     if (raw.playerCommands && typeof raw.playerCommands === 'object') {
+      const entries = [];
       for (const k of Object.keys(raw.playerCommands)) {
         const c = raw.playerCommands[k];
         if (c && typeof c === 'object' && c.cmdId) {
-          playerCommands[k] = {
+          const parsedReb = (c.rebirths === null || c.rebirths === undefined)
+            ? null
+            : Math.max(0, Math.min(999999, Math.floor(Number(c.rebirths) || 0)));
+          const parsedLvl = (c.level === null || c.level === undefined)
+            ? null
+            : Math.max(1, Math.min(999999, Math.floor(Number(c.level) || 1)));
+          entries.push([k, {
             cmdId: String(c.cmdId),
             targetIds: normList(c.targetIds),
             targetNameLower: String(c.targetNameLower || '').trim().toLowerCase(),
             name: c.name ? String(c.name).trim().slice(0, 12) : '',
-            rebirths: Math.max(0, Math.min(999999, Math.floor(Number(c.rebirths) || 0))),
-            level: Math.max(1, Math.min(999999, Math.floor(Number(c.level) || 1))),
+            rebirths: parsedReb,
+            level: parsedLvl,
+            addBB: Math.trunc(Number(c.addBB) || 0),
+            addBT: Math.trunc(Number(c.addBT) || 0),
+            addMoney: Math.trunc(Number(c.addMoney) || 0),
             issuedAt: Number(c.issuedAt) || 0
-          };
+          }]);
         }
+      }
+      entries.sort((a, b) => (a[1].issuedAt || 0) - (b[1].issuedAt || 0));
+      for (const [k, v] of entries.slice(-80)) {
+        playerCommands[k] = v;
       }
     }
     return {
@@ -6911,6 +6925,10 @@ class IdleBreakoutGame {
     const saveCmdSet = hasReloadCtx ? new Set(reloadContext.saveCmdIds || []) : null;
     const saveTs = hasReloadCtx ? (Number(reloadContext.saveTs) || 0) : 0;
     let changed = false;
+    let statEdited = false;
+    let giftedBB = 0;
+    let giftedBT = 0;
+    let giftedMoney = 0;
 
     for (const cmd of cmdList) {
       if (!cmd || !cmd.cmdId) continue;
@@ -6933,24 +6951,51 @@ class IdleBreakoutGame {
       }
       try { localStorage.setItem('idle_breakout_applied_admin_cmds', JSON.stringify(this.appliedAdminCmdIds)); } catch (e) {}
 
-      const newReb = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
-      const newLvl = Math.max(1, Math.min(999999, Math.floor(Number(cmd.level) || 1)));
-      const lvlChanged = newLvl !== this.level;
-
-      this.rebirthCount = newReb;
-      this.rebirthMultiplier = this.getRebirthMultiplier();
-      this.level = newLvl;
+      if (cmd.rebirths !== null && cmd.rebirths !== undefined) {
+        this.rebirthCount = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
+        this.rebirthMultiplier = this.getRebirthMultiplier();
+        statEdited = true;
+        changed = true;
+      }
+      if (cmd.level !== null && cmd.level !== undefined) {
+        const newLvl = Math.max(1, Math.min(999999, Math.floor(Number(cmd.level) || 1)));
+        const lvlChanged = newLvl !== this.level;
+        this.level = newLvl;
+        if (lvlChanged && this.width && this.height) {
+          this.generateLevel(this.level);
+        }
+        statEdited = true;
+        changed = true;
+      }
       if (cmd.name) {
         this.setPlayerNameDirect(cmd.name);
+        statEdited = true;
+        changed = true;
       }
-      if (lvlChanged && this.width && this.height) {
-        this.generateLevel(this.level);
+
+      const addBB = Math.trunc(Number(cmd.addBB) || 0);
+      const addBT = Math.trunc(Number(cmd.addBT) || 0);
+      const addMoney = Math.trunc(Number(cmd.addMoney) || 0);
+      if (addBB !== 0) {
+        this.bb = Math.max(0, this.bb + addBB);
+        giftedBB += addBB;
+        changed = true;
       }
-      changed = true;
+      if (addBT !== 0) {
+        this.bossTokens = Math.max(0, this.bossTokens + addBT);
+        giftedBT += addBT;
+        changed = true;
+      }
+      if (addMoney !== 0) {
+        this.money = Math.max(0, this.money + addMoney);
+        giftedMoney += addMoney;
+        changed = true;
+      }
     }
 
     if (changed) {
       this.updateHUD();
+      this.refreshOpenModals();
       this.renderLeaderboard();
       this.save();
       this.broadcastMyStatus();
@@ -6960,7 +7005,13 @@ class IdleBreakoutGame {
           this.cloud.saveToCloud(true);
         }
       }
-      this.showToast(`🛠️ Fejlesztő frissítette az állapotod: Rebirth ${this.rebirthCount} | Szint ${this.level}!`, 4500);
+      if (window.soundEngine) window.soundEngine.playCoin();
+      const parts = [];
+      if (statEdited) parts.push(`Rebirth ${this.rebirthCount} | Szint ${this.level}`);
+      if (giftedBB !== 0) parts.push(`${giftedBB > 0 ? '+' : ''}${this.formatNumber(giftedBB)} ⭐ BB`);
+      if (giftedBT !== 0) parts.push(`${giftedBT > 0 ? '+' : ''}${this.formatNumber(giftedBT)} 👑 BT`);
+      if (giftedMoney !== 0) parts.push(`${giftedMoney > 0 ? '+' : '-'}$${this.formatNumber(Math.abs(giftedMoney))}`);
+      this.showToast(`🛠️ Fejlesztő frissítette az állapotod: ${parts.join(' • ')}!`, 5000);
     }
     return changed;
   }
@@ -7628,15 +7679,29 @@ class IdleBreakoutGame {
 
   devOpenEditDrawer(entry) {
     this.devEditTarget = entry;
+    this.devEditInitial = {
+      name: entry.name || 'Játékos',
+      rebirths: Number(entry.rebirths) || 0,
+      level: Number(entry.level) || 1
+    };
     const box = document.getElementById('dev-edit-box');
     const lbl = document.getElementById('dev-edit-target-label');
     const nIn = document.getElementById('dev-edit-name');
     const rIn = document.getElementById('dev-edit-reb');
     const lIn = document.getElementById('dev-edit-lvl');
+    const bbIn = document.getElementById('dev-edit-add-bb');
+    const btIn = document.getElementById('dev-edit-add-bt');
+    const moneyIn = document.getElementById('dev-edit-add-money');
+    const currRow = document.getElementById('dev-edit-currency-row');
+
     if (lbl) lbl.textContent = `${entry.name} (${entry.isPlayer ? 'TE' : (entry.isCustom ? 'Kézi' : 'Távoli')})`;
     if (nIn) nIn.value = entry.name || 'Játékos';
     if (rIn) rIn.value = entry.rebirths ?? 0;
     if (lIn) lIn.value = entry.level ?? 1;
+    if (bbIn) bbIn.value = '0';
+    if (btIn) btIn.value = '0';
+    if (moneyIn) moneyIn.value = '0';
+    if (currRow) currRow.style.display = entry.isCustom ? 'none' : 'flex';
     if (box) box.style.display = 'flex';
   }
 
@@ -7646,6 +7711,10 @@ class IdleBreakoutGame {
     const nIn = document.getElementById('dev-edit-name');
     const rIn = document.getElementById('dev-edit-reb');
     const lIn = document.getElementById('dev-edit-lvl');
+    const bbIn = document.getElementById('dev-edit-add-bb');
+    const btIn = document.getElementById('dev-edit-add-bt');
+    const moneyIn = document.getElementById('dev-edit-add-money');
+
     const rawName = (nIn ? nIn.value : entry.name).trim();
     if (rawName.length > 12) {
       this.showToast('⚠️ A név legfeljebb 12 karakter lehet!', 2400);
@@ -7654,6 +7723,19 @@ class IdleBreakoutGame {
     const newName = rawName.slice(0, 12) || String(entry.name || 'Játékos').slice(0, 12);
     const newReb = Math.max(0, Math.min(999999, Math.floor(parseInt(rIn ? rIn.value : entry.rebirths, 10) || 0)));
     const newLvl = Math.max(1, Math.min(999999, Math.floor(parseInt(lIn ? lIn.value : entry.level, 10) || 1)));
+    const addBB = Math.trunc(Number(bbIn ? bbIn.value : 0) || 0);
+    const addBT = Math.trunc(Number(btIn ? btIn.value : 0) || 0);
+    const addMoney = Math.trunc(Number(moneyIn ? moneyIn.value : 0) || 0);
+
+    const init = this.devEditInitial || {
+      name: entry.name || 'Játékos',
+      rebirths: Number(entry.rebirths) || 0,
+      level: Number(entry.level) || 1
+    };
+    const nameChanged = newName !== init.name;
+    const rebChanged = newReb !== init.rebirths;
+    const lvlChanged = newLvl !== init.level;
+    const hasCurrencyGift = addBB !== 0 || addBT !== 0 || addMoney !== 0;
 
     // Régi statikus felülírások törlése, hogy a játékos ne ragadjon be fix számra:
     if (this.lbAdminRules && this.lbAdminRules.overrides) {
@@ -7670,17 +7752,32 @@ class IdleBreakoutGame {
     }
 
     if (entry.isPlayer) {
-      const lvlChanged = newLvl !== this.level;
+      const levelDiffers = newLvl !== this.level;
       this.rebirthCount = newReb;
       this.rebirthMultiplier = this.getRebirthMultiplier();
       this.level = newLvl;
       this.setPlayerNameDirect(newName);
-      if (lvlChanged) this.generateLevel(this.level);
+      if (levelDiffers) this.generateLevel(this.level);
+      if (addBB !== 0) this.bb = Math.max(0, this.bb + addBB);
+      if (addBT !== 0) this.bossTokens = Math.max(0, this.bossTokens + addBT);
+      if (addMoney !== 0) this.money = Math.max(0, this.money + addMoney);
       this.updateHUD();
+      this.refreshOpenModals();
       this.save();
       this.broadcastMyStatus();
-      if (this.cloud && this.cloud.currentUser) {
-        await this.cloud.saveToCloud(true);
+      if (this.cloud) {
+        await this.cloud.syncLeaderboardToCloud(true);
+        if (this.cloud.currentUser) {
+          await this.cloud.saveToCloud(true);
+        }
+      }
+      if (hasCurrencyGift) {
+        if (window.soundEngine) window.soundEngine.playCoin();
+        const giftParts = [];
+        if (addBB !== 0) giftParts.push(`${addBB > 0 ? '+' : ''}${this.formatNumber(addBB)} ⭐ BB`);
+        if (addBT !== 0) giftParts.push(`${addBT > 0 ? '+' : ''}${this.formatNumber(addBT)} 👑 BT`);
+        if (addMoney !== 0) giftParts.push(`${addMoney > 0 ? '+' : '-'}$${this.formatNumber(Math.abs(addMoney))}`);
+        this.showToast(`🎁 Saját jóváírás: ${giftParts.join(' • ')}!`, 3500);
       }
     } else if (entry.isCustom) {
       const cp = this.lbAdminRules.customPlayers.find(c => c.id === entry.id);
@@ -7689,51 +7786,74 @@ class IdleBreakoutGame {
         cp.rebirths = newReb;
         cp.level = newLvl;
       }
-    } else {
+    } else if (nameChanged || rebChanged || lvlChanged || hasCurrencyGift) {
       const now = Date.now();
       const matchIds = this.getEntryMatchIds(entry);
       const origLower = (entry._origName || entry.name || '').trim().toLowerCase();
-      const cmdKey = entry.uid || entry.docId || entry.id || `name:${origLower}`;
       if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
         this.lbAdminRules.playerCommands = {};
       }
-      this.lbAdminRules.playerCommands[cmdKey] = {
-        cmdId: 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+      const cmdId = 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      this.lbAdminRules.playerCommands[cmdId] = {
+        cmdId,
         targetIds: matchIds,
         targetNameLower: origLower,
-        name: newName,
-        rebirths: newReb,
-        level: newLvl,
+        name: nameChanged ? newName : '',
+        rebirths: rebChanged ? newReb : null,
+        level: lvlChanged ? newLvl : null,
+        addBB,
+        addBT,
+        addMoney,
         issuedAt: now
       };
 
-      if (this.remotePlayers) {
-        for (const pid of Object.keys(this.remotePlayers)) {
-          const rp = this.remotePlayers[pid];
-          if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
-            rp.name = newName;
-            rp.rebirths = newReb;
-            rp.level = newLvl;
-            rp.ts = now;
-          }
-        }
-        try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+      const cmdKeys = Object.keys(this.lbAdminRules.playerCommands);
+      if (cmdKeys.length > 80) {
+        cmdKeys
+          .sort((a, b) => (this.lbAdminRules.playerCommands[a].issuedAt || 0) - (this.lbAdminRules.playerCommands[b].issuedAt || 0))
+          .slice(0, cmdKeys.length - 80)
+          .forEach(k => delete this.lbAdminRules.playerCommands[k]);
       }
 
-      if (this.cloud && (entry.docId || entry.uid)) {
-        await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
-          name: newName,
-          rebirths: newReb,
-          level: newLvl,
-          ts: now
-        });
+      if (nameChanged || rebChanged || lvlChanged) {
+        if (this.remotePlayers) {
+          for (const pid of Object.keys(this.remotePlayers)) {
+            const rp = this.remotePlayers[pid];
+            if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
+              rp.name = newName;
+              rp.rebirths = newReb;
+              rp.level = newLvl;
+              rp.ts = now;
+              rp.adminUpdatedAt = now;
+            }
+          }
+          try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+        }
+
+        if (this.cloud && (entry.docId || entry.uid)) {
+          await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
+            name: newName,
+            rebirths: newReb,
+            level: newLvl,
+            ts: now
+          });
+        }
+      }
+
+      if (hasCurrencyGift) {
+        const giftParts = [];
+        if (addBB !== 0) giftParts.push(`${addBB > 0 ? '+' : ''}${this.formatNumber(addBB)} ⭐ BB`);
+        if (addBT !== 0) giftParts.push(`${addBT > 0 ? '+' : ''}${this.formatNumber(addBT)} 👑 BT`);
+        if (addMoney !== 0) giftParts.push(`${addMoney > 0 ? '+' : '-'}$${this.formatNumber(Math.abs(addMoney))}`);
+        this.showToast(`🎁 Kiküldve ${this.escapeHtml(entry.name)} számára: ${giftParts.join(' • ')}!`, 3800);
       }
     }
 
     this.devEditTarget = null;
+    this.devEditInitial = null;
     const box = document.getElementById('dev-edit-box');
     if (box) box.style.display = 'none';
-    await this.syncAdminRulesGlobally(true);
+    await this.syncAdminRulesGlobally(!hasCurrencyGift);
   }
 
   async devBanOrUnbanEntry(entry) {
