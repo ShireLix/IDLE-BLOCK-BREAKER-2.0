@@ -955,9 +955,9 @@ header.top-bar {
   flex-wrap: wrap;
 }
 
-/* Ball Buy Buttons (9 Distinct Ball Types) */
+/* Ball Buy Buttons (10 Distinct Ball Types) */
 .ball-buy-slot {
-  width: 43px;
+  width: 40px;
   height: 55px;
   background: var(--bg-retro);
   border: 2px solid var(--border-color);
@@ -1041,6 +1041,17 @@ header.top-bar {
 .ball-slot-symbiot {
   border-color: #6b21a8;
   background: linear-gradient(180deg, #faf5ff 0%, var(--bg-retro) 100%);
+}
+
+.ball-icon-coin {
+  background: radial-gradient(circle at 35% 35%, #fef9c3, #facc15 55%, #b45309 100%);
+  border: 2px solid #78350f;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.9);
+}
+
+.ball-slot-coin {
+  border-color: #b45309;
+  background: linear-gradient(180deg, #fefce8 0%, var(--bg-retro) 100%);
 }
 
 .ball-slot-tag {
@@ -1896,6 +1907,10 @@ header.top-bar {
   background: #fb923c;
 }
 
+.stat-col-preview.coin-preview {
+  background: rgba(250, 204, 21, 0.45);
+}
+
 .stat-col-fill {
   position: relative;
   z-index: 1;
@@ -1910,6 +1925,10 @@ header.top-bar {
 
 .stat-col-fill.power-fill {
   background: linear-gradient(180deg, #fb923c 0%, #dc2626 100%);
+}
+
+.stat-col-fill.coin-fill {
+  background: linear-gradient(180deg, #facc15 0%, #eab308 100%);
 }
 
 .stat-col-label {
@@ -2801,7 +2820,7 @@ header.top-bar {
 
   .top-left-section {
     display: grid;
-    grid-template-columns: repeat(9, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
     width: 100%;
   }
@@ -3048,7 +3067,7 @@ header.top-bar {
   }
 
   .ball-buy-slot {
-    width: 43px;
+    width: 39px;
     height: 44px;
     padding-top: 2px;
   }

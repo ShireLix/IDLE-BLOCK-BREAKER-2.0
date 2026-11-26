@@ -259,6 +259,17 @@ const BT_ABILITY_CATALOG = [
     levels: [
       'Beméri a labdához legközelebbi blokkot, és 3 mp-enként önirányító rakétát lő rá!'
     ]
+  },
+  {
+    key: 'coin',
+    icon: '🪙',
+    name: 'Coin Ball – Token Bányász',
+    baseDesc: 'Alap: mindig fix 1 sebzés + fejleszthető pénzbónusz ($1–$55/ütközés).',
+    costs: [10, 30],
+    levels: [
+      'Minden 888. blokk-ütközés után +1 👑 BT és minden 2 500. ütközés után +1 ⭐ BB jár!',
+      'Nagyobb esély / gyorsabb bányászat: minden 666. ütközés után +1 👑 BT és minden 1 850. ütközés után +1 ⭐ BB jár!'
+    ]
   }
 ];
 
@@ -362,8 +373,8 @@ function sha256HexFallback(ascii) {
 }
 
 // 30 Stages Seasonal Breaker Pass Catalog
-// Free Track: Milestone levels offer rich rewards, intermediate levels (2-4, 6-9, etc.) are empty on FREE only!
-// Free Track: Exactly 5 Skins, 3 Effects, 1 RARE Cosmic Effect.
+// Free Track: Every stage grants either an exclusive Cosmetic or a ⭐ BB + 👑 BT reward bundle!
+// Free Track: Skins, Effects, Breaking Effects + BB & BT bundles on every intermediate stage.
 // Paid Track: Exclusive Prémium reward on EVERY single stage (1-30) - cannot be activated or claimed.
 const BATTLE_PASS_STAGES = [
   {
@@ -375,49 +386,49 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 2,
     bricks: 5000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 3, name: '+2 ⭐ BB & +3 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_obsidian', name: 'Obszidián Éj Skin', color: '#27272a', desc: 'Sötét vulkáni obszidián páncélzat' }
   },
   {
     stage: 3,
     bricks: 12000,
-    free: null,
+    free: { type: 'effect', id: 'fx_saturn', name: '🪐 Szaturnusz Gyűrű Effekt', desc: 'Döntött arany-kozmikus bolygógyűrű és keringő hold a labda körül!' },
     paid: { type: 'currency', currency: 'money', amount: 1500, name: '$1,500 Pénzbónusz', desc: 'Azonnali prémium tőkeinjekció' }
   },
   {
     stage: 4,
     bricks: 25000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 4, name: '+2 ⭐ BB & +4 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_matrix', name: 'Mátrix Kód Skin', color: '#22c55e', desc: 'Zöld digitális neon mátrixfény' }
   },
   {
     stage: 5,
     bricks: 45000,
-    free: { type: 'skin', id: 'skin_violet', name: 'Neon Ibolya Skin', color: '#8b5cf6', desc: 'Elektromos ibolya villámkorona' },
+    free: { type: 'break_effect', id: 'brk_explode', name: '💥 Blokk Robbanás Breaking Effekt', desc: 'A kiválasztott labdád által tört blokkok látványos tűzgömbbel és lökéshullámmal felrobbannak!' },
     paid: { type: 'skin', id: 'skin_p_solar', name: 'Napvihar Narancs Skin', color: '#f97316', desc: 'Tüzes napkitörés plazmaív' }
   },
   {
     stage: 6,
     bricks: 70000,
-    free: null,
+    free: { type: 'skin', id: 'skin_violet', name: 'Neon Ibolya Skin', color: '#8b5cf6', desc: 'Elektromos ibolya villámkorona' },
     paid: { type: 'currency', currency: 'bb', amount: 5, name: '+5 Black Brick (BB)', desc: 'Ritka prestige valuta csomag' }
   },
   {
     stage: 7,
     bricks: 105000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 3, bt: 5, name: '+3 ⭐ BB & +5 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'effect', id: 'fx_p_golddust', name: 'Aranypor Uszály Effekt', desc: 'Fényes keringő aranyporszemek' }
   },
   {
     stage: 8,
     bricks: 150000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 6, name: '+4 ⭐ BB & +6 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'money', amount: 25000, name: '$25,000 Pénzbónusz', desc: 'Haladó fejlesztési alap' }
   },
   {
     stage: 9,
     bricks: 210000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 7, name: '+4 ⭐ BB & +7 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_quantum', name: 'Kvantum Cián Skin', color: '#06b6d4', desc: 'Kibernetikus kvantumrezgés aura' }
   },
   {
@@ -429,19 +440,19 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 11,
     bricks: 390000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 5, bt: 8, name: '+5 ⭐ BB & +8 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bt', amount: 2, name: '+2 Boss Token (BT)', desc: 'Prémium szintlépő tokenek' }
   },
   {
     stage: 12,
     bricks: 510000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 6, bt: 9, name: '+6 ⭐ BB & +9 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_chrome', name: 'Króm Acél Skin', color: '#94a3b8', desc: 'Tükörfényes folyékony fémburkolat' }
   },
   {
     stage: 13,
     bricks: 650000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 6, bt: 10, name: '+6 ⭐ BB & +10 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bb', amount: 15, name: '+15 Black Brick (BB)', desc: 'Erőteljes BB erősítő csomag' }
   },
   {
@@ -453,19 +464,19 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 15,
     bricks: 1020000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 12, name: '+8 ⭐ BB & +12 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'money', amount: 250000, name: '$250,000 Pénzbónusz', desc: 'Nagy tétű aranytartalék' }
   },
   {
     stage: 16,
     bricks: 1250000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 14, name: '+8 ⭐ BB & +14 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'effect', id: 'fx_p_violetlightning', name: 'Ibolya Villám Effekt', desc: 'Pulzáló lila villámcsapás ív' }
   },
   {
     stage: 17,
     bricks: 1510000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 10, bt: 15, name: '+10 ⭐ BB & +15 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bt', amount: 4, name: '+4 Boss Token (BT)', desc: 'Különleges boss token jutalom' }
   },
   {
@@ -477,19 +488,19 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 19,
     bricks: 2130000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 10, bt: 16, name: '+10 ⭐ BB & +16 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bb', amount: 30, name: '+30 Black Brick (BB)', desc: 'Elit Black Brick támogatás' }
   },
   {
     stage: 20,
     bricks: 2490000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 12, bt: 18, name: '+12 ⭐ BB & +18 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_godlight', name: 'Mennyei Fény Skin', color: '#fef08a', desc: 'Ragyogó arany-fehér szakrális aura' }
   },
   {
     stage: 21,
     bricks: 2890000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 12, bt: 20, name: '+12 ⭐ BB & +20 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'money', amount: 2500000, name: '$2.5M Pénzbónusz', desc: 'Prémium milliomos csomag' }
   },
   {
@@ -501,13 +512,13 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 23,
     bricks: 3810000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 14, bt: 22, name: '+14 ⭐ BB & +22 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bt', amount: 6, name: '+6 Boss Token (BT)', desc: 'Mesterfokú Boss Token láda' }
   },
   {
     stage: 24,
     bricks: 4330000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 15, bt: 24, name: '+15 ⭐ BB & +24 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bb', amount: 60, name: '+60 Black Brick (BB)', desc: 'Kiemelt prestige BB láda' }
   },
   {
@@ -519,13 +530,13 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 26,
     bricks: 5520000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 16, bt: 25, name: '+16 ⭐ BB & +25 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'money', amount: 15000000, name: '$15M Pénzbónusz', desc: 'Titáni vagyon injekció' }
   },
   {
     stage: 27,
     bricks: 6190000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 18, bt: 28, name: '+18 ⭐ BB & +28 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bt', amount: 10, name: '+10 Boss Token (BT)', desc: 'Legendás Boss Token készlet' }
   },
   {
@@ -537,7 +548,7 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 29,
     bricks: 7690000,
-    free: null,
+    free: { type: 'currency', currency: 'bb_bt', bb: 20, bt: 30, name: '+20 ⭐ BB & +30 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'currency', currency: 'bb', amount: 120, name: '+120 Black Brick (BB)', desc: 'Végső hajrá prémium BB tartalék' }
   },
   {
@@ -567,6 +578,7 @@ class IdleBreakoutGame {
     this.MAX_GHOST_BALLS = 10;
     this.MAX_ROCKET_BALLS = 5;
     this.MAX_SYMBIOT_BALLS = 1;
+    this.MAX_COIN_BALLS = 20;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
     this.clickPower = 1;
@@ -590,8 +602,11 @@ class IdleBreakoutGame {
       poison: 0,   // 0..3 (3, 10, 50 BT)
       ghost: 0,    // 0..3 (3, 20, 50 BT)
       multiply: 0, // 0..3 (3, 20, 50 BT)
-      rocket: 0    // 0..1 (10 BT)
+      rocket: 0,   // 0..1 (10 BT)
+      coin: 0      // 0..2 (10, 30 BT)
     };
+    this.coinBtHitCounter = 0;
+    this.coinBbHitCounter = 0;
 
     // Pierce Ball separate $ speed upgrade (unlocked at bbUpgrades.piercing >= 5)
     this.pierceSpeedUpgradeLevel = 0;
@@ -663,6 +678,7 @@ class IdleBreakoutGame {
         baseCost: 25,
         costMult: 1.15,
         speedFactor: 0.72,
+        displaySpeedStepPct: 5,
         basePower: 1.0,
         powerStep: 1.0,
         speedLevel: 1,
@@ -682,6 +698,7 @@ class IdleBreakoutGame {
         baseCost: 150,
         costMult: 1.18,
         speedFactor: 2.0,
+        displaySpeedStepPct: 8,
         basePower: 0.5,
         powerStep: 0.5,
         speedLevel: 1,
@@ -701,6 +718,7 @@ class IdleBreakoutGame {
         baseCost: 750,
         costMult: 1.20,
         speedFactor: 0.5,
+        displaySpeedStepPct: 3,
         basePower: 20.0,
         powerStep: 10.0,
         speedLevel: 1,
@@ -720,6 +738,7 @@ class IdleBreakoutGame {
         baseCost: 2500,
         costMult: 1.22,
         speedFactor: 0.9,
+        displaySpeedStepPct: 4,
         basePower: 4.0,
         powerStep: 2.5,
         speedLevel: 1,
@@ -739,6 +758,7 @@ class IdleBreakoutGame {
         baseCost: 8000,
         costMult: 1.24,
         speedFactor: 1.5,
+        displaySpeedStepPct: 7,
         basePower: 1.0,
         powerStep: 1.0,
         speedLevel: 1,
@@ -749,6 +769,26 @@ class IdleBreakoutGame {
         powerBaseCost: 7500,
         radius: 7.5
       },
+      coin: {
+        id: 'coin',
+        name: 'COIN BALL',
+        shortDesc: 'Fix 1 sebzés • $1–$55 pénz/ütközés • max 20 db',
+        color: '#facc15',
+        count: 0,
+        baseCost: 20000,
+        costMult: 1.24,
+        speedFactor: 1.7,
+        displaySpeedStepPct: 6,
+        basePower: 1.0,
+        powerStep: 1.0,
+        speedLevel: 1,
+        maxSpeedLevel: 25,
+        speedBaseCost: 2000,
+        powerLevel: 1,
+        maxPowerLevel: 55,
+        powerBaseCost: 250,
+        radius: 8.0
+      },
       rocket: {
         id: 'rocket',
         name: 'ROCKET BALL',
@@ -758,6 +798,7 @@ class IdleBreakoutGame {
         baseCost: 45000,
         costMult: 1.28,
         speedFactor: 1.0,
+        displaySpeedStepPct: 5,
         basePower: 10.0,
         powerStep: 5.0,
         speedLevel: 1,
@@ -777,6 +818,7 @@ class IdleBreakoutGame {
         baseCost: 180000,
         costMult: 1.28,
         speedFactor: 1.0,
+        displaySpeedStepPct: 6,
         basePower: 4.0,
         powerStep: 3.0,
         speedLevel: 1,
@@ -796,6 +838,7 @@ class IdleBreakoutGame {
         baseCost: 650000,
         costMult: 1.30,
         speedFactor: 1.0,
+        displaySpeedStepPct: 4,
         basePower: 12.0,
         powerStep: 6.0,
         speedLevel: 1,
@@ -815,6 +858,7 @@ class IdleBreakoutGame {
         baseCost: 250000000,
         costMult: 1.50,
         speedFactor: 2.0,
+        displaySpeedStepPct: 9,
         basePower: 50.0,
         powerStep: 25.0,
         speedLevel: 1,
@@ -1278,6 +1322,73 @@ class IdleBreakoutGame {
     }
   }
 
+  isPrimaryCosmeticBall(ball) {
+    if (!ball || ball.isPiercing || ball.isSplitChild) return false;
+    for (const candidate of this.balls) {
+      if (!candidate.isPiercing && !candidate.isSplitChild && candidate.type === ball.type) {
+        return candidate === ball;
+      }
+    }
+    return false;
+  }
+
+  // --- Breaking Effect: Blokk Robbanás Animáció (Stage 5) ---
+  spawnBreakingExplosion(cx, cy, color, isBoss = false) {
+    if (this.suppressAudioAndVisuals || document.hidden) return;
+    this.visualRings.push(
+      { x: cx, y: cy, radius: 4, maxRadius: isBoss ? 56 : 36, alpha: 0.98, color: '254, 240, 138', speed: 230 },
+      { x: cx, y: cy, radius: 8, maxRadius: isBoss ? 84 : 58, alpha: 0.92, color: '249, 115, 22', speed: 270 },
+      { x: cx, y: cy, radius: 10, maxRadius: isBoss ? 105 : 74, alpha: 0.72, color: '239, 68, 68', speed: 320 }
+    );
+
+    const chunkCount = isBoss ? 14 : 10;
+    for (let i = 0; i < chunkCount; i++) {
+      if (this.debrisParticles.length >= 220) this.debrisParticles.shift();
+      const angle = (Math.PI * 2 * (i / chunkCount)) + (Math.random() - 0.5) * 0.55;
+      const speed = 110 + Math.random() * (isBoss ? 170 : 140);
+      const size = 4 + Math.random() * 3;
+      const life = 0.35 + Math.random() * 0.25;
+      this.debrisParticles.push({
+        x: cx + (Math.random() - 0.5) * 8,
+        y: cy + (Math.random() - 0.5) * 6,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 35,
+        gravity: 260,
+        size,
+        color: color || '#f97316',
+        shape: 'square',
+        rot: Math.random() * Math.PI * 2,
+        vrot: (Math.random() - 0.5) * 16,
+        life,
+        maxLife: life
+      });
+    }
+
+    const emberColors = ['#fef08a', '#fb923c', '#ef4444'];
+    const emberCount = isBoss ? 14 : 10;
+    for (let i = 0; i < emberCount; i++) {
+      if (this.debrisParticles.length >= 220) this.debrisParticles.shift();
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 80 + Math.random() * (isBoss ? 160 : 130);
+      const size = 3 + Math.random() * 3.5;
+      const life = 0.30 + Math.random() * 0.22;
+      this.debrisParticles.push({
+        x: cx + (Math.random() - 0.5) * 10,
+        y: cy + (Math.random() - 0.5) * 8,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 15,
+        gravity: 90,
+        size,
+        color: emberColors[i % emberColors.length],
+        shape: 'circle',
+        rot: 0,
+        vrot: 0,
+        life,
+        maxLife: life
+      });
+    }
+  }
+
   // --- Brick Damage & Money Reward ---
   damageBrick(brick, dmg, source = 'click', options = {}) {
     if (!brick || brick.hp <= 0) return;
@@ -1286,7 +1397,9 @@ class IdleBreakoutGame {
       : (brick.isGoldBrick ? '#fde047' : (brick.color || this.getBlockColor(brick.hp, false)));
 
     let actualDmg = dmg;
-    if (source === 'piercing_special') {
+    if (source === 'coin') {
+      actualDmg = 1; // A Coin Ball minden esetben pontosan 1-et sebez
+    } else if (source === 'piercing_special') {
       if (brick.isBoss) {
         actualDmg = Math.max(15, Math.round(brick.maxHp * 0.03)); // 3% HP per hit on boss
       } else {
@@ -1297,7 +1410,7 @@ class IdleBreakoutGame {
     }
 
     // Apply 2x Damage & All Ball Speed lvl 2/3/5 damage multiplier
-    if (source !== 'piercing_special' && !options.instantKill) {
+    if (source !== 'coin' && source !== 'piercing_special' && !options.instantKill) {
       actualDmg *= this.getDamageMultiplier();
     } else if (brick.isBoss && source === 'piercing_special') {
       actualDmg *= this.getDamageMultiplier();
@@ -1350,10 +1463,21 @@ class IdleBreakoutGame {
     if (brick.hp <= 0) {
       this.totalBricksDestroyed++;
       this.updateBattlePassHUD();
-      if (!silent && window.soundEngine) window.soundEngine.playBrickDestroy(brick.isBoss ? 5 : 1);
 
-      // A blokk azonnali / közvetlen ütés előtti HP-színének megfelelő robbanási részecskék
-      this.spawnBrickDestructionDebris(brick.x + brick.w / 2, brick.y + brick.h / 2, preHitColor, brick.isBoss);
+      const hasExplodeBreakFx = !!(
+        options.ball &&
+        this.isPrimaryCosmeticBall(options.ball) &&
+        this.ballTypeEquips?.[options.ball.type]?.breakEffectId === 'brk_explode'
+      );
+
+      if (hasExplodeBreakFx) {
+        if (!silent && window.soundEngine) window.soundEngine.playExplosion();
+        this.spawnBreakingExplosion(brick.x + brick.w / 2, brick.y + brick.h / 2, preHitColor, brick.isBoss);
+      } else {
+        if (!silent && window.soundEngine) window.soundEngine.playBrickDestroy(brick.isBoss ? 5 : 1);
+        // A blokk azonnali / közvetlen ütés előtti HP-színének megfelelő robbanási részecskék
+        this.spawnBrickDestructionDebris(brick.x + brick.w / 2, brick.y + brick.h / 2, preHitColor, brick.isBoss);
+      }
 
       if (brick.isBoss) {
         let bossBonus = this.getBossKillBonus(this.level) * this.rebirthMultiplier;
@@ -2459,6 +2583,9 @@ class IdleBreakoutGame {
     if (typeKey === 'symbiot') {
       return this.MAX_SYMBIOT_BALLS;
     }
+    if (typeKey === 'coin') {
+      return this.MAX_COIN_BALLS;
+    }
     return null;
   }
 
@@ -2466,17 +2593,33 @@ class IdleBreakoutGame {
   getBallSpeed(typeKey) {
     const b = this.ballTypes[typeKey];
     const base = this.BASE_SPEED * b.speedFactor;
+    if (typeKey === 'coin') {
+      return base + (b.speedLevel - 1) * 0.32;
+    }
     return base + (b.speedLevel - 1) * (0.35 * Math.max(0.6, b.speedFactor));
   }
 
   getBallSpeedStep(typeKey) {
     const b = this.ballTypes[typeKey];
+    if (typeKey === 'coin') return 0.32;
     return 0.35 * Math.max(0.6, b.speedFactor);
   }
 
   getBallPower(typeKey) {
+    if (typeKey === 'coin') return 1;
     const b = this.ballTypes[typeKey];
     return b.basePower + (b.powerLevel - 1) * b.powerStep;
+  }
+
+  getCoinBallRewardPerHit() {
+    return Math.min(55, Math.max(1, this.ballTypes.coin?.powerLevel || 1));
+  }
+
+  getCoinBallTokenThresholds() {
+    const lvl = this.btUpgrades.coin || 0;
+    if (lvl >= 2) return { btHits: 666, bbHits: 1850 };
+    if (lvl >= 1) return { btHits: 888, bbHits: 2500 };
+    return null;
   }
 
   getBallCost(typeKey) {
@@ -2653,7 +2796,8 @@ class IdleBreakoutGame {
 
   getPowerUpgradeCost(typeKey) {
     const b = this.ballTypes[typeKey];
-    const raw = Math.round(b.powerBaseCost * Math.pow(1.25, b.powerLevel - 1));
+    const mult = (typeKey === 'coin') ? 1.18 : 1.25;
+    const raw = Math.round(b.powerBaseCost * Math.pow(mult, b.powerLevel - 1));
     return this.applyDiscount(raw);
   }
 
@@ -3218,6 +3362,8 @@ class IdleBreakoutGame {
       this.suppressAudioAndVisuals = false;
     } else {
       let totalDps = 0;
+      let offlineCoinBonus = 0;
+      let offlineCoinHits = 0;
       for (const key in this.ballTypes) {
         const b = this.ballTypes[key];
         if (b.count <= 0) continue;
@@ -3227,11 +3373,33 @@ class IdleBreakoutGame {
         if (key === 'ghost') hitRate = speed * 0.85;
         if (key === 'multiply') hitRate = speed * 0.65;
         if (key === 'symbiot') hitRate = speed * 2.2;
+        if (key === 'coin') {
+          hitRate = speed * 0.45;
+          const hits = b.count * hitRate * cappedSec;
+          offlineCoinHits += Math.floor(hits);
+          offlineCoinBonus += hits * this.getCoinBallRewardPerHit() * this.rebirthMultiplier;
+        }
         totalDps += b.count * power * hitRate;
       }
 
+      if (offlineCoinHits > 0) {
+        const coinThresholds = this.getCoinBallTokenThresholds();
+        if (coinThresholds) {
+          this.coinBtHitCounter = (this.coinBtHitCounter || 0) + offlineCoinHits;
+          this.coinBbHitCounter = (this.coinBbHitCounter || 0) + offlineCoinHits;
+          while (this.coinBtHitCounter >= coinThresholds.btHits) {
+            this.coinBtHitCounter -= coinThresholds.btHits;
+            this.bossTokens += 1;
+          }
+          while (this.coinBbHitCounter >= coinThresholds.bbHits) {
+            this.coinBbHitCounter -= coinThresholds.bbHits;
+            this.bb += 1;
+          }
+        }
+      }
+
       let remainingDamage = totalDps * cappedSec;
-      let earned = 0;
+      let earned = offlineCoinBonus;
 
       while (remainingDamage > 0) {
         const isBoss = this.isBossLevel(this.level);
@@ -3579,6 +3747,46 @@ class IdleBreakoutGame {
       } else if (!ball.hasSplit && ball.splitTier < maxTier) {
         ball.hasSplit = true;
         this.spawnMultiplyChildren(ball);
+      }
+    } else if (ball.type === 'coin') {
+      // COIN BALL: mindig pontosan 1 sebzés + pénz ütközésenként + maxolás után BT/BB bányászat!
+      this.damageBrick(brick, 1, 'coin', { ball });
+      let coinBonus = this.getCoinBallRewardPerHit() * this.rebirthMultiplier;
+      if (this.isPowerUpActive('2x_money')) {
+        coinBonus *= 2;
+      }
+      this.money += coinBonus;
+
+      const silent = this.suppressAudioAndVisuals || document.hidden;
+      const fxX = brick.x + brick.w / 2;
+      const fxY = brick.y + brick.h / 2 - 14;
+      if (!silent) {
+        this.addFloatingText(`+🪙$${this.formatNumber(Math.max(1, Math.round(coinBonus)))}`, fxX, fxY, '#facc15');
+      }
+
+      const thresholds = this.getCoinBallTokenThresholds();
+      if (thresholds) {
+        this.coinBtHitCounter = (this.coinBtHitCounter || 0) + 1;
+        this.coinBbHitCounter = (this.coinBbHitCounter || 0) + 1;
+        while (this.coinBtHitCounter >= thresholds.btHits) {
+          this.coinBtHitCounter -= thresholds.btHits;
+          this.bossTokens += 1;
+          if (!silent) {
+            this.addFloatingText('+1 👑 BT (COIN)!', fxX, fxY - 14, '#fbbf24');
+            if (window.soundEngine) window.soundEngine.playCoin();
+          }
+        }
+        while (this.coinBbHitCounter >= thresholds.bbHits) {
+          this.coinBbHitCounter -= thresholds.bbHits;
+          this.bb += 1;
+          if (!silent) {
+            this.addFloatingText('+1 ⭐ BB (COIN)!', fxX, fxY - 28, '#fde047');
+            if (window.soundEngine) window.soundEngine.playLevelUp();
+          }
+        }
+      }
+      if (!this.suppressAudioAndVisuals) {
+        this.updateHUD();
       }
     } else {
       this.damageBrick(brick, ball.power, ball.type, { ball });
@@ -3931,18 +4139,28 @@ class IdleBreakoutGame {
       this.ctx.restore();
     }
 
-    // 3.55 Brick Destruction Debris (A labda skinjének színével megegyező robbanási animáció)
+    // 3.55 Brick Destruction Debris (A labda skinjének színével megegyező robbanási animáció + Breaking Effekt)
     for (const p of this.debrisParticles) {
       this.ctx.save();
       const alpha = Math.max(0, p.life / p.maxLife);
       this.ctx.globalAlpha = alpha;
       this.ctx.translate(p.x, p.y);
-      this.ctx.rotate(p.rot);
-      this.ctx.fillStyle = p.color;
-      this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-      this.ctx.strokeStyle = '#000000';
-      this.ctx.lineWidth = 1;
-      this.ctx.strokeRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      if (p.shape === 'circle') {
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+        this.ctx.fillStyle = p.color;
+        this.ctx.fill();
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        this.ctx.lineWidth = 0.8;
+        this.ctx.stroke();
+      } else {
+        this.ctx.rotate(p.rot);
+        this.ctx.fillStyle = p.color;
+        this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      }
       this.ctx.restore();
     }
 
@@ -4006,13 +4224,22 @@ class IdleBreakoutGame {
       if (!ball.isSplitChild && !cosmeticAppliedForType[ball.type]) {
         cosmeticAppliedForType[ball.type] = true;
         const eq = this.ballTypeEquips && this.ballTypeEquips[ball.type];
-        if (eq && ((eq.skinId && eq.skinId !== 'default') || (eq.effectId && eq.effectId !== 'none'))) {
+        if (eq && ((eq.skinId && eq.skinId !== 'default') || (eq.effectId && eq.effectId !== 'none') || (eq.breakEffectId && eq.breakEffectId !== 'none'))) {
           activeEquip = eq;
         }
       }
 
       if (activeEquip && activeEquip.effectId && activeEquip.effectId !== 'none') {
         this.drawCosmeticEffectLayer(this.ctx, ball, activeEquip.effectId);
+      }
+      if (activeEquip && activeEquip.breakEffectId === 'brk_explode') {
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius + 3.5 + Math.sin(this.animTime * 11) * 1.2, 0, Math.PI * 2);
+        this.ctx.strokeStyle = 'rgba(249, 115, 22, 0.72)';
+        this.ctx.lineWidth = 1.8;
+        this.ctx.stroke();
+        this.ctx.restore();
       }
 
       if (activeEquip && activeEquip.skinId && activeEquip.skinId !== 'default') {
@@ -4149,6 +4376,26 @@ class IdleBreakoutGame {
         this.ctx.arc(ball.x, ball.y, ball.radius * 0.42, 0, Math.PI * 2);
         this.ctx.fillStyle = '#fef08a';
         this.ctx.fill();
+      } else if (ball.type === 'coin') {
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#facc15';
+        this.ctx.fill();
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = '#78350f';
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius * 0.72, 0, Math.PI * 2);
+        this.ctx.strokeStyle = '#ca8a04';
+        this.ctx.lineWidth = 1.4;
+        this.ctx.stroke();
+
+        this.ctx.font = `bold ${Math.max(9, Math.round(ball.radius * 1.25))}px "Courier New", monospace`;
+        this.ctx.fillStyle = '#451a03';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('$', ball.x, ball.y + 0.5);
       } else {
         this.ctx.beginPath();
         this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
@@ -4157,6 +4404,9 @@ class IdleBreakoutGame {
         this.ctx.lineWidth = 2;
         this.ctx.strokeStyle = '#000000';
         this.ctx.stroke();
+      }
+      if (activeEquip && ((activeEquip.effectId && activeEquip.effectId !== 'none') || (activeEquip.breakEffectId && activeEquip.breakEffectId !== 'none'))) {
+        this.drawCosmeticEffectFrontLayer(this.ctx, ball, activeEquip.effectId, activeEquip.breakEffectId);
       }
       this.ctx.restore();
     }
@@ -4367,15 +4617,20 @@ class IdleBreakoutGame {
 
       const spdMaxed = b.speedLevel >= b.maxSpeedLevel;
       const pwrMaxed = b.powerLevel >= b.maxPowerLevel;
+      const isCoinBall = (key === 'coin');
 
       const curSpd = this.getBallSpeed(key);
       const spdStep = this.getBallSpeedStep(key);
-      const displaySpdPct = Math.round(b.speedFactor * 100) + (b.speedLevel - 1) * 5;
+      const displaySpdStep = b.displaySpeedStepPct || 5;
+      const displaySpdPct = Math.round(b.speedFactor * 100) + (b.speedLevel - 1) * displaySpdStep;
       const spdPct = calcBarPct(b.speedLevel, b.maxSpeedLevel);
       const spdNextPct = spdMaxed ? spdPct : Math.max(spdPct + 4, Math.min(100, calcBarPct(b.speedLevel + 1, b.maxSpeedLevel)));
 
-      const curPwr = this.getBallPower(key);
-      const pwrStep = b.powerStep;
+      const curPwr = isCoinBall ? this.getCoinBallRewardPerHit() : this.getBallPower(key);
+      const pwrStep = isCoinBall ? 1 : b.powerStep;
+      const basePwrPct = (key === 'speedy') ? 50 : 100;
+      const displayPwrStepPct = isCoinBall ? 0 : Math.round((b.powerStep / b.basePower) * basePwrPct);
+      const displayPwrPct = basePwrPct + (b.powerLevel - 1) * displayPwrStepPct;
       const pwrPct = calcBarPct(b.powerLevel, b.maxPowerLevel);
       const pwrNextPct = pwrMaxed ? pwrPct : Math.max(pwrPct + 4, Math.min(100, calcBarPct(b.powerLevel + 1, b.maxPowerLevel)));
 
@@ -4402,9 +4657,10 @@ class IdleBreakoutGame {
         const btCost = btIsMax ? null : btItem.costs[btLvl];
         const canBuyBT = baseMaxed && !btIsMax && this.bossTokens >= btCost;
         const btCls = btIsMax ? 'maxed-upg-btn' : (canBuyBT ? 'affordable' : '');
+        const reqLabel = isCoinBall ? 'Speed+Coin' : 'Speed+Power';
         const bottomLabel = btIsMax
           ? 'MAX'
-          : (!baseMaxed ? `🔒 MAX Speed+Power (${btCost} BT)` : `${btCost} BT`);
+          : (!baseMaxed ? `🔒 MAX ${reqLabel} (${btCost} BT)` : `${btCost} BT`);
         btBtnHtml = `
           <div id="wrap-upg-bt-${key}" class="ball-bt-wrap">
             <button class="ball-bt-btn ${btCls}" id="btn-upg-bt-${key}" ${(!canBuyBT || btIsMax) ? 'disabled' : ''}>
@@ -4415,12 +4671,17 @@ class IdleBreakoutGame {
         `;
       }
 
+      const coinThresholds = isCoinBall ? this.getCoinBallTokenThresholds() : null;
+      const coinDescExtra = coinThresholds
+        ? ` • 👑 ${this.coinBtHitCounter || 0}/${coinThresholds.btHits} | ⭐ ${this.coinBbHitCounter || 0}/${coinThresholds.bbHits}`
+        : '';
+
       col.innerHTML = `
         <div class="ball-card-head">
           <div class="ball-title-label">
             <span class="ball-count-badge">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
             <span class="ball-card-name">${b.name}</span>
-            <span class="ball-card-desc">${b.shortDesc}</span>
+            <span class="ball-card-desc">${b.shortDesc}${coinDescExtra}</span>
           </div>
           <div class="ball-dot ball-icon-${key}"></div>
         </div>
@@ -4433,27 +4694,27 @@ class IdleBreakoutGame {
               <div class="stat-col-fill speed-fill" style="height: ${spdPct}%;"></div>
             </div>
             <div class="stat-col-label">⚡ SEB.</div>
-            <div class="stat-col-gain">${spdMaxed ? 'MAX' : '+5%'}</div>
+            <div class="stat-col-gain">${spdMaxed ? 'MAX' : `+${displaySpdStep}%`}</div>
           </div>
           <div class="stat-col-item">
-            <div class="stat-col-val">${fmtStat(curPwr)}</div>
+            <div class="stat-col-val">${isCoinBall ? '$' + fmtStat(curPwr) : displayPwrPct + '%'}</div>
             <div class="stat-col-track">
-              ${!pwrMaxed ? `<div class="stat-col-preview power-preview" style="height: ${pwrNextPct}%;"></div>` : ''}
-              <div class="stat-col-fill power-fill" style="height: ${pwrPct}%;"></div>
+              ${!pwrMaxed ? `<div class="stat-col-preview ${isCoinBall ? 'coin-preview' : 'power-preview'}" style="height: ${pwrNextPct}%;"></div>` : ''}
+              <div class="stat-col-fill ${isCoinBall ? 'coin-fill' : 'power-fill'}" style="height: ${pwrPct}%;"></div>
             </div>
-            <div class="stat-col-label">💥 SEBZÉS</div>
-            <div class="stat-col-gain">${pwrMaxed ? 'MAX' : `+${fmtStat(pwrStep)}`}</div>
+            <div class="stat-col-label">${isCoinBall ? '🪙 PÉNZ/ÜT' : '💥 SEBZÉS'}</div>
+            <div class="stat-col-gain">${pwrMaxed ? 'MAX' : (isCoinBall ? '+$1' : '+' + displayPwrStepPct + '%')}</div>
           </div>
         </div>
 
         <div class="ball-upg-btn-grid">
           <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
-            <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+5%)`}</div>
+            <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+${displaySpdStep}%)`}</div>
             <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
           </button>
 
           <button class="ball-upgrade-btn ${pwrClass}" id="btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
-            <div class="btn-top-info">${pwrMaxed ? `Power MAX (${b.maxPowerLevel})` : `Power ${b.powerLevel}/${b.maxPowerLevel} (+${fmtStat(pwrStep)})`}</div>
+            <div class="btn-top-info">${pwrMaxed ? (isCoinBall ? `Coin MAX ($${b.maxPowerLevel}/üt)` : `Power MAX (${b.maxPowerLevel})`) : (isCoinBall ? `Coin ${b.powerLevel}/${b.maxPowerLevel} (+$1/üt)` : `Power ${b.powerLevel}/${b.maxPowerLevel} (+${displayPwrStepPct}%)`)}</div>
             <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
           </button>
         </div>
@@ -4472,7 +4733,9 @@ class IdleBreakoutGame {
         const btBtn = col.querySelector(`#btn-upg-bt-${key}`);
         const btLvl = this.btUpgrades[key] || 0;
         const lockNote = (!baseMaxed && btLvl < btItem.costs.length)
-          ? '🔒 Először maxold ki a labda Speed és Power fejlesztéseit!'
+          ? (isCoinBall
+              ? '🔒 Először maxold ki a labda Speed és Coin/ütközés fejlesztéseit!'
+              : '🔒 Először maxold ki a labda Speed és Power fejlesztéseit!')
           : null;
         if (btWrap) {
           btWrap.addEventListener('mouseenter', (e) => this.showBBPhaseTooltip(btItem, btLvl, e, 'BT', btItem.costs, lockNote));
@@ -4545,6 +4808,7 @@ class IdleBreakoutGame {
       ? 'maxed-upg-btn'
       : (pirateActive ? 'pirate-free' : (canAffordClick ? 'affordable' : ''));
 
+    const displayClickPct = this.clickPower * 100;
     const clickCol = document.createElement('div');
     clickCol.className = 'ball-upgrade-section';
     clickCol.innerHTML = `
@@ -4559,18 +4823,18 @@ class IdleBreakoutGame {
 
       <div class="ball-stat-chart single-col">
         <div class="stat-col-item">
-          <div class="stat-col-val">${this.clickPower}</div>
+          <div class="stat-col-val">${displayClickPct}%</div>
           <div class="stat-col-track">
             ${!clickMaxed ? `<div class="stat-col-preview power-preview" style="height: ${clickNextPct}%;"></div>` : ''}
             <div class="stat-col-fill power-fill" style="height: ${clickPct}%;"></div>
           </div>
           <div class="stat-col-label">👆 SEBZÉS</div>
-          <div class="stat-col-gain">${clickMaxed ? 'MAX' : '+1'}</div>
+          <div class="stat-col-gain">${clickMaxed ? 'MAX' : '+100%'}</div>
         </div>
       </div>
 
       <button class="ball-upgrade-btn ${clickClass}" id="btn-upg-click" ${clickMaxed ? 'disabled' : ''}>
-        <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} (+1)`}</div>
+        <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} (+100%)`}</div>
         <div class="btn-cost-bottom">${clickMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost))}</div>
       </button>
     `;
@@ -5238,6 +5502,8 @@ class IdleBreakoutGame {
       clickUpgradeLevel: this.clickUpgradeLevel,
       bbUpgrades: { ...this.bbUpgrades },
       btUpgrades: { ...this.btUpgrades },
+      coinBtHitCounter: this.coinBtHitCounter,
+      coinBbHitCounter: this.coinBbHitCounter,
       pierceSpeedUpgradeLevel: this.pierceSpeedUpgradeLevel,
       nextBossIsGold: this.nextBossIsGold,
       nextLevelIsGold: this.nextLevelIsGold,
@@ -5430,6 +5696,8 @@ class IdleBreakoutGame {
         }
         for (const k in this.bbUpgrades) this.bbUpgrades[k] = 0;
         for (const k in this.btUpgrades) this.btUpgrades[k] = 0;
+        this.coinBtHitCounter = 0;
+        this.coinBbHitCounter = 0;
         this.pendingOfflineSeconds = 0;
       }
 
@@ -5447,6 +5715,8 @@ class IdleBreakoutGame {
       this.clickUpgradeLevel = Math.min(this.MAX_CLICK_LEVEL, data.clickUpgradeLevel ?? 1);
       this.clickPower = this.clickUpgradeLevel;
       this.pierceSpeedUpgradeLevel = Math.min(this.MAX_PIERCE_SPEED_LEVEL, data.pierceSpeedUpgradeLevel ?? 0);
+      this.coinBtHitCounter = Math.max(0, Number(data.coinBtHitCounter) || 0);
+      this.coinBbHitCounter = Math.max(0, Number(data.coinBbHitCounter) || 0);
       this.nextBossIsGold = !!data.nextBossIsGold;
       this.nextLevelIsGold = !!data.nextLevelIsGold;
       this.isGoldLevelActive = !!data.isGoldLevelActive;
@@ -5459,14 +5729,17 @@ class IdleBreakoutGame {
         const unlocked = this.getUnlockedCosmetics();
         const usedSkins = new Set();
         const usedEffects = new Set();
+        const usedBreakEffects = new Set();
         for (const tKey of Object.keys(data.ballTypeEquips)) {
           if (!this.ballTypes[tKey]) continue;
           const eq = data.ballTypeEquips[tKey] || {};
           let sId = (eq.skinId && unlocked.skins.has(eq.skinId) && !usedSkins.has(eq.skinId)) ? eq.skinId : 'default';
           let eId = (eq.effectId && unlocked.effects.has(eq.effectId) && !usedEffects.has(eq.effectId)) ? eq.effectId : 'none';
+          let bId = (eq.breakEffectId && unlocked.breakEffects.has(eq.breakEffectId) && !usedBreakEffects.has(eq.breakEffectId)) ? eq.breakEffectId : 'none';
           if (sId !== 'default') usedSkins.add(sId);
           if (eId !== 'none') usedEffects.add(eId);
-          this.ballTypeEquips[tKey] = { skinId: sId, effectId: eId };
+          if (bId !== 'none') usedBreakEffects.add(bId);
+          this.ballTypeEquips[tKey] = { skinId: sId, effectId: eId, breakEffectId: bId };
         }
       } else if (data.normalBallEquips) {
         const unlocked = this.getUnlockedCosmetics();
@@ -5476,7 +5749,7 @@ class IdleBreakoutGame {
           const eId = unlocked.effects.has(eq.effectId) ? eq.effectId : 'none';
           if (sId !== 'default' || eId !== 'none') {
             if (!this.ballTypeEquips.normal) {
-              this.ballTypeEquips.normal = { skinId: sId, effectId: eId };
+              this.ballTypeEquips.normal = { skinId: sId, effectId: eId, breakEffectId: 'none' };
               break;
             }
           }
@@ -5727,6 +6000,10 @@ class IdleBreakoutGame {
           this.ctx.strokeStyle = `rgba(168, 85, 247, ${alpha * 1.4})`;
           this.ctx.lineWidth = ball.radius * 1.05;
           this.ctx.stroke();
+        } else if (ball.type === 'coin') {
+          this.ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 1.35})`;
+          this.ctx.lineWidth = ball.radius * 0.75;
+          this.ctx.stroke();
         } else if (ball.type === 'normal') {
           this.ctx.strokeStyle = `rgba(254, 240, 138, ${alpha * 0.8})`;
           this.ctx.lineWidth = ball.radius * 0.5;
@@ -5812,6 +6089,39 @@ class IdleBreakoutGame {
         ctx.stroke();
       }
       ctx.restore();
+    } else if (effectId === 'fx_saturn') {
+      ctx.save();
+      const tilt = -0.35 + Math.sin(this.animTime * 1.6) * 0.08;
+      const orbitAngle = this.animTime * 2.8;
+      ctx.translate(x, y);
+      ctx.rotate(tilt);
+
+      // Keringő mini-hold a labda mögötti félpályán
+      if (Math.sin(orbitAngle) < 0) {
+        const mx = Math.cos(orbitAngle) * (r * 2.15);
+        const my = Math.sin(orbitAngle) * (r * 0.62);
+        ctx.beginPath();
+        ctx.arc(mx, my, 2.3, 0, Math.PI * 2);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+
+      // Hátsó Szaturnusz gyűrűív (Math.PI .. 2*Math.PI)
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 2.15, r * 0.62, 0, Math.PI, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.82)';
+      ctx.lineWidth = 3.2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.68, r * 0.45, 0, Math.PI, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(254, 243, 199, 0.85)';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
     } else if (effectId === 'fx_p_godcrown') {
       ctx.save();
       // Glória
@@ -5820,6 +6130,62 @@ class IdleBreakoutGame {
       ctx.strokeStyle = '#fde047';
       ctx.lineWidth = 2;
       ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawCosmeticEffectFrontLayer(ctx, ball, effectId, breakEffectId) {
+    const x = ball.x;
+    const y = ball.y;
+    const r = ball.radius;
+
+    if (effectId === 'fx_saturn') {
+      ctx.save();
+      const tilt = -0.35 + Math.sin(this.animTime * 1.6) * 0.08;
+      const orbitAngle = this.animTime * 2.8;
+      ctx.translate(x, y);
+      ctx.rotate(tilt);
+
+      // Elülső Szaturnusz gyűrűív (0 .. Math.PI) a labda előtt áthaladva
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 2.15, r * 0.62, 0, 0, Math.PI);
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.95)';
+      ctx.lineWidth = 3.4;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 1.68, r * 0.45, 0, 0, Math.PI);
+      ctx.strokeStyle = 'rgba(254, 249, 195, 0.96)';
+      ctx.lineWidth = 1.7;
+      ctx.stroke();
+
+      // Keringő mini-hold a labda előtti félpályán
+      if (Math.sin(orbitAngle) >= 0) {
+        const mx = Math.cos(orbitAngle) * (r * 2.15);
+        const my = Math.sin(orbitAngle) * (r * 0.62);
+        ctx.beginPath();
+        ctx.arc(mx, my, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fill();
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 0.9;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (breakEffectId === 'brk_explode') {
+      ctx.save();
+      for (let i = 0; i < 2; i++) {
+        const ang = this.animTime * 6.5 + i * Math.PI;
+        const dist = r + 3.5;
+        const sx = x + Math.cos(ang) * dist;
+        const sy = y + Math.sin(ang) * dist;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = i === 0 ? '#fde047' : '#fb923c';
+        ctx.fill();
+      }
       ctx.restore();
     }
   }
@@ -7589,13 +7955,15 @@ class IdleBreakoutGame {
   getUnlockedCosmetics() {
     const unlocked = {
       skins: new Set(['default']),
-      effects: new Set(['none'])
+      effects: new Set(['none']),
+      breakEffects: new Set(['none'])
     };
 
     for (const stage of BATTLE_PASS_STAGES) {
       if (this.battlePassClaimedFree[stage.stage] && stage.free && stage.free.type !== 'currency') {
         if (stage.free.type === 'skin') unlocked.skins.add(stage.free.id);
         if (stage.free.type === 'effect') unlocked.effects.add(stage.free.id);
+        if (stage.free.type === 'break_effect') unlocked.breakEffects.add(stage.free.id);
       }
     }
     return unlocked;
@@ -7691,6 +8059,7 @@ class IdleBreakoutGame {
     const unlocked = this.getUnlockedCosmetics();
     const allSkins = [{ id: 'default', name: 'Alapértelmezett' }];
     const allEffects = [{ id: 'none', name: 'Nincs effekt' }];
+    const allBreakEffects = [{ id: 'none', name: 'Nincs törés effekt' }];
 
     for (const stage of BATTLE_PASS_STAGES) {
       if (stage.free && stage.free.type === 'skin' && unlocked.skins.has(stage.free.id)) {
@@ -7699,11 +8068,17 @@ class IdleBreakoutGame {
       if (stage.free && stage.free.type === 'effect' && unlocked.effects.has(stage.free.id)) {
         allEffects.push({ id: stage.free.id, name: stage.free.name });
       }
+      if (stage.free && stage.free.type === 'break_effect' && unlocked.breakEffects.has(stage.free.id)) {
+        allBreakEffects.push({ id: stage.free.id, name: stage.free.name });
+      }
       if (stage.paid && stage.paid.type === 'skin' && unlocked.skins.has(stage.paid.id)) {
         allSkins.push({ id: stage.paid.id, name: stage.paid.name });
       }
       if (stage.paid && stage.paid.type === 'effect' && unlocked.effects.has(stage.paid.id)) {
         allEffects.push({ id: stage.paid.id, name: stage.paid.name });
+      }
+      if (stage.paid && stage.paid.type === 'break_effect' && unlocked.breakEffects.has(stage.paid.id)) {
+        allBreakEffects.push({ id: stage.paid.id, name: stage.paid.name });
       }
     }
 
@@ -7713,6 +8088,7 @@ class IdleBreakoutGame {
       heavy: { one: 'Heavy labda', many: 'Heavy labdák' },
       smasher: { one: 'Smasher labda', many: 'Smasher labdák' },
       poison: { one: 'Poison labda', many: 'Poison labdák' },
+      coin: { one: 'Coin labda', many: 'Coin labdák' },
       rocket: { one: 'Rocket labda', many: 'Rocket labdák' },
       ghost: { one: 'Ghost labda', many: 'Ghost labdák' },
       multiply: { one: 'Multiply labda', many: 'Multiply labdák' },
@@ -7730,14 +8106,14 @@ class IdleBreakoutGame {
       `;
     } else {
       armoryHtml = `<div style="font-size:12px; color:#555; margin-bottom:4px; line-height:1.25;">
-        ℹ️ Bármelyik labdatípusból <strong>1 db labdára</strong> tehetsz skint és effektet. <strong>Egy skin és egy effekt egyszerre csak 1 labdán lehet!</strong>
+        ℹ️ Bármelyik labdatípusból <strong>1 db labdára</strong> tehetsz skint, vizuális effektet és törés (breaking) effektet. <strong>Minden kozmetika egyszerre csak 1 labdán lehet!</strong>
       </div>`;
 
       for (const typeKey of ownedBallTypes) {
         const cnt = this.ballTypes[typeKey].count;
         const lbl = armoryLabels[typeKey] || { one: this.ballTypes[typeKey].name, many: this.ballTypes[typeKey].name };
         const typeDisplay = cnt > 1 ? lbl.many : lbl.one;
-        const curEquip = (this.ballTypeEquips && this.ballTypeEquips[typeKey]) || { skinId: 'default', effectId: 'none' };
+        const curEquip = (this.ballTypeEquips && this.ballTypeEquips[typeKey]) || { skinId: 'default', effectId: 'none', breakEffectId: 'none' };
 
         const skinOptions = allSkins.map(s => {
           const sel = (s.id === curEquip.skinId) ? 'selected' : '';
@@ -7769,6 +8145,21 @@ class IdleBreakoutGame {
           return `<option value="${fx.id}" ${sel}>${fx.name}${note}</option>`;
         }).join('');
 
+        const breakEffectOptions = allBreakEffects.map(bfx => {
+          const sel = (bfx.id === (curEquip.breakEffectId || 'none')) ? 'selected' : '';
+          let note = '';
+          if (bfx.id !== 'none' && this.ballTypeEquips) {
+            for (const otherKey of Object.keys(this.ballTypeEquips)) {
+              if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].breakEffectId === bfx.id) {
+                const otherLbl = armoryLabels[otherKey] ? armoryLabels[otherKey].one : otherKey;
+                note = ` (${otherLbl}-n van)`;
+                break;
+              }
+            }
+          }
+          return `<option value="${bfx.id}" ${sel}>${bfx.name}${note}</option>`;
+        }).join('');
+
         armoryHtml += `
           <div class="armory-ball-card">
             <div class="armory-ball-header">
@@ -7785,6 +8176,12 @@ class IdleBreakoutGame {
               <label>Effekt:</label>
               <select class="armory-select" data-ball-type="${typeKey}" data-cosmetic-type="effect">
                 ${effectOptions}
+              </select>
+            </div>
+            <div class="armory-select-row">
+              <label>Törés:</label>
+              <select class="armory-select" data-ball-type="${typeKey}" data-cosmetic-type="break_effect">
+                ${breakEffectOptions}
               </select>
             </div>
           </div>
@@ -7810,7 +8207,7 @@ class IdleBreakoutGame {
   equipCosmeticToBallType(typeKey, type, cosmeticId) {
     if (!this.ballTypeEquips) this.ballTypeEquips = {};
     if (!this.ballTypeEquips[typeKey]) {
-      this.ballTypeEquips[typeKey] = { skinId: 'default', effectId: 'none' };
+      this.ballTypeEquips[typeKey] = { skinId: 'default', effectId: 'none', breakEffectId: 'none' };
     }
     const labelMap = {
       normal: 'Normál labda',
@@ -7818,6 +8215,7 @@ class IdleBreakoutGame {
       heavy: 'Heavy labda',
       smasher: 'Smasher labda',
       poison: 'Poison labda',
+      coin: 'Coin labda',
       rocket: 'Rocket labda',
       ghost: 'Ghost labda',
       multiply: 'Multiply labda',
@@ -7847,6 +8245,17 @@ class IdleBreakoutGame {
       }
       this.ballTypeEquips[typeKey].effectId = cosmeticId;
       this.showToast(`✨ ${friendly} effekt beállítva (1 db-on aktív)!`, 2400);
+    } else if (type === 'break_effect') {
+      // 1 törés effekt egyszerre csak 1 labdán lehet az összes típus között!
+      if (cosmeticId !== 'none') {
+        for (const otherKey of Object.keys(this.ballTypeEquips)) {
+          if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].breakEffectId === cosmeticId) {
+            this.ballTypeEquips[otherKey].breakEffectId = 'none';
+          }
+        }
+      }
+      this.ballTypeEquips[typeKey].breakEffectId = cosmeticId;
+      this.showToast(`💥 ${friendly} törés effekt beállítva (1 db-on aktív)!`, 2400);
     }
     if (window.soundEngine) window.soundEngine.playCosmeticEquip();
     this.renderBattlePass();
@@ -7865,6 +8274,10 @@ class IdleBreakoutGame {
         if (rew.currency === 'money') this.money += rew.amount;
         if (rew.currency === 'bb') this.bb += rew.amount;
         if (rew.currency === 'bt') this.bossTokens += rew.amount;
+        if (rew.currency === 'bb_bt') {
+          this.bb += (rew.bb || 0);
+          this.bossTokens += (rew.bt || 0);
+        }
         this.showToast(`🎁 <strong>Jutalom átvéve:</strong> ${rew.name}!`, 3500);
       } else {
         this.showToast(`🎉 <strong>Új Kozmetika Feloldva:</strong> ${rew.name}! Húzd rá bármelyik labdádra a Labda Skinek fülön!`, 4500);
