@@ -234,9 +234,22 @@ class CloudAuthManager {
     const email = (emailEl ? emailEl.value : '').trim();
     const password = passEl ? passEl.value : '';
 
-    const playerName = (rawName || this.game.playerName || 'Játékos').slice(0, 14);
+    const regNameWarn = document.getElementById('auth-reg-name-warn');
+    const regPassWarn = document.getElementById('auth-reg-pass-warn');
+    if (regNameWarn) regNameWarn.style.display = rawName.length > 12 ? 'block' : 'none';
+    if (regPassWarn) regPassWarn.style.display = password.length > 20 ? 'block' : 'none';
+
+    if (rawName.length > 12) {
+      this.showError('A játékosnév legfeljebb 12 karakter lehet!');
+      return;
+    }
+    const playerName = (rawName || this.game.playerName || 'Játékos').slice(0, 12);
     if (!email || !email.includes('@')) {
       this.showError('Kérlek adj meg egy érvényes e-mail címet!');
+      return;
+    }
+    if (password.length > 20) {
+      this.showError('A jelszó legfeljebb 20 karakter lehet!');
       return;
     }
     if (password.length < 6) {
@@ -288,8 +301,15 @@ class CloudAuthManager {
     const email = (emailEl ? emailEl.value : '').trim();
     const password = passEl ? passEl.value : '';
 
+    const loginPassWarn = document.getElementById('auth-login-pass-warn');
+    if (loginPassWarn) loginPassWarn.style.display = password.length > 20 ? 'block' : 'none';
+
     if (!email || !password) {
       this.showError('Add meg az e-mail címed és a jelszavad!');
+      return;
+    }
+    if (password.length > 20) {
+      this.showError('A jelszó legfeljebb 20 karakter lehet!');
       return;
     }
 
@@ -568,7 +588,7 @@ class CloudAuthManager {
     try {
       const saveData = this.game.buildSaveData(this.currentUser.uid);
       const uid = this.currentUser.uid;
-      const pName = (this.game.playerName || this.currentUser.displayName || 'Játékos').slice(0, 14);
+      const pName = (this.game.playerName || this.currentUser.displayName || 'Játékos').slice(0, 12);
 
       await this.db.collection('users').doc(uid).set({
         playerName: pName,
@@ -653,8 +673,8 @@ class CloudAuthManager {
             const key = docUid;
             const existing = this.game.remotePlayers[key];
             if (!existing || (d.ts || 0) >= (existing.ts || 0) || !existing.fromFirestore) {
-              const incomingName = (d.name || '').trim().slice(0, 14);
-              const prevName = (existing && existing.name || '').trim().slice(0, 14);
+              const incomingName = (d.name || '').trim().slice(0, 12);
+              const prevName = (existing && existing.name || '').trim().slice(0, 12);
               const resolvedName = (incomingName && incomingName !== 'Játékos')
                 ? incomingName
                 : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
@@ -667,9 +687,9 @@ class CloudAuthManager {
                 fromFirestore: true,
                 keepInTop10: !!(existing && existing.keepInTop10),
                 name: resolvedName,
-                rebirths: Math.max(Number(d.rebirths) || 0, existing ? (Number(existing.rebirths) || 0) : 0),
-                level: Number(d.level) || 1,
-                bricks: Number(d.bricks) || 0,
+                rebirths: Math.max(0, Number(d.rebirths) || 0),
+                level: Math.max(1, Number(d.level) || 1),
+                bricks: Math.max(0, Number(d.bricks) || 0),
                 ts: Math.max(Number(d.ts) || 0, existing ? (Number(existing.ts) || 0) : 0)
               };
               dirtyRemote = true;

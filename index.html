@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=6.0">
+  <link rel="stylesheet" href="css/style.css?v=6.4">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
@@ -52,9 +52,10 @@
     <div class="player-profile-card">
       <div class="player-profile-row" id="player-name-edit-row-pc">
         <label for="player-name-input-pc" class="profile-label">NÉV:</label>
-        <input type="text" id="player-name-input-pc" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
+        <input type="text" id="player-name-input-pc" class="player-name-input" value="Játékos" placeholder="Add meg a neved...">
         <button id="btn-save-name-pc" class="retro-btn mini-save-btn">OK</button>
       </div>
+      <div id="name-limit-warn-pc" class="field-limit-warn" style="display: none;">⚠️ A név legfeljebb 12 karakter lehet!</div>
       <div class="player-profile-locked-row" id="player-name-locked-row-pc" style="display: none;">
         <span class="profile-label">NÉV:</span>
         <strong id="player-locked-name-pc" class="player-locked-name">Játékos</strong>
@@ -130,16 +131,22 @@
             <div class="ball-price-box" id="ball-price-rocket">$45K</div>
           </div>
 
-          <div class="ball-buy-slot" id="ball-slot-ghost" title="GHOSTBALL (max 40 db): 1x sebesség, áthalad a blokkokon + BT szellembomba!">
+          <div class="ball-buy-slot" id="ball-slot-ghost" title="GHOSTBALL (max 10 db): 1x sebesség, áthalad a blokkokon + BT szellembomba!">
             <div class="ball-dot ball-icon-ghost"></div>
             <div class="ball-slot-tag">GHST</div>
             <div class="ball-price-box" id="ball-price-ghost">$180K</div>
           </div>
 
-          <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL (max 15 / 50-nél 25 db): 1x sebesség, ütközéskor osztódik (BT: 16-ig!)">
+          <div class="ball-buy-slot" id="ball-slot-multiply" title="MULTIPLY BALL (max 7 db): 1x sebesség, ütközéskor osztódik (BT: 16-ig!)">
             <div class="ball-dot ball-icon-multiply"></div>
             <div class="ball-slot-tag">MULT</div>
             <div class="ball-price-box" id="ball-price-multiply">$650K</div>
+          </div>
+
+          <div class="ball-buy-slot ball-slot-symbiot" id="ball-slot-symbiot" title="SYMBIOT BALL (MAX 1 db): MINDEN képesség egyben (Speed + Heavy + Smash + Méreg + Rakéta + Ghost + Osztódás)!">
+            <div class="ball-dot ball-icon-symbiot"></div>
+            <div class="ball-slot-tag">SYMB</div>
+            <div class="ball-price-box" id="ball-price-symbiot">$250.0M</div>
           </div>
         </div>
 
@@ -172,22 +179,24 @@
       <!-- Row 2: Status, Action Buttons & Active Power-ups -->
       <div class="top-bar-row top-bar-row-actions">
         <div class="top-center-section">
-          <div class="status-box">
-            <span id="hud-balls-text">0/15</span>
-            <span class="status-sub">BALLS</span>
-          </div>
+          <div class="mobile-status-pair">
+            <div class="status-box">
+              <span id="hud-balls-text">0/15</span>
+              <span class="status-sub">BALLS</span>
+            </div>
 
-          <div class="status-box">
-            <span class="status-sub">LEVEL</span>
-            <span id="hud-level-text" class="status-box-val">1</span>
+            <div class="status-box">
+              <span class="status-sub">LEVEL</span>
+              <span id="hud-level-text" class="status-box-val">1</span>
+            </div>
           </div>
 
           <!-- Mobile Action Buttons with Info 'i' Icons (Visible only on mobile/narrow screens) -->
-          <div class="mobile-tab-group">
+          <div class="mobile-tab-group mobile-lb-group">
             <button id="btn-open-leaderboard" class="retro-btn mobile-action-btn" title="Ranglista megnyitása">🏆 RANGLISTA</button>
             <button id="btn-hud-lb-info" class="retro-btn mobile-action-btn mobile-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Ranglista esemény infó">i</button>
           </div>
-          <div class="mobile-tab-group">
+          <div class="mobile-tab-group mobile-bp-group">
             <button id="btn-open-battlepass" class="retro-btn mobile-action-btn" title="Breaker Pass megnyitása">🎖️ BREAKER PASS</button>
             <button id="btn-hud-bp-info" class="retro-btn mobile-action-btn mobile-i-btn" type="button" title="December 24. nyeremény infó" aria-label="Breaker Pass esemény infó">i</button>
           </div>
@@ -255,7 +264,7 @@
       <!-- Quick Tab for Equipping Ball Skins & Effects -->
       <div class="bp-tab-row">
         <button id="btn-bp-tab-stages-pc" class="bp-tab-btn active">SZINTEK (1-30)</button>
-        <button id="btn-bp-tab-armory-pc" class="bp-tab-btn">🎨 NORMÁL LABDÁK</button>
+        <button id="btn-bp-tab-armory-pc" class="bp-tab-btn">🎨 LABDA SKINEK</button>
       </div>
     </div>
 
@@ -293,9 +302,10 @@
         <div class="player-profile-card mobile-profile-card">
           <div class="player-profile-row" id="player-name-edit-row-mobile">
             <label for="player-name-input-mobile" class="profile-label">NÉV:</label>
-            <input type="text" id="player-name-input-mobile" class="player-name-input" maxlength="14" value="Játékos" placeholder="Add meg a neved...">
+            <input type="text" id="player-name-input-mobile" class="player-name-input" value="Játékos" placeholder="Add meg a neved...">
             <button id="btn-save-name-mobile" class="retro-btn mini-save-btn">OK</button>
           </div>
+          <div id="name-limit-warn-mobile" class="field-limit-warn" style="display: none;">⚠️ A név legfeljebb 12 karakter lehet!</div>
           <div class="player-profile-locked-row" id="player-name-locked-row-mobile" style="display: none;">
             <span class="profile-label">NÉV:</span>
             <strong id="player-locked-name-mobile" class="player-locked-name">Játékos</strong>
@@ -365,7 +375,7 @@
 
           <div class="bp-tab-row mobile-bp-tab-row">
             <button id="btn-bp-tab-stages-mobile" class="bp-tab-btn active">🎁 SZINTEK (1-30)</button>
-            <button id="btn-bp-tab-armory-mobile" class="bp-tab-btn">🎨 NORMÁL LABDÁK</button>
+            <button id="btn-bp-tab-armory-mobile" class="bp-tab-btn">🎨 LABDA SKINEK</button>
           </div>
 
           <div class="bp-premium-banner mobile-bp-premium-banner">
@@ -494,7 +504,7 @@
       ⭐ <strong style="color: #d97706;">+1 BB (Breakout Badge)</strong><br>
       💰 <strong>Jövedelem szorzó:</strong> <span id="rebirth-current-mult">1.00x</span> ➔ <span id="rebirth-next-mult" class="rebirth-highlight" style="color: #22c55e;">1.15x</span> (+15% pénz!)<br>
       🎱 <strong>Max labdaférőhely:</strong> <span id="rebirth-slots-info" style="color: #2563eb; font-weight: bold;">15 ➔ 15</span><br>
-      🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.125% ➔ 0.127%</span><br>
+      🍀 <strong>Power-Up esély:</strong> <span id="rebirth-chance-info" style="color: #f59e0b; font-weight: bold;">0.125% ➔ 0.130%</span><br>
       ⚡ <strong>Kritikus kattintás:</strong> <span id="rebirth-crit-info" style="color: #38bdf8; font-weight: bold;">5% ➔ 6%</span><br><br>
       <small style="color: #555; display: block; border-top: 1px dashed #888; padding-top: 6px;">
         (Újra az 1. szintről kezdesz 0 labdával, de a BB/BT valutád, a BB/BT fejlesztéseid, a Breaker Pass haladásod, a játékosneved, a pénzszorzód és a labdaférőhelyed megmaradnak!)
@@ -541,6 +551,7 @@
               <div class="auth-field-group">
                 <label for="auth-login-password">Jelszó:</label>
                 <input type="password" id="auth-login-password" class="auth-input" placeholder="Jelszó..." required autocomplete="current-password">
+                <div id="auth-login-pass-warn" class="field-limit-warn" style="display: none;">⚠️ A jelszó legfeljebb 20 karakter lehet!</div>
               </div>
             </div>
             <button id="btn-auth-submit-login" type="submit" class="retro-btn auth-submit-btn">🔑 BELÉPÉS ÉS FOLYTATÁS</button>
@@ -551,7 +562,8 @@
             <div class="auth-fields-split">
               <div class="auth-field-group">
                 <label for="auth-reg-name">Játékosnév:</label>
-                <input type="text" id="auth-reg-name" class="auth-input" maxlength="14" placeholder="Pl. Shirelix" autocomplete="nickname">
+                <input type="text" id="auth-reg-name" class="auth-input" placeholder="Pl. Shirelix" autocomplete="nickname">
+                <div id="auth-reg-name-warn" class="field-limit-warn" style="display: none;">⚠️ A név legfeljebb 12 karakter lehet!</div>
               </div>
               <div class="auth-field-group">
                 <label for="auth-reg-email">E-mail cím:</label>
@@ -559,8 +571,9 @@
               </div>
             </div>
             <div class="auth-field-group">
-              <label for="auth-reg-password">Jelszó (min. 6 karakter):</label>
-              <input type="password" id="auth-reg-password" class="auth-input" minlength="6" placeholder="Legalább 6 karakter..." required autocomplete="new-password">
+              <label for="auth-reg-password">Jelszó:</label>
+              <input type="password" id="auth-reg-password" class="auth-input" placeholder="Jelszó..." required autocomplete="new-password">
+              <div id="auth-reg-pass-warn" class="field-limit-warn" style="display: none;">⚠️ A jelszó legfeljebb 20 karakter lehet!</div>
             </div>
             <button id="btn-auth-submit-register" type="submit" class="retro-btn auth-submit-btn" style="background: #22c55e;">✨ FIÓK LÉTREHOZÁSA ÉS MENTÉS</button>
             <div class="auth-hint-text">A jelenlegi haladásod automatikusan mentésre kerül az új fiókodba!</div>
@@ -647,10 +660,10 @@
         <p class="dev-lock-desc">Add meg a fejlesztői kódot a ranglista szereplőinek globális szabályozásához, tiltásához és szerkesztéséhez.</p>
         <div id="dev-pin-error" class="auth-error-box" style="display: none;"></div>
         <form id="dev-pin-form" class="dev-pin-form">
-          <input type="password" id="dev-pin-input" class="auth-input" placeholder="Fejlesztői PIN (alap: 2026)..." autocomplete="off">
+          <input type="password" id="dev-pin-input" class="auth-input" placeholder="Fejlesztői kód..." autocomplete="off">
           <button id="btn-dev-unlock" type="submit" class="retro-btn dev-unlock-btn">🔓 FELOLDÁS</button>
         </form>
-        <div class="dev-lock-hint">Gyorsbillentyű PC-n: <code>Ctrl + Shift + D</code> • Alap PIN: <strong>2026</strong></div>
+        <div class="dev-lock-hint">Gyorsbillentyű PC-n: <code>Ctrl + Shift + D</code></div>
       </div>
     </div>
 
@@ -671,7 +684,7 @@
       <div id="dev-tab-players" class="dev-tab-pane">
         <form id="dev-add-player-form" class="dev-add-bar">
           <span class="dev-add-label">➕ ÚJ / KÉZI:</span>
-          <input type="text" id="dev-add-name" class="auth-input dev-sm-input" maxlength="14" placeholder="Játékosnév...">
+          <input type="text" id="dev-add-name" class="auth-input dev-sm-input" placeholder="Játékosnév (max 12)...">
           <input type="number" id="dev-add-reb" class="auth-input dev-num-input" min="0" value="0" placeholder="Reb" title="Rebirth szám">
           <input type="number" id="dev-add-lvl" class="auth-input dev-num-input" min="1" value="1" placeholder="Szint" title="Szint">
           <button id="btn-dev-add-player" type="submit" class="retro-btn dev-add-btn">HOZZÁAD</button>
@@ -680,7 +693,7 @@
         <div id="dev-edit-box" class="dev-edit-drawer" style="display: none;">
           <div class="dev-edit-title">✏️ Szerkesztés: <strong id="dev-edit-target-label">-</strong></div>
           <div class="dev-edit-fields">
-            <label>Név: <input type="text" id="dev-edit-name" class="auth-input dev-sm-input" maxlength="14"></label>
+            <label>Név: <input type="text" id="dev-edit-name" class="auth-input dev-sm-input"></label>
             <label>Reb: <input type="number" id="dev-edit-reb" class="auth-input dev-num-input" min="0"></label>
             <label>Szint: <input type="number" id="dev-edit-lvl" class="auth-input dev-num-input" min="1"></label>
             <button id="btn-dev-save-edit" class="retro-btn dev-save-edit-btn" type="button">💾 MENTÉS</button>
@@ -754,11 +767,7 @@
         </div>
 
         <div class="dev-security-row">
-          <div class="dev-pin-change">
-            <span>🔑 Új fejlesztői PIN:</span>
-            <input type="password" id="dev-new-pin-input" class="auth-input dev-sm-input" maxlength="20" placeholder="Új PIN...">
-            <button id="btn-dev-save-pin" class="retro-btn dev-tool-btn" type="button">PIN MENTÉSE</button>
-          </div>
+          <span class="dev-empty-chips">🔒 Globális fejlesztői hozzáférés aktív (titkos kód védve).</span>
           <button id="btn-dev-reset-rules" class="retro-btn dev-danger-btn" type="button">♻️ ÖSSZES SZABÁLY TÖRLÉSE</button>
         </div>
       </div>
@@ -777,9 +786,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/mqtt.min.js"></script>
 <script src="js/firebase-config.js?v=4.5"></script>
-<script src="js/cloud.js?v=5.7"></script>
+<script src="js/cloud.js?v=5.8"></script>
 <script src="js/audio.js?v=4.8"></script>
-<script src="js/game.js?v=6.2"></script>
+<script src="js/game.js?v=6.5"></script>
 
 </body>
 </html>

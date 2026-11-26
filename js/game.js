@@ -202,7 +202,7 @@ const NON_UPGRADABLE_POWERUPS = [
     name: 'GOLD LEVEL',
     rarityBadge: '0.08 esély (~0.6%) • Rebirth 15+',
     isGoldSpecial: true,
-    desc: 'Csak Rebirth 15 fölött van rá esély (0,08 súly, ~0,6% dropból)! A következő normál pálya minden egyes blokkja 500 és 2 000 közötti HP-t kap, és mindegyik 20x annyi pénzt ($) ad, mint alapból!',
+    desc: 'Csak Rebirth 15 fölött van rá esély (~0,6% esély power-up dobásból)! A következő normál pálya minden egyes blokkja 500 és 2 000 közötti HP-t kap, és mindegyik 20x annyi pénzt ($) ad, mint alapból!',
     statusFn: (game) => {
       if (game.isGoldLevelActive) return '🌟 JELENLEG AKTÍV A PÁLYÁN (20x pénz)!';
       if (game.nextLevelIsGold) return '🌟 BEÉLESÍTVE: A következő normál pálya GOLD LEVEL lesz!';
@@ -288,7 +288,80 @@ const BALL_SKIN_COLORS = {
   skin_p_godlight: '#fef08a'
 };
 
-// 30 Stages Seasonal Battle Pass Catalog
+const DEV_AUTH_SALT = 'IB_DEV_2026_SHX_SALT_v1::';
+const DEV_AUTH_HASH = '2e79b30f5b08103756a0182126be056c1e1a14046dd9d1677c40ff8d347b7c82';
+
+function sha256HexFallback(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  const lengthProperty = 'length';
+  let i, j;
+  let result = '';
+  const words = [];
+  const utf8 = unescape(encodeURIComponent(ascii));
+  const asciiBitLength = utf8[lengthProperty] * 8;
+
+  const hash = sha256HexFallback.h = sha256HexFallback.h || [];
+  const k = sha256HexFallback.k = sha256HexFallback.k || [];
+  let primeCounter = k[lengthProperty];
+  const isComposite = {};
+  for (let candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) isComposite[i] = candidate;
+      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+
+  let padded = utf8 + '\x80';
+  while (padded[lengthProperty] % 64 - 56) padded += '\x00';
+  for (i = 0; i < padded[lengthProperty]; i++) {
+    j = padded.charCodeAt(i);
+    if (j >> 8) return '';
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words[lengthProperty]] = ((asciiBitLength / maxWord) | 0);
+  words[words[lengthProperty]] = (asciiBitLength);
+
+  for (j = 0; j < words[lengthProperty];) {
+    const w = words.slice(j, j += 16);
+    const oldHash = hash.slice(0);
+    for (i = 0; i < 64; i++) {
+      const w15 = w[i - 15], w2 = w[i - 2];
+      const a = hash[0], e = hash[4];
+      const temp1 = hash[7]
+        + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+        + ((e & hash[5]) ^ ((~e) & hash[6]))
+        + k[i]
+        + (w[i] = (i < 16) ? w[i] : (
+          w[i - 16]
+          + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3))
+          + w[i - 7]
+          + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))
+        ) | 0);
+      const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))
+        + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+      hash[7] = hash[6]; hash[6] = hash[5]; hash[5] = hash[4];
+      hash[4] = (hash[3] + temp1) | 0;
+      hash[3] = hash[2]; hash[2] = hash[1]; hash[1] = hash[0];
+      hash[0] = (temp1 + temp2) | 0;
+    }
+    for (i = 0; i < 8; i++) hash[i] = (hash[i] + oldHash[i]) | 0;
+  }
+  for (i = 0; i < 8; i++) {
+    for (j = 3; j + 1; j--) {
+      const b = (hash[i] >> (j * 8)) & 255;
+      result += ((b < 16) ? 0 : '') + b.toString(16);
+    }
+  }
+  sha256HexFallback.h = [];
+  return result;
+}
+
+// 30 Stages Seasonal Breaker Pass Catalog
 // Free Track: Milestone levels offer rich rewards, intermediate levels (2-4, 6-9, etc.) are empty on FREE only!
 // Free Track: Exactly 5 Skins, 3 Effects, 1 RARE Cosmic Effect.
 // Paid Track: Exclusive Prémium reward on EVERY single stage (1-30) - cannot be activated or claimed.
@@ -490,9 +563,10 @@ class IdleBreakoutGame {
     this.bb = 0; // Breakout Badges
     this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 10 Boss Token = 1 BB
     this.BOSS_TOKEN_COST = 10;
-    this.MAX_MULTIPLY_BALLS = 15;
-    this.MAX_GHOST_BALLS = 40;
+    this.MAX_MULTIPLY_BALLS = 7;
+    this.MAX_GHOST_BALLS = 10;
     this.MAX_ROCKET_BALLS = 5;
+    this.MAX_SYMBIOT_BALLS = 1;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
     this.clickPower = 1;
@@ -532,7 +606,15 @@ class IdleBreakoutGame {
     this.MAX_PIERCE_SPEED_LEVEL = 20;
 
     // Real-Time Multiplayer Leaderboard
-    this.playerName = localStorage.getItem('idle_breakout_player_name') || 'Játékos';
+    this.playerName = (localStorage.getItem('idle_breakout_player_name') || 'Játékos').slice(0, 12);
+    this.appliedAdminCmdIds = [];
+    try {
+      const savedCmds = localStorage.getItem('idle_breakout_applied_admin_cmds');
+      if (savedCmds) {
+        const parsedCmds = JSON.parse(savedCmds);
+        if (Array.isArray(parsedCmds)) this.appliedAdminCmdIds = parsedCmds.slice(-100);
+      }
+    } catch (e) {}
     this.myPlayerId = localStorage.getItem('idle_breakout_player_id');
     if (!this.myPlayerId) {
       this.myPlayerId = 'p_' + Math.random().toString(36).substring(2, 8) + '_' + Date.now().toString(36);
@@ -565,7 +647,8 @@ class IdleBreakoutGame {
     this.totalBricksDestroyed = 0;
     this.battlePassClaimedFree = {};
     this.battlePassClaimedPaid = {};
-    this.normalBallEquips = {}; // normalBallIndex -> { skinId, effectId }
+    this.normalBallEquips = {}; // legacy save migration
+    this.ballTypeEquips = {};   // ballTypeKey -> { skinId, effectId }
     this.activeBPTab = 'stages'; // 'stages' | 'armory'
 
     // Base Speed Reference (1x = 3.7 - kicsit lassabb normál labda a kért 5-6 órás játékmenethez)
@@ -688,7 +771,7 @@ class IdleBreakoutGame {
       ghost: {
         id: 'ghost',
         name: 'GHOSTBALL',
-        shortDesc: '1x sebesség, áthalad + BT szellembomba (max 40)',
+        shortDesc: '1x sebesség, áthalad + BT szellembomba (max 10)',
         color: '#c8f4ff',
         count: 0,
         baseCost: 180000,
@@ -707,7 +790,7 @@ class IdleBreakoutGame {
       multiply: {
         id: 'multiply',
         name: 'MULTIPLY BALL',
-        shortDesc: '1x sebesség, osztódik (BT: 2→4→8→16, 5 mp)',
+        shortDesc: '1x sebesség, osztódik (BT: 2→4→8→16, 5 mp, max 7)',
         color: '#d900b8',
         count: 0,
         baseCost: 650000,
@@ -722,6 +805,25 @@ class IdleBreakoutGame {
         maxPowerLevel: 40,
         powerBaseCost: 350000,
         radius: 9.0
+      },
+      symbiot: {
+        id: 'symbiot',
+        name: 'SYMBIOT BALL',
+        shortDesc: 'MINDEN képesség egyben (Speed+Heavy+Smash+Méreg+Rakéta+Ghost+Osztódás) • MAX 1!',
+        color: '#111827',
+        count: 0,
+        baseCost: 250000000,
+        costMult: 1.50,
+        speedFactor: 2.0,
+        basePower: 50.0,
+        powerStep: 25.0,
+        speedLevel: 1,
+        maxSpeedLevel: 40,
+        speedBaseCost: 15000000,
+        powerLevel: 1,
+        maxPowerLevel: 50,
+        powerBaseCost: 25000000,
+        radius: 10.5
       }
     };
 
@@ -808,6 +910,7 @@ class IdleBreakoutGame {
     // Setup perimeter border bricks and arena level
     this.createPerimeterBricks();
     this.generateLevel(this.level);
+    this.processPendingAdminCommands();
 
     // Ensure any permanent-for-run BB lvl 4/5 effects that were saved as active or unlocked are ready
     this.restoreActivePowerUpVisuals();
@@ -1441,17 +1544,17 @@ class IdleBreakoutGame {
       return;
     }
 
-    // Átlagosan minden ~800 blokk után 1 power-up (100 / 800 = 0.125% blokkonként), rebirth-enként mérsékelt +0.002%
+    // Átlagosan minden ~800 blokk után 1 power-up (100 / 800 = 0.125% blokkonként), rebirth-enként mérsékelt +0.005%
     const totalDropPercent = this.getPowerUpDropChancePercent();
     const roll = Math.random() * 100;
     if (roll >= totalDropPercent) {
       return;
     }
 
-    // Kiegyensúlyozott power-up súlyozás:
-    // - Erős bónuszok (2x Money, 2x Damage, Gold Boss, Shock Wave): mérsékelt 2.2 - 2.6 súly
-    // - Hasznos ritkább bónuszok (Speed, Discount, Pierce, Auto Clicker, Free Upg): 0.70 - 0.95 súly
-    // - Gold Level (csak Rebirth 15 fölött!): megnövelt 0.08 súly (~0.6% dropból)
+    // Kiegyensúlyozott power-up esély-eloszlás:
+    // - Erős bónuszok (2x Money, 2x Damage, Gold Boss, Shock Wave): mérsékelt 2.2 - 2.6 esély
+    // - Hasznos ritkább bónuszok (Speed, Discount, Pierce, Auto Clicker, Free Upg): 0.70 - 0.95 esély
+    // - Gold Level (csak Rebirth 15 fölött!): 0.08 esély (~0.6% power-up dobásból)
     const candidates = [
       { id: '2x_money',     weight: 2.2  },
       { id: '2x_dmg',       weight: 2.2  },
@@ -1995,9 +2098,9 @@ class IdleBreakoutGame {
     return best;
   }
 
-  spawnRocketFromBall(ball) {
+  spawnRocketFromBall(ball, forceHoming = false) {
     if (this.rockets.length >= 80) return;
-    const isHoming = (this.btUpgrades.rocket || 0) >= 1;
+    const isHoming = forceHoming || (this.btUpgrades.rocket || 0) >= 1;
     let angle = Math.random() * Math.PI * 2;
     let target = null;
 
@@ -2009,8 +2112,8 @@ class IdleBreakoutGame {
     }
 
     const rocketSpeed = 9.5;
-    // Alap labda 10 dmg -> rakéta: 100 közvetlen, 50 mellette lévő blokkok, 20 az amellett lévő blokkok!
-    const powerScale = Math.max(1, ball.power / this.ballTypes.rocket.basePower);
+    const baseRef = (this.ballTypes[ball.type] && this.ballTypes[ball.type].basePower) || this.ballTypes.rocket.basePower;
+    const powerScale = Math.max(1, ball.power / baseRef) * (ball.type === 'symbiot' ? 1.5 : 1);
     this.rockets.push({
       x: ball.x,
       y: ball.y,
@@ -2313,13 +2416,16 @@ class IdleBreakoutGame {
 
   getMaxBallTypeLimit(typeKey) {
     if (typeKey === 'multiply') {
-      return this.getMaxBalls() >= 50 ? 25 : this.MAX_MULTIPLY_BALLS;
+      return this.MAX_MULTIPLY_BALLS;
     }
     if (typeKey === 'ghost') {
       return this.MAX_GHOST_BALLS;
     }
     if (typeKey === 'rocket') {
       return this.MAX_ROCKET_BALLS;
+    }
+    if (typeKey === 'symbiot') {
+      return this.MAX_SYMBIOT_BALLS;
     }
     return null;
   }
@@ -2329,6 +2435,11 @@ class IdleBreakoutGame {
     const b = this.ballTypes[typeKey];
     const base = this.BASE_SPEED * b.speedFactor;
     return base + (b.speedLevel - 1) * (0.35 * Math.max(0.6, b.speedFactor));
+  }
+
+  getBallSpeedStep(typeKey) {
+    const b = this.ballTypes[typeKey];
+    return 0.35 * Math.max(0.6, b.speedFactor);
   }
 
   getBallPower(typeKey) {
@@ -2359,7 +2470,7 @@ class IdleBreakoutGame {
       if (window.soundEngine) window.soundEngine.playCoin();
       this.updateHUD();
       this.renderUpgradesMenu();
-      if (typeKey === 'normal') this.renderBattlePass();
+      this.renderBattlePass();
     }
   }
 
@@ -2387,7 +2498,7 @@ class IdleBreakoutGame {
       isSplitChild: false,
       splitTier: 0,
       splitCooldown: 0,
-      ghostHitSet: typeKey === 'ghost' ? new Set() : null,
+      ghostHitSet: (typeKey === 'ghost' || typeKey === 'symbiot') ? new Set() : null,
       ghostBombTimer: 0,
       rocketTimer: 0
     });
@@ -2403,17 +2514,21 @@ class IdleBreakoutGame {
     const nextTier = (parentBall.splitTier || 0) + 1;
     if (nextTier > maxTier) return;
 
-    // Performance cap: max 160 active multiply mini-balls
+    // Performance cap: max 160 active multiply/symbiot mini-balls
     const currentChildren = this.balls.filter(b => b.isSplitChild).length;
     if (currentChildren >= 160) return;
 
-    const bDef = this.ballTypes.multiply;
-    const powerScale = this.getBallPower('multiply') / bDef.basePower;
-    const tierBaseDamages = [10, 5, 2, 1, 0.5];
-    const tierRadii = [9.0, 6.8, 5.4, 4.3, 3.4];
-    const tierColors = ['#d900b8', '#f038d0', '#ff70e5', '#ffb8f2', '#ffe0fa'];
-    const childDmg = (tierBaseDamages[nextTier] ?? 0.5) * powerScale;
-    const childSpeed = this.getBallSpeed('multiply') * (1 + nextTier * 0.06);
+    const isSym = parentBall.type === 'symbiot';
+    const baseType = isSym ? 'symbiot' : 'multiply';
+    const bDef = this.ballTypes[baseType];
+    const powerScale = this.getBallPower(baseType) / bDef.basePower;
+    const tierBaseDamages = isSym ? [25, 14, 7, 4, 2] : [10, 5, 2, 1, 0.5];
+    const tierRadii = isSym ? [9.5, 7.5, 6.0, 4.8, 3.8] : [9.0, 6.8, 5.4, 4.3, 3.4];
+    const tierColors = isSym
+      ? ['#18181b', '#7e22ce', '#dc2626', '#c084fc', '#fca5a5']
+      : ['#d900b8', '#f038d0', '#ff70e5', '#ffb8f2', '#ffe0fa'];
+    const childDmg = (tierBaseDamages[nextTier] ?? (isSym ? 2 : 0.5)) * powerScale;
+    const childSpeed = this.getBallSpeed(baseType) * (1 + nextTier * 0.06);
 
     const baseAngle = Math.atan2(parentBall.vy, parentBall.vx);
     const offsets = [-0.45, 0.45];
@@ -2421,8 +2536,8 @@ class IdleBreakoutGame {
     for (const off of offsets) {
       const a = baseAngle + off;
       this.balls.push({
-        type: 'multiply',
-        color: tierColors[nextTier] || '#ffe0fa',
+        type: baseType,
+        color: tierColors[nextTier] || (isSym ? '#c084fc' : '#ffe0fa'),
         x: parentBall.x,
         y: parentBall.y,
         vx: Math.cos(a) * childSpeed,
@@ -2434,6 +2549,7 @@ class IdleBreakoutGame {
         isSplitChild: true,
         splitTier: nextTier,
         hasSplit: false,
+        ghostHitSet: isSym ? new Set() : null,
         timeLeft: 5.0 // 5 másodperc múlva eltűnnek az osztódások!
       });
     }
@@ -2487,7 +2603,7 @@ class IdleBreakoutGame {
       if (idx !== -1) this.balls.splice(idx, 1);
       this.updateHUD();
       this.renderUpgradesMenu();
-      if (typeKey === 'normal') this.renderBattlePass();
+      this.renderBattlePass();
     }
   }
 
@@ -2548,7 +2664,7 @@ class IdleBreakoutGame {
       if (window.soundEngine) window.soundEngine.playCoin();
       this.updateHUD();
       this.renderUpgradesMenu();
-      if (typeKey === 'normal') this.renderBattlePass();
+      this.renderBattlePass();
     }
   }
 
@@ -2562,12 +2678,12 @@ class IdleBreakoutGame {
 
       const newPower = this.getBallPower(typeKey);
       const multScale = newPower / bDef.basePower;
-      const tierBaseDamages = [10, 5, 2, 1, 0.5];
+      const tierBaseDamages = typeKey === 'symbiot' ? [25, 14, 7, 4, 2] : [10, 5, 2, 1, 0.5];
 
       this.balls.forEach(ball => {
         if (ball.type === typeKey && !ball.isPiercing) {
           if (ball.isSplitChild) {
-            ball.power = (tierBaseDamages[ball.splitTier] ?? 0.5) * multScale;
+            ball.power = (tierBaseDamages[ball.splitTier] ?? (typeKey === 'symbiot' ? 2 : 0.5)) * multScale;
           } else {
             ball.power = newPower;
           }
@@ -2577,7 +2693,7 @@ class IdleBreakoutGame {
       if (window.soundEngine) window.soundEngine.playCoin();
       this.updateHUD();
       this.renderUpgradesMenu();
-      if (typeKey === 'normal') this.renderBattlePass();
+      this.renderBattlePass();
     }
   }
 
@@ -2718,7 +2834,7 @@ class IdleBreakoutGame {
   }
 
   getPowerUpDropChancePercent(rebirthCount = this.rebirthCount) {
-    return (100 / 800) + (Math.max(0, Number(rebirthCount) || 0) * 0.002);
+    return (100 / 800) + (Math.max(0, Number(rebirthCount) || 0) * 0.005);
   }
 
   getRequiredRebirthLevel() {
@@ -3078,6 +3194,7 @@ class IdleBreakoutGame {
         let hitRate = speed * 0.42;
         if (key === 'ghost') hitRate = speed * 0.85;
         if (key === 'multiply') hitRate = speed * 0.65;
+        if (key === 'symbiot') hitRate = speed * 2.2;
         totalDps += b.count * power * hitRate;
       }
 
@@ -3167,21 +3284,37 @@ class IdleBreakoutGame {
         ball.splitCooldown = Math.max(0, ball.splitCooldown - dt);
       }
 
-      // Ghostball BT szellembomba időzítő (10 mp / 5 mp / 1 mp)
+      // Ghostball & Symbiot szellembomba időzítő
       if (ball.type === 'ghost' && ghostCfg) {
         ball.ghostBombTimer = (ball.ghostBombTimer || 0) + dt;
         if (ball.ghostBombTimer >= ghostCfg.cooldown) {
           ball.ghostBombTimer -= ghostCfg.cooldown;
           this.spawnGhostBomb(ball.x, ball.y, ghostCfg);
         }
+      } else if (ball.type === 'symbiot' && !ball.isSplitChild) {
+        const symGhostCfg = ghostCfg
+          ? { ...ghostCfg, cooldown: Math.min(ghostCfg.cooldown, 4.0), dmg: Math.max(ghostCfg.dmg, Math.round(ball.power * 2)) }
+          : { cooldown: 4.0, gridSpan: 5, fuse: 1.0, dmg: Math.max(80, Math.round(ball.power * 2)) };
+        ball.ghostBombTimer = (ball.ghostBombTimer || 0) + dt;
+        if (ball.ghostBombTimer >= symGhostCfg.cooldown) {
+          ball.ghostBombTimer -= symGhostCfg.cooldown;
+          this.spawnGhostBomb(ball.x, ball.y, symGhostCfg);
+        }
       }
 
-      // Rocket Ball rakétakilövő időzítő (Alap: 10 mp random | 10 BT: 3 mp önirányító!)
+      // Rocket Ball & Symbiot rakétakilövő időzítő
       if (ball.type === 'rocket') {
         ball.rocketTimer = (ball.rocketTimer || 0) + dt;
         if (ball.rocketTimer >= rocketCooldown) {
           ball.rocketTimer -= rocketCooldown;
           this.spawnRocketFromBall(ball);
+        }
+      } else if (ball.type === 'symbiot' && !ball.isSplitChild) {
+        const symRocketCooldown = Math.min(rocketCooldown, 3.0);
+        ball.rocketTimer = (ball.rocketTimer || 0) + dt;
+        if (ball.rocketTimer >= symRocketCooldown) {
+          ball.rocketTimer -= symRocketCooldown;
+          this.spawnRocketFromBall(ball, true);
         }
       }
 
@@ -3225,10 +3358,11 @@ class IdleBreakoutGame {
           ball.vy = -Math.abs(ball.vy);
         }
 
-        const isPassThrough = ball.isPiercing || ball.type === 'ghost';
+        const isGhostPass = ball.type === 'ghost' || ball.type === 'symbiot';
+        const isPassThrough = ball.isPiercing || isGhostPass;
 
-        // Ghostball tracks bricks it is currently inside so it hits each brick ONCE per pass-through
-        const currentlyTouchingIds = ball.type === 'ghost' ? new Set() : null;
+        // Ghostball & Symbiot tracks bricks it is currently inside so it hits each brick ONCE per pass-through
+        const currentlyTouchingIds = isGhostPass ? new Set() : null;
 
         for (const brick of this.bricks) {
           if (brick.hp <= 0) continue;
@@ -3239,10 +3373,10 @@ class IdleBreakoutGame {
           const distY = ball.y - cy;
 
           if (distX * distX + distY * distY < ball.radius * ball.radius) {
-            if (ball.type === 'ghost') {
-              // Ghostball passes straight through ALL bricks (including Boss) without bouncing!
+            if (isGhostPass) {
+              // Ghostball & Symbiot pass straight through ALL bricks (including Boss) without bouncing!
               currentlyTouchingIds.add(brick.id);
-              if (!ball.ghostHitSet.has(brick.id)) {
+              if (ball.ghostHitSet && !ball.ghostHitSet.has(brick.id)) {
                 ball.ghostHitSet.add(brick.id);
                 this.handleBallBrickImpact(ball, brick);
               }
@@ -3296,8 +3430,8 @@ class IdleBreakoutGame {
           }
         }
 
-        // Clear exited brick IDs from Ghostball's hit set so it can hit them again on next pass!
-        if (ball.type === 'ghost' && ball.ghostHitSet) {
+        // Clear exited brick IDs from Ghostball / Symbiot hit set so it can hit them again on next pass!
+        if (isGhostPass && ball.ghostHitSet) {
           for (const id of ball.ghostHitSet) {
             if (!currentlyTouchingIds.has(id)) {
               ball.ghostHitSet.delete(id);
@@ -3369,6 +3503,48 @@ class IdleBreakoutGame {
         }
       } else if (!ball.hasSplit && ball.splitTier < maxTier) {
         // Az osztódott labdák a BT szinttől függően osztódnak tovább (2 -> 4 -> 8 -> 16)
+        ball.hasSplit = true;
+        this.spawnMultiplyChildren(ball);
+      }
+    } else if (ball.type === 'symbiot') {
+      // SYMBIOT: Heavy/Speedy direct damage + Poison + Smasher AoE + Multiply split!
+      this.damageBrick(brick, ball.power, 'symbiot', { ball });
+      if (!ball.isSplitChild) this.triggerScreenShake(2.8, 5.5);
+      if (brick.hp > 0) {
+        this.applyPoisonToBrick(brick);
+      }
+
+      const cx = brick.x + brick.w / 2;
+      const cy = brick.y + brick.h / 2;
+      if (!this.suppressAudioAndVisuals && !ball.isSplitChild) {
+        this.visualRings.push({
+          x: cx,
+          y: cy,
+          radius: 7,
+          maxRadius: Math.max(brick.w, brick.h) * 1.6,
+          alpha: 0.85,
+          color: '168, 85, 247',
+          speed: 145
+        });
+      }
+
+      const maxDist = Math.max(this.gridCellW, this.gridCellH) * 2.2;
+      const neighbors = this.bricks
+        .filter(b => b !== brick && b.hp > 0 && Math.hypot((b.x + b.w / 2) - cx, (b.y + b.h / 2) - cy) <= maxDist)
+        .sort((a, b) => Math.hypot((a.x + a.w / 2) - cx, (a.y + a.h / 2) - cy) - Math.hypot((b.x + b.w / 2) - cx, (b.y + b.h / 2) - cy))
+        .slice(0, 3);
+      const splashDmg = Math.max(1, Math.round(ball.power * 0.5));
+      for (const nb of neighbors) {
+        this.damageBrick(nb, splashDmg, 'smasher_splash', { ball });
+      }
+
+      const maxTier = this.getMultiplyMaxSplitTier();
+      if (!ball.isSplitChild) {
+        if ((ball.splitCooldown || 0) <= 0) {
+          ball.splitCooldown = 1.6;
+          this.spawnMultiplyChildren(ball);
+        }
+      } else if (!ball.hasSplit && ball.splitTier < maxTier) {
         ball.hasSplit = true;
         this.spawnMultiplyChildren(ball);
       }
@@ -3772,8 +3948,8 @@ class IdleBreakoutGame {
     // 3.5 Draw Animated Ball Trails & Visual Accents
     this.drawBallTrails();
 
-    // 4. Draw Balls (All 8 types visually distinct + Pierce Ball + Battle Pass Normal Cosmetics)
-    let normalBallIndex = 0;
+    // 4. Draw Balls (All 9 types visually distinct + Pierce Ball + Universal Cosmetics)
+    const cosmeticAppliedForType = {};
     for (const ball of this.balls) {
       this.ctx.save();
       if (ball.isPiercing) {
@@ -3790,6 +3966,57 @@ class IdleBreakoutGame {
         this.ctx.lineWidth = 2.5;
         this.ctx.strokeStyle = '#f59e0b';
         this.ctx.stroke();
+        this.ctx.restore();
+        continue;
+      }
+
+      let activeEquip = null;
+      if (!ball.isSplitChild && !cosmeticAppliedForType[ball.type]) {
+        cosmeticAppliedForType[ball.type] = true;
+        const eq = this.ballTypeEquips && this.ballTypeEquips[ball.type];
+        if (eq && ((eq.skinId && eq.skinId !== 'default') || (eq.effectId && eq.effectId !== 'none'))) {
+          activeEquip = eq;
+        }
+      }
+
+      if (activeEquip && activeEquip.effectId && activeEquip.effectId !== 'none') {
+        this.drawCosmeticEffectLayer(this.ctx, ball, activeEquip.effectId);
+      }
+
+      if (activeEquip && activeEquip.skinId && activeEquip.skinId !== 'default') {
+        if (ball.type === 'ghost') this.ctx.globalAlpha = 0.82;
+        this.drawCosmeticSkinBody(this.ctx, ball, activeEquip.skinId);
+      } else if (ball.type === 'symbiot') {
+        // SYMBIOT BALL: Obsidian mag + izzó bíbor/lila szimbióta indák
+        const rot = this.animTime * 4.5;
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius + 3.5, 0, Math.PI * 2);
+        this.ctx.strokeStyle = ball.isSplitChild ? 'rgba(192, 132, 252, 0.7)' : 'rgba(239, 68, 68, 0.75)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+
+        this.ctx.strokeStyle = '#a855f7';
+        this.ctx.lineWidth = 1.6;
+        for (let k = 0; k < 4; k++) {
+          const a = rot + k * (Math.PI / 2);
+          this.ctx.beginPath();
+          this.ctx.moveTo(ball.x + Math.cos(a) * (ball.radius * 0.7), ball.y + Math.sin(a) * (ball.radius * 0.7));
+          this.ctx.lineTo(ball.x + Math.cos(a + 0.35) * (ball.radius + 4), ball.y + Math.sin(a + 0.35) * (ball.radius + 4));
+          this.ctx.stroke();
+        }
+
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = ball.color;
+        this.ctx.fill();
+        this.ctx.lineWidth = 2.5;
+        this.ctx.strokeStyle = '#7e22ce';
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.arc(ball.x, ball.y, ball.radius * 0.42, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#ef4444';
+        this.ctx.fill();
       } else if (ball.type === 'ghost') {
         this.ctx.globalAlpha = 0.72;
         this.ctx.beginPath();
@@ -3890,9 +4117,6 @@ class IdleBreakoutGame {
         this.ctx.arc(ball.x, ball.y, ball.radius * 0.42, 0, Math.PI * 2);
         this.ctx.fillStyle = '#fef08a';
         this.ctx.fill();
-      } else if (ball.type === 'normal') {
-        const normIdx = normalBallIndex++;
-        this.drawNormalBallCosmetic(ball, normIdx);
       } else {
         this.ctx.beginPath();
         this.ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
@@ -4096,6 +4320,11 @@ class IdleBreakoutGame {
     }
 
     const pirateActive = this.isPirateShopActive();
+    const fmtStat = (n) => Number.isInteger(n) ? n.toLocaleString('hu-HU') : Number(n.toFixed(2)).toString();
+    const calcBarPct = (lvl, maxLvl) => {
+      const ratio = Math.max(0, Math.min(1, (lvl - 1) / Math.max(1, maxLvl - 1)));
+      return Math.round(8 + ratio * 92);
+    };
 
     for (const key in this.ballTypes) {
       const b = this.ballTypes[key];
@@ -4106,6 +4335,18 @@ class IdleBreakoutGame {
 
       const spdMaxed = b.speedLevel >= b.maxSpeedLevel;
       const pwrMaxed = b.powerLevel >= b.maxPowerLevel;
+
+      const curSpd = this.getBallSpeed(key);
+      const spdStep = this.getBallSpeedStep(key);
+      const curSpdX = curSpd / this.BASE_SPEED;
+      const spdStepX = spdStep / this.BASE_SPEED;
+      const spdPct = calcBarPct(b.speedLevel, b.maxSpeedLevel);
+      const spdNextPct = spdMaxed ? spdPct : Math.max(spdPct + 4, Math.min(100, calcBarPct(b.speedLevel + 1, b.maxSpeedLevel)));
+
+      const curPwr = this.getBallPower(key);
+      const pwrStep = b.powerStep;
+      const pwrPct = calcBarPct(b.powerLevel, b.maxPowerLevel);
+      const pwrNextPct = pwrMaxed ? pwrPct : Math.max(pwrPct + 4, Math.min(100, calcBarPct(b.powerLevel + 1, b.maxPowerLevel)));
 
       const spdCost = this.getSpeedUpgradeCost(key);
       const pwrCost = this.getPowerUpgradeCost(key);
@@ -4134,7 +4375,7 @@ class IdleBreakoutGame {
           ? 'MAX'
           : (!baseMaxed ? `🔒 MAX Speed+Power (${btCost} BT)` : `${btCost} BT`);
         btBtnHtml = `
-          <div id="wrap-upg-bt-${key}" style="width:100%; max-width:140px;">
+          <div id="wrap-upg-bt-${key}" class="ball-bt-wrap">
             <button class="ball-bt-btn ${btCls}" id="btn-upg-bt-${key}" ${(!canBuyBT || btIsMax) ? 'disabled' : ''}>
               <div class="btn-top-info">👑 Ability ${btLvl}/${btMax}</div>
               <div class="btn-cost-bottom" style="font-size:${!baseMaxed && !btIsMax ? '12px' : '15px'};">${bottomLabel}</div>
@@ -4144,22 +4385,47 @@ class IdleBreakoutGame {
       }
 
       col.innerHTML = `
-        <div class="ball-title-label">
-          <span style="font-size: 14px; color: #555;">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
-          <span>${b.name}</span>
-          <span style="font-size: 13px; color: #444;">${b.shortDesc}</span>
-          <div class="ball-dot ball-icon-${key}" style="margin-top: 4px;"></div>
+        <div class="ball-card-head">
+          <div class="ball-title-label">
+            <span class="ball-count-badge">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
+            <span class="ball-card-name">${b.name}</span>
+            <span class="ball-card-desc">${b.shortDesc}</span>
+          </div>
+          <div class="ball-dot ball-icon-${key}"></div>
         </div>
 
-        <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
-          <div class="btn-top-info">${spdMaxed ? `Speed ${b.maxSpeedLevel}/${b.maxSpeedLevel}` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} >> ${b.speedLevel + 1}`}</div>
-          <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
-        </button>
+        <div class="ball-stat-chart" aria-label="${b.name} statisztikák">
+          <div class="stat-col-item">
+            <div class="stat-col-val">${curSpdX.toFixed(2)}x</div>
+            <div class="stat-col-track">
+              ${!spdMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${spdNextPct}%;"></div>` : ''}
+              <div class="stat-col-fill speed-fill" style="height: ${spdPct}%;"></div>
+            </div>
+            <div class="stat-col-label">⚡ SEB.</div>
+            <div class="stat-col-gain">${spdMaxed ? 'MAX' : `+${spdStepX.toFixed(2)}x`}</div>
+          </div>
+          <div class="stat-col-item">
+            <div class="stat-col-val">${fmtStat(curPwr)}</div>
+            <div class="stat-col-track">
+              ${!pwrMaxed ? `<div class="stat-col-preview power-preview" style="height: ${pwrNextPct}%;"></div>` : ''}
+              <div class="stat-col-fill power-fill" style="height: ${pwrPct}%;"></div>
+            </div>
+            <div class="stat-col-label">💥 SEBZÉS</div>
+            <div class="stat-col-gain">${pwrMaxed ? 'MAX' : `+${fmtStat(pwrStep)}`}</div>
+          </div>
+        </div>
 
-        <button class="ball-upgrade-btn ${pwrClass}" id="btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
-          <div class="btn-top-info">${pwrMaxed ? `Power ${b.maxPowerLevel}/${b.maxPowerLevel}` : `Power ${b.powerLevel}/${b.maxPowerLevel} >> ${b.powerLevel + 1}`}</div>
-          <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
-        </button>
+        <div class="ball-upg-btn-grid">
+          <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+${spdStepX.toFixed(2)}x)`}</div>
+            <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
+          </button>
+
+          <button class="ball-upgrade-btn ${pwrClass}" id="btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${pwrMaxed ? `Power MAX (${b.maxPowerLevel})` : `Power ${b.powerLevel}/${b.maxPowerLevel} (+${fmtStat(pwrStep)})`}</div>
+            <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
+          </button>
+        </div>
 
         ${btBtnHtml}
 
@@ -4199,6 +4465,8 @@ class IdleBreakoutGame {
       const canAffordPierce = !pierceMaxed && this.money >= pCost;
       const curMult = this.getPermanentPierceSpeedMult().toFixed(1);
       const nextMult = (this.getPermanentPierceSpeedMult() + 0.5).toFixed(1);
+      const pPct = Math.round(8 + (this.pierceSpeedUpgradeLevel / Math.max(1, this.MAX_PIERCE_SPEED_LEVEL)) * 92);
+      const pNextPct = pierceMaxed ? pPct : Math.max(pPct + 4, Math.min(100, Math.round(8 + ((this.pierceSpeedUpgradeLevel + 1) / Math.max(1, this.MAX_PIERCE_SPEED_LEVEL)) * 92)));
       const pClass = pierceMaxed
         ? 'maxed-upg-btn'
         : (pirateActive ? 'pirate-free' : (canAffordPierce ? 'affordable' : ''));
@@ -4206,10 +4474,25 @@ class IdleBreakoutGame {
       const pierceCol = document.createElement('div');
       pierceCol.className = 'ball-upgrade-section';
       pierceCol.innerHTML = `
-        <div class="ball-title-label">
-          <span style="font-size: 14px; color: #b45309;">PIERCE LVL 5 BONUS</span>
-          <span>⚡ PIERCE SPEED</span>
-          <span style="font-size: 13px; color: #444;">Külön áttörő sebesség</span>
+        <div class="ball-card-head">
+          <div class="ball-title-label">
+            <span class="ball-count-badge" style="color: #b45309;">PIERCE LVL 5 BONUS</span>
+            <span class="ball-card-name">⚡ PIERCE SPEED</span>
+            <span class="ball-card-desc">Külön áttörő sebesség</span>
+          </div>
+          <div style="font-size: 20px;">⚡</div>
+        </div>
+
+        <div class="ball-stat-chart single-col">
+          <div class="stat-col-item">
+            <div class="stat-col-val">${curMult}x</div>
+            <div class="stat-col-track">
+              ${!pierceMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${pNextPct}%;"></div>` : ''}
+              <div class="stat-col-fill speed-fill" style="height: ${pPct}%;"></div>
+            </div>
+            <div class="stat-col-label">⚡ ÁTTÖRŐ</div>
+            <div class="stat-col-gain">${pierceMaxed ? 'MAX' : '+0.5x'}</div>
+          </div>
         </div>
 
         <button class="ball-upgrade-btn ${pClass}" id="btn-upg-pierce-spd" ${pierceMaxed ? 'disabled' : ''}>
@@ -4225,6 +4508,8 @@ class IdleBreakoutGame {
     const clickMaxed = this.clickUpgradeLevel >= this.MAX_CLICK_LEVEL;
     const clickCost = this.getClickUpgradeCost();
     const canAffordClick = !clickMaxed && this.money >= clickCost;
+    const clickPct = calcBarPct(this.clickUpgradeLevel, this.MAX_CLICK_LEVEL);
+    const clickNextPct = clickMaxed ? clickPct : Math.max(clickPct + 4, Math.min(100, calcBarPct(this.clickUpgradeLevel + 1, this.MAX_CLICK_LEVEL)));
     const clickClass = clickMaxed
       ? 'maxed-upg-btn'
       : (pirateActive ? 'pirate-free' : (canAffordClick ? 'affordable' : ''));
@@ -4232,14 +4517,29 @@ class IdleBreakoutGame {
     const clickCol = document.createElement('div');
     clickCol.className = 'ball-upgrade-section';
     clickCol.innerHTML = `
-      <div class="ball-title-label">
-        <span style="font-size: 14px; color: #555;">MANUAL</span>
-        <span>CLICK POWER</span>
-        <div style="font-size: 20px; margin-top: 4px;">👆</div>
+      <div class="ball-card-head">
+        <div class="ball-title-label">
+          <span class="ball-count-badge">MANUAL</span>
+          <span class="ball-card-name">CLICK POWER</span>
+          <span class="ball-card-desc">Kattintás sebzése</span>
+        </div>
+        <div style="font-size: 20px;">👆</div>
+      </div>
+
+      <div class="ball-stat-chart single-col">
+        <div class="stat-col-item">
+          <div class="stat-col-val">${this.clickPower}</div>
+          <div class="stat-col-track">
+            ${!clickMaxed ? `<div class="stat-col-preview power-preview" style="height: ${clickNextPct}%;"></div>` : ''}
+            <div class="stat-col-fill power-fill" style="height: ${clickPct}%;"></div>
+          </div>
+          <div class="stat-col-label">👆 SEBZÉS</div>
+          <div class="stat-col-gain">${clickMaxed ? 'MAX' : '+1'}</div>
+        </div>
       </div>
 
       <button class="ball-upgrade-btn ${clickClass}" id="btn-upg-click" ${clickMaxed ? 'disabled' : ''}>
-        <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} >> ${this.clickUpgradeLevel + 1}`}</div>
+        <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} (+1)`}</div>
         <div class="btn-cost-bottom">${clickMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost))}</div>
       </button>
     `;
@@ -4923,7 +5223,9 @@ class IdleBreakoutGame {
       battlePassClaimedFree: this.battlePassClaimedFree,
       battlePassClaimedPaid: {},
       normalBallEquips: this.normalBallEquips,
+      ballTypeEquips: this.ballTypeEquips,
       playerName: this.playerName,
+      appliedAdminCmdIds: (this.appliedAdminCmdIds || []).slice(-100),
       balls: {}
     };
 
@@ -5089,6 +5391,7 @@ class IdleBreakoutGame {
         this.battlePassClaimedFree = {};
         this.battlePassClaimedPaid = {};
         this.normalBallEquips = {};
+        this.ballTypeEquips = {};
         for (const k in this.ballTypes) {
           this.ballTypes[k].count = 0;
           this.ballTypes[k].speedLevel = 1;
@@ -5121,18 +5424,41 @@ class IdleBreakoutGame {
       // A Prémium Battle Pass nem aktiválható mentésből sem: mindig zárolva marad!
       this.battlePassClaimedPaid = {};
       if (data.battlePassClaimedFree) this.battlePassClaimedFree = { ...data.battlePassClaimedFree };
-      if (data.normalBallEquips) {
+      if (data.ballTypeEquips && typeof data.ballTypeEquips === 'object') {
+        const unlocked = this.getUnlockedCosmetics();
+        const usedSkins = new Set();
+        const usedEffects = new Set();
+        for (const tKey of Object.keys(data.ballTypeEquips)) {
+          if (!this.ballTypes[tKey]) continue;
+          const eq = data.ballTypeEquips[tKey] || {};
+          let sId = (eq.skinId && unlocked.skins.has(eq.skinId) && !usedSkins.has(eq.skinId)) ? eq.skinId : 'default';
+          let eId = (eq.effectId && unlocked.effects.has(eq.effectId) && !usedEffects.has(eq.effectId)) ? eq.effectId : 'none';
+          if (sId !== 'default') usedSkins.add(sId);
+          if (eId !== 'none') usedEffects.add(eId);
+          this.ballTypeEquips[tKey] = { skinId: sId, effectId: eId };
+        }
+      } else if (data.normalBallEquips) {
         const unlocked = this.getUnlockedCosmetics();
         for (const idx in data.normalBallEquips) {
           const eq = data.normalBallEquips[idx] || {};
-          this.normalBallEquips[idx] = {
-            skinId: unlocked.skins.has(eq.skinId) ? eq.skinId : 'default',
-            effectId: unlocked.effects.has(eq.effectId) ? eq.effectId : 'none'
-          };
+          const sId = unlocked.skins.has(eq.skinId) ? eq.skinId : 'default';
+          const eId = unlocked.effects.has(eq.effectId) ? eq.effectId : 'none';
+          if (sId !== 'default' || eId !== 'none') {
+            if (!this.ballTypeEquips.normal) {
+              this.ballTypeEquips.normal = { skinId: sId, effectId: eId };
+              break;
+            }
+          }
         }
       }
+      const loadedCmdIds = Array.isArray(data.appliedAdminCmdIds) ? data.appliedAdminCmdIds : [];
+      if (loadedCmdIds.length > 0) {
+        const merged = new Set([...(this.appliedAdminCmdIds || []), ...loadedCmdIds]);
+        this.appliedAdminCmdIds = [...merged].slice(-100);
+        try { localStorage.setItem('idle_breakout_applied_admin_cmds', JSON.stringify(this.appliedAdminCmdIds)); } catch (e) {}
+      }
       if (data.playerName) {
-        this.playerName = String(data.playerName).slice(0, 14);
+        this.playerName = String(data.playerName).slice(0, 12);
         try { localStorage.setItem('idle_breakout_player_name', this.playerName); } catch (e) {}
       }
 
@@ -5231,6 +5557,10 @@ class IdleBreakoutGame {
         this.renderBattlePass();
         this.refreshOpenModals();
         this.broadcastMyStatus();
+        this.processPendingAdminCommands({
+          saveTs: Number(data.lastSavedAt) || 0,
+          saveCmdIds: Array.isArray(data.appliedAdminCmdIds) ? data.appliedAdminCmdIds : []
+        });
 
         try {
           localStorage.setItem(this.SAVE_KEY, JSON.stringify(this.buildSaveData(ownerUid)));
@@ -5271,6 +5601,7 @@ class IdleBreakoutGame {
     this.battlePassClaimedFree = {};
     this.battlePassClaimedPaid = {};
     this.normalBallEquips = {};
+    this.ballTypeEquips = {};
     this.balls = [];
     this.activePowerUps = {};
     this.bonusOrb = null;
@@ -5301,7 +5632,7 @@ class IdleBreakoutGame {
   }
 
   setPlayerNameDirect(newName) {
-    const clean = (newName || '').trim().slice(0, 14);
+    const clean = (newName || '').trim().slice(0, 12);
     if (!clean) return;
     this.playerName = clean;
     try { localStorage.setItem('idle_breakout_player_name', this.playerName); } catch (e) {}
@@ -5361,6 +5692,10 @@ class IdleBreakoutGame {
           this.ctx.strokeStyle = `rgba(185, 28, 28, ${alpha * 0.8})`;
           this.ctx.lineWidth = ball.radius * 1.1;
           this.ctx.stroke();
+        } else if (ball.type === 'symbiot') {
+          this.ctx.strokeStyle = `rgba(168, 85, 247, ${alpha * 1.4})`;
+          this.ctx.lineWidth = ball.radius * 1.05;
+          this.ctx.stroke();
         } else if (ball.type === 'normal') {
           this.ctx.strokeStyle = `rgba(254, 240, 138, ${alpha * 0.8})`;
           this.ctx.lineWidth = ball.radius * 0.5;
@@ -5371,16 +5706,15 @@ class IdleBreakoutGame {
     }
   }
 
-  // --- Normal Ball Custom Cosmetics (Skins & Effects) Renderer ---
-  drawNormalBallCosmetic(ball, normIdx) {
-    const equip = this.normalBallEquips[normIdx] || { skinId: 'default', effectId: 'none' };
-    const ctx = this.ctx;
+  // --- Universal Ball Custom Cosmetics (Skins & Effects) Renderer ---
+  drawCosmeticEffectLayer(ctx, ball, effectId) {
+    if (!effectId || effectId === 'none') return;
     const x = ball.x;
     const y = ball.y;
     const r = ball.radius;
 
     // 1. Draw Custom Effect (Background / Aura / Particle Layers)
-    if (equip.effectId === 'fx_cosmic_rare') {
+    if (effectId === 'fx_cosmic_rare') {
       // RITKA: Kozmikus Szingularitás - Fekete lyuk örvény & csillagpor
       ctx.save();
       const rot = this.animTime * 3;
@@ -5397,16 +5731,16 @@ class IdleBreakoutGame {
         ctx.fillRect(x + Math.cos(a) * dist - 1.5, y + Math.sin(a) * dist - 1.5, 3, 3);
       }
       ctx.restore();
-    } else if (equip.effectId === 'fx_flame' || equip.effectId === 'fx_p_darkflame') {
+    } else if (effectId === 'fx_flame' || effectId === 'fx_p_darkflame') {
       ctx.save();
-      const isDark = (equip.effectId === 'fx_p_darkflame');
+      const isDark = (effectId === 'fx_p_darkflame');
       ctx.beginPath();
       ctx.arc(x, y, r + 4 + Math.sin(this.animTime * 12) * 1.5, 0, Math.PI * 2);
       ctx.strokeStyle = isDark ? 'rgba(147, 51, 234, 0.8)' : 'rgba(239, 68, 68, 0.8)';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
-    } else if (equip.effectId === 'fx_frost') {
+    } else if (effectId === 'fx_frost') {
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r + 3, 0, Math.PI * 2);
@@ -5414,9 +5748,9 @@ class IdleBreakoutGame {
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
-    } else if (equip.effectId === 'fx_starlight' || equip.effectId === 'fx_p_golddust') {
+    } else if (effectId === 'fx_starlight' || effectId === 'fx_p_golddust') {
       ctx.save();
-      const isGold = (equip.effectId === 'fx_p_golddust');
+      const isGold = (effectId === 'fx_p_golddust');
       ctx.fillStyle = isGold ? '#facc15' : '#fef08a';
       for (let i = 0; i < 3; i++) {
         const ang = this.animTime * 4 + (i * Math.PI * 2 / 3);
@@ -5424,7 +5758,7 @@ class IdleBreakoutGame {
         ctx.fillRect(x + Math.cos(ang) * dist - 1, y + Math.sin(ang) * dist - 1, 2, 2);
       }
       ctx.restore();
-    } else if (equip.effectId === 'fx_p_rings') {
+    } else if (effectId === 'fx_p_rings') {
       ctx.save();
       const ringR = r + 2 + ((this.animTime * 20) % 10);
       const ringAlpha = 1 - (((this.animTime * 20) % 10) / 10);
@@ -5434,9 +5768,9 @@ class IdleBreakoutGame {
       ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.restore();
-    } else if (equip.effectId === 'fx_p_lightning' || equip.effectId === 'fx_p_violetlightning') {
+    } else if (effectId === 'fx_p_lightning' || effectId === 'fx_p_violetlightning') {
       ctx.save();
-      const isViolet = (equip.effectId === 'fx_p_violetlightning');
+      const isViolet = (effectId === 'fx_p_violetlightning');
       ctx.strokeStyle = isViolet ? '#e879f9' : '#38bdf8';
       ctx.lineWidth = 1.5;
       for (let i = 0; i < 3; i++) {
@@ -5447,7 +5781,7 @@ class IdleBreakoutGame {
         ctx.stroke();
       }
       ctx.restore();
-    } else if (equip.effectId === 'fx_p_godcrown') {
+    } else if (effectId === 'fx_p_godcrown') {
       ctx.save();
       // Glória
       ctx.beginPath();
@@ -5457,10 +5791,14 @@ class IdleBreakoutGame {
       ctx.stroke();
       ctx.restore();
     }
+  }
 
-    // 2. Draw Ball Body with Custom Skin
+  drawCosmeticSkinBody(ctx, ball, skinId) {
+    const x = ball.x;
+    const y = ball.y;
+    const r = ball.radius;
     ctx.save();
-    let fillColor = BALL_SKIN_COLORS[equip.skinId] || ball.color;
+    let fillColor = BALL_SKIN_COLORS[skinId] || ball.color;
 
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -5477,7 +5815,7 @@ class IdleBreakoutGame {
     ctx.fill();
 
     // 3. Draw Unique Animated Skin Layer (A skineken is legyen egyedi animált effekt!)
-    this.drawSkinAnimatedEffect(ctx, x, y, r, equip.skinId);
+    this.drawSkinAnimatedEffect(ctx, x, y, r, skinId);
 
     ctx.restore();
   }
@@ -5612,11 +5950,37 @@ class IdleBreakoutGame {
   initLeaderboard() {
     this.renderLeaderboard();
 
-    const saveName = (inputEl) => {
+    const bindLengthGuard = (inputId, warnId, maxLen) => {
+      const inp = document.getElementById(inputId);
+      const warn = document.getElementById(warnId);
+      if (!inp) return;
+      const syncWarn = () => {
+        const exceeded = (inp.value || '').trim().length > maxLen;
+        if (warn) warn.style.display = exceeded ? 'block' : 'none';
+        inp.classList.toggle('input-over-limit', exceeded);
+      };
+      inp.addEventListener('input', syncWarn);
+    };
+    bindLengthGuard('player-name-input-pc', 'name-limit-warn-pc', 12);
+    bindLengthGuard('player-name-input-mobile', 'name-limit-warn-mobile', 12);
+    bindLengthGuard('auth-reg-name', 'auth-reg-name-warn', 12);
+    bindLengthGuard('auth-reg-password', 'auth-reg-pass-warn', 20);
+    bindLengthGuard('auth-login-password', 'auth-login-pass-warn', 20);
+
+    const saveName = (inputEl, warnId) => {
       if (this.cloud && this.cloud.currentUser) return;
       const val = (inputEl.value || '').trim();
+      const warn = document.getElementById(warnId);
       if (!val) return;
-      this.playerName = val.slice(0, 14);
+      if (val.length > 12) {
+        if (warn) warn.style.display = 'block';
+        inputEl.classList.add('input-over-limit');
+        this.showToast('⚠️ A játékosnév legfeljebb 12 karakter lehet!', 2600);
+        return;
+      }
+      if (warn) warn.style.display = 'none';
+      inputEl.classList.remove('input-over-limit');
+      this.playerName = val;
       try { localStorage.setItem('idle_breakout_player_name', this.playerName); } catch (e) {}
       const pcInput = document.getElementById('player-name-input-pc');
       const mobileInput = document.getElementById('player-name-input-mobile');
@@ -5637,11 +6001,11 @@ class IdleBreakoutGame {
     if (pcInput) {
       pcInput.value = this.playerName;
       pcInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') saveName(pcInput);
+        if (e.key === 'Enter') saveName(pcInput, 'name-limit-warn-pc');
       });
     }
     if (pcSaveBtn && pcInput) {
-      pcSaveBtn.addEventListener('click', () => saveName(pcInput));
+      pcSaveBtn.addEventListener('click', () => saveName(pcInput, 'name-limit-warn-pc'));
     }
 
     const mobileInput = document.getElementById('player-name-input-mobile');
@@ -5649,11 +6013,11 @@ class IdleBreakoutGame {
     if (mobileInput) {
       mobileInput.value = this.playerName;
       mobileInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') saveName(mobileInput);
+        if (e.key === 'Enter') saveName(mobileInput, 'name-limit-warn-mobile');
       });
     }
     if (mobileSaveBtn && mobileInput) {
-      mobileSaveBtn.addEventListener('click', () => saveName(mobileInput));
+      mobileSaveBtn.addEventListener('click', () => saveName(mobileInput, 'name-limit-warn-mobile'));
     }
 
     // Valós idejű multiplayer kapcsolat inicializálása
@@ -5752,19 +6116,13 @@ class IdleBreakoutGame {
                 let keepLvl = dLvl;
                 let keepBrk = dBrk;
                 if (existing && (existing.ts || 0) > dTs) {
-                  // Ha a Firestore-ból vagy másik böngészőből már van újabb/magasabb adat erre az UID-re, ne rontsuk vissza régebbivel:
-                  const eReb = Number(existing.rebirths) || 0;
-                  const eLvl = Number(existing.level) || 1;
-                  const eBrk = Number(existing.bricks) || 0;
-                  if (eReb > dReb || (eReb === dReb && eLvl > dLvl) || (eReb === dReb && eLvl === dLvl && eBrk > dBrk)) {
-                    keepReb = eReb;
-                    keepLvl = eLvl;
-                    keepBrk = eBrk;
-                  }
+                  keepReb = Math.max(0, Number(existing.rebirths) || 0);
+                  keepLvl = Math.max(1, Number(existing.level) || 1);
+                  keepBrk = Math.max(0, Number(existing.bricks) || 0);
                 }
 
-                const incomingName = (data.name || '').trim().slice(0, 14);
-                const prevName = (existing && existing.name || '').trim().slice(0, 14);
+                const incomingName = (data.name || '').trim().slice(0, 12);
+                const prevName = (existing && existing.name || '').trim().slice(0, 12);
                 const resolvedName = (incomingName && incomingName !== 'Játékos')
                   ? incomingName
                   : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
@@ -5915,7 +6273,7 @@ class IdleBreakoutGame {
 
   getDefaultAdminRules() {
     return {
-      version: 1,
+      version: 2,
       updatedAt: 0,
       hideDefaultName: false,
       hideGuests: false,
@@ -5926,6 +6284,7 @@ class IdleBreakoutGame {
       bannedNames: [],
       whitelistNames: [],
       overrides: {},
+      playerCommands: {},
       customPlayers: []
     };
   }
@@ -5941,7 +6300,7 @@ class IdleBreakoutGame {
           .filter(cp => cp && cp.id)
           .map(cp => ({
             id: String(cp.id),
-            name: String(cp.name || 'Játékos').slice(0, 14),
+            name: String(cp.name || 'Játékos').slice(0, 12),
             rebirths: Math.max(0, Number(cp.rebirths) || 0),
             level: Math.max(1, Number(cp.level) || 1),
             bricks: Math.max(0, Number(cp.bricks) || 0),
@@ -5949,8 +6308,25 @@ class IdleBreakoutGame {
           }))
       : [];
     const overrides = (raw.overrides && typeof raw.overrides === 'object') ? { ...raw.overrides } : {};
+    const playerCommands = {};
+    if (raw.playerCommands && typeof raw.playerCommands === 'object') {
+      for (const k of Object.keys(raw.playerCommands)) {
+        const c = raw.playerCommands[k];
+        if (c && typeof c === 'object' && c.cmdId) {
+          playerCommands[k] = {
+            cmdId: String(c.cmdId),
+            targetIds: normList(c.targetIds),
+            targetNameLower: String(c.targetNameLower || '').trim().toLowerCase(),
+            name: c.name ? String(c.name).trim().slice(0, 12) : '',
+            rebirths: Math.max(0, Math.min(999999, Math.floor(Number(c.rebirths) || 0))),
+            level: Math.max(1, Math.min(999999, Math.floor(Number(c.level) || 1))),
+            issuedAt: Number(c.issuedAt) || 0
+          };
+        }
+      }
+    }
     return {
-      version: 1,
+      version: 2,
       updatedAt: Number(raw.updatedAt) || 0,
       hideDefaultName: !!raw.hideDefaultName,
       hideGuests: !!raw.hideGuests,
@@ -5961,6 +6337,7 @@ class IdleBreakoutGame {
       bannedNames: normList(raw.bannedNames).map(s => s.toLowerCase()),
       whitelistNames: normList(raw.whitelistNames).map(s => s.toLowerCase()),
       overrides,
+      playerCommands,
       customPlayers
     };
   }
@@ -5980,6 +6357,69 @@ class IdleBreakoutGame {
     } catch (e) {}
   }
 
+  processPendingAdminCommands(reloadContext = null) {
+    const cmdsObj = (this.lbAdminRules && this.lbAdminRules.playerCommands) || {};
+    const cmdList = Object.values(cmdsObj).sort((a, b) => (a.issuedAt || 0) - (b.issuedAt || 0));
+    if (cmdList.length === 0) return false;
+
+    const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
+    const myIds = [myUid, this.myPlayerId].filter(Boolean).map(String);
+    const myNameLower = (this.playerName || '').trim().toLowerCase();
+    const hasReloadCtx = !!(reloadContext && typeof reloadContext === 'object');
+    const saveCmdSet = hasReloadCtx ? new Set(reloadContext.saveCmdIds || []) : null;
+    const saveTs = hasReloadCtx ? (Number(reloadContext.saveTs) || 0) : 0;
+    let changed = false;
+
+    for (const cmd of cmdList) {
+      if (!cmd || !cmd.cmdId) continue;
+      if (hasReloadCtx) {
+        const alreadyInLoadedSave = saveCmdSet.has(cmd.cmdId) || (saveTs > 0 && saveTs >= (cmd.issuedAt || 0));
+        if (alreadyInLoadedSave) continue;
+      } else if ((this.appliedAdminCmdIds || []).includes(cmd.cmdId)) {
+        continue;
+      }
+
+      const idMatch = Array.isArray(cmd.targetIds) && cmd.targetIds.some(id => myIds.includes(String(id)));
+      const nameMatch = !!cmd.targetNameLower && cmd.targetNameLower !== 'játékos' && myNameLower === cmd.targetNameLower;
+      if (!idMatch && !nameMatch) continue;
+
+      if (!this.appliedAdminCmdIds.includes(cmd.cmdId)) {
+        this.appliedAdminCmdIds.push(cmd.cmdId);
+      }
+      if (this.appliedAdminCmdIds.length > 100) {
+        this.appliedAdminCmdIds = this.appliedAdminCmdIds.slice(-100);
+      }
+      try { localStorage.setItem('idle_breakout_applied_admin_cmds', JSON.stringify(this.appliedAdminCmdIds)); } catch (e) {}
+
+      const newReb = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
+      const newLvl = Math.max(1, Math.min(999999, Math.floor(Number(cmd.level) || 1)));
+      const lvlChanged = newLvl !== this.level;
+
+      this.rebirthCount = newReb;
+      this.rebirthMultiplier = this.getRebirthMultiplier();
+      this.level = newLvl;
+      if (cmd.name) {
+        this.setPlayerNameDirect(cmd.name);
+      }
+      if (lvlChanged && this.width && this.height) {
+        this.generateLevel(this.level);
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      this.updateHUD();
+      this.renderLeaderboard();
+      this.save();
+      this.broadcastMyStatus();
+      if (this.cloud && this.cloud.currentUser) {
+        this.cloud.saveToCloud(true);
+      }
+      this.showToast(`🛠️ Fejlesztő frissítette az állapotod: Rebirth ${this.rebirthCount} | Szint ${this.level}!`, 4500);
+    }
+    return changed;
+  }
+
   applyIncomingAdminRules(raw, source = 'remote') {
     if (!raw || typeof raw !== 'object') return;
     const incoming = this.normalizeAdminRules(raw);
@@ -5987,11 +6427,14 @@ class IdleBreakoutGame {
     if (incoming.updatedAt > curUpdated) {
       this.lbAdminRules = incoming;
       this.saveAdminRulesLocally();
+      this.processPendingAdminCommands();
       this.renderLeaderboard();
       const devModal = document.getElementById('dev-leaderboard-modal');
       if (devModal && devModal.classList.contains('open')) {
         this.renderDevLeaderboardPanel();
       }
+    } else {
+      this.processPendingAdminCommands();
     }
   }
 
@@ -6070,22 +6513,17 @@ class IdleBreakoutGame {
       if (rp.fromFirestore) existing.fromFirestore = true;
       if (rp.keepInTop10) existing.keepInTop10 = true;
 
-      const rReb = Number(rp.rebirths) || 0;
-      const rLvl = Number(rp.level) || 1;
-      const rBrk = Number(rp.bricks) || 0;
-      const betterProgress =
-        rReb > existing.rebirths ||
-        (rReb === existing.rebirths && rLvl > existing.level) ||
-        (rReb === existing.rebirths && rLvl === existing.level && rBrk > existing.bricks);
+      const rReb = Math.max(0, Number(rp.rebirths) || 0);
+      const rLvl = Math.max(1, Number(rp.level) || 1);
+      const rBrk = Math.max(0, Number(rp.bricks) || 0);
+      const rTs = Number(rp.ts) || 0;
 
-      if (betterProgress) {
+      if (rTs >= existing.ts) {
+        existing.ts = rTs;
         existing.rebirths = rReb;
         existing.level = rLvl;
         existing.bricks = rBrk;
-      }
-      if ((Number(rp.ts) || 0) > existing.ts) {
-        existing.ts = Number(rp.ts) || 0;
-        const rn = (rp.name || '').trim();
+        const rn = (rp.name || '').trim().slice(0, 12);
         if (rn && (rn !== 'Játékos' || !existing.name || existing.name === 'Játékos')) {
           existing.name = rn;
         }
@@ -6163,7 +6601,7 @@ class IdleBreakoutGame {
       if (ov && typeof ov === 'object') {
         return {
           ...entry,
-          name: ov.name ? String(ov.name).slice(0, 14) : entry.name,
+          name: ov.name ? String(ov.name).slice(0, 12) : entry.name,
           rebirths: ov.rebirths !== undefined ? Math.max(0, Number(ov.rebirths) || 0) : entry.rebirths,
           level: ov.level !== undefined ? Math.max(1, Number(ov.level) || 1) : entry.level,
           _hasOverride: true,
@@ -6283,6 +6721,13 @@ class IdleBreakoutGame {
     });
   }
 
+  formatLeaderboardStat(val) {
+    const n = Number(val) || 0;
+    if (!Number.isFinite(n)) return 'MAX';
+    if (Math.abs(n) >= 10000) return this.formatNumber(Math.floor(n));
+    return String(Math.floor(n));
+  }
+
   renderLeaderboard() {
     const roster = this.getRawLeaderboardRoster();
     const entries = roster.filter(e => !e._filterReason);
@@ -6369,8 +6814,8 @@ class IdleBreakoutGame {
         <div class="leaderboard-row ${rankClass} ${meClass} ${pinnedClass}">
           <span class="col-rank">${medal}</span>
           <span class="col-name">${dotHtml}${this.escapeHtml(entry.name)}${meBadge}</span>
-          <span class="col-reb">${entry.rebirths}</span>
-          <span class="col-lvl">${entry.level}</span>
+          <span class="col-reb">${this.formatLeaderboardStat(entry.rebirths)}</span>
+          <span class="col-lvl">${this.formatLeaderboardStat(entry.level)}</span>
         </div>
       `;
     }).join('');
@@ -6404,12 +6849,16 @@ class IdleBreakoutGame {
     }
   }
 
-  getDevPin() {
+  async verifyDevCode(rawCode) {
+    const payload = DEV_AUTH_SALT + String(rawCode || '').trim();
     try {
-      return localStorage.getItem('idle_breakout_dev_pin') || '2026';
-    } catch (e) {
-      return '2026';
-    }
+      if (typeof crypto !== 'undefined' && crypto.subtle && typeof TextEncoder !== 'undefined') {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+        const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        return hex === DEV_AUTH_HASH;
+      }
+    } catch (e) {}
+    return sha256HexFallback(payload) === DEV_AUTH_HASH;
   }
 
   openDevPanel() {
@@ -6477,12 +6926,13 @@ class IdleBreakoutGame {
 
     const pinForm = document.getElementById('dev-pin-form');
     if (pinForm) {
-      pinForm.addEventListener('submit', (e) => {
+      pinForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const pinIn = document.getElementById('dev-pin-input');
         const pinErr = document.getElementById('dev-pin-error');
         const entered = (pinIn ? pinIn.value : '').trim();
-        if (entered === this.getDevPin()) {
+        const valid = await this.verifyDevCode(entered);
+        if (valid) {
           this._devSessionUnlocked = true;
           try { sessionStorage.setItem('idle_breakout_dev_unlocked', '1'); } catch (err) {}
           if (pinErr) { pinErr.textContent = ''; pinErr.style.display = 'none'; }
@@ -6490,7 +6940,7 @@ class IdleBreakoutGame {
           if (window.soundEngine) window.soundEngine.playLevelUp();
         } else {
           if (pinErr) {
-            pinErr.textContent = 'Hibás fejlesztői PIN kód!';
+            pinErr.textContent = 'Hibás fejlesztői kód!';
             pinErr.style.display = 'block';
           }
         }
@@ -6598,26 +7048,11 @@ class IdleBreakoutGame {
     if (addBanBtn) addBanBtn.addEventListener('click', doAddBan);
     if (banInput) banInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doAddBan(); } });
 
-    // PIN change & Reset all rules
-    const savePinBtn = document.getElementById('btn-dev-save-pin');
-    const newPinInput = document.getElementById('dev-new-pin-input');
-    if (savePinBtn && newPinInput) {
-      savePinBtn.addEventListener('click', () => {
-        const val = (newPinInput.value || '').trim();
-        if (val.length < 3) {
-          this.showToast('⚠️ A PIN legalább 3 karakter legyen!', 2600);
-          return;
-        }
-        try { localStorage.setItem('idle_breakout_dev_pin', val); } catch (e) {}
-        newPinInput.value = '';
-        this.showToast('🔑 Új fejlesztői PIN elmentve!', 2600);
-      });
-    }
-
+    // Reset all rules
     const resetRulesBtn = document.getElementById('btn-dev-reset-rules');
     if (resetRulesBtn) {
       resetRulesBtn.addEventListener('click', () => {
-        if (!confirm('Biztosan törlöd az összes tiltást, engedélyezőlistát és felülírást?')) return;
+        if (!confirm('Biztosan törlöd az összes tiltást, engedélyezőlistát és parancsot?')) return;
         this.lbAdminRules = this.getDefaultAdminRules();
         this.syncAdminRulesGlobally(true);
       });
@@ -6628,13 +7063,18 @@ class IdleBreakoutGame {
     const nameIn = document.getElementById('dev-add-name');
     const rebIn = document.getElementById('dev-add-reb');
     const lvlIn = document.getElementById('dev-add-lvl');
-    const name = (nameIn ? nameIn.value : '').trim().slice(0, 14);
-    if (!name) {
+    const rawName = (nameIn ? nameIn.value : '').trim();
+    if (!rawName) {
       this.showToast('⚠️ Adj meg egy játékosnevet!', 2200);
       return;
     }
-    const rebirths = Math.max(0, parseInt(rebIn ? rebIn.value : '0', 10) || 0);
-    const level = Math.max(1, parseInt(lvlIn ? lvlIn.value : '1', 10) || 1);
+    if (rawName.length > 12) {
+      this.showToast('⚠️ A név legfeljebb 12 karakter lehet!', 2400);
+      return;
+    }
+    const name = rawName.slice(0, 12);
+    const rebirths = Math.max(0, Math.min(999999, Math.floor(parseInt(rebIn ? rebIn.value : '0', 10) || 0)));
+    const level = Math.max(1, Math.min(999999, Math.floor(parseInt(lvlIn ? lvlIn.value : '1', 10) || 1)));
     this.lbAdminRules.customPlayers.push({
       id: 'custom_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 5),
       name,
@@ -6667,9 +7107,28 @@ class IdleBreakoutGame {
     const nIn = document.getElementById('dev-edit-name');
     const rIn = document.getElementById('dev-edit-reb');
     const lIn = document.getElementById('dev-edit-lvl');
-    const newName = (nIn ? nIn.value : entry.name).trim().slice(0, 14) || entry.name;
-    const newReb = Math.max(0, parseInt(rIn ? rIn.value : entry.rebirths, 10) || 0);
-    const newLvl = Math.max(1, parseInt(lIn ? lIn.value : entry.level, 10) || 1);
+    const rawName = (nIn ? nIn.value : entry.name).trim();
+    if (rawName.length > 12) {
+      this.showToast('⚠️ A név legfeljebb 12 karakter lehet!', 2400);
+      return;
+    }
+    const newName = rawName.slice(0, 12) || String(entry.name || 'Játékos').slice(0, 12);
+    const newReb = Math.max(0, Math.min(999999, Math.floor(parseInt(rIn ? rIn.value : entry.rebirths, 10) || 0)));
+    const newLvl = Math.max(1, Math.min(999999, Math.floor(parseInt(lIn ? lIn.value : entry.level, 10) || 1)));
+
+    // Régi statikus felülírások törlése, hogy a játékos ne ragadjon be fix számra:
+    if (this.lbAdminRules && this.lbAdminRules.overrides) {
+      for (const k of [
+        entry.uid,
+        entry.id,
+        entry.docId,
+        ...(entry.rawKeys || []),
+        entry._origName ? `name:${entry._origName.trim().toLowerCase()}` : null,
+        `name:${newName.trim().toLowerCase()}`
+      ].filter(Boolean)) {
+        delete this.lbAdminRules.overrides[k];
+      }
+    }
 
     if (entry.isPlayer) {
       const lvlChanged = newLvl !== this.level;
@@ -6682,7 +7141,7 @@ class IdleBreakoutGame {
       this.save();
       this.broadcastMyStatus();
       if (this.cloud && this.cloud.currentUser) {
-        this.cloud.saveToCloud(true);
+        await this.cloud.saveToCloud(true);
       }
     } else if (entry.isCustom) {
       const cp = this.lbAdminRules.customPlayers.find(c => c.id === entry.id);
@@ -6692,18 +7151,42 @@ class IdleBreakoutGame {
         cp.level = newLvl;
       }
     } else {
-      const ovKey = entry.uid || entry.id || `name:${(entry._origName || entry.name).trim().toLowerCase()}`;
-      this.lbAdminRules.overrides[ovKey] = {
+      const now = Date.now();
+      const matchIds = this.getEntryMatchIds(entry);
+      const origLower = (entry._origName || entry.name || '').trim().toLowerCase();
+      const cmdKey = entry.uid || entry.docId || entry.id || `name:${origLower}`;
+      if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
+        this.lbAdminRules.playerCommands = {};
+      }
+      this.lbAdminRules.playerCommands[cmdKey] = {
+        cmdId: 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+        targetIds: matchIds,
+        targetNameLower: origLower,
         name: newName,
         rebirths: newReb,
-        level: newLvl
+        level: newLvl,
+        issuedAt: now
       };
+
+      if (this.remotePlayers) {
+        for (const pid of Object.keys(this.remotePlayers)) {
+          const rp = this.remotePlayers[pid];
+          if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
+            rp.name = newName;
+            rp.rebirths = newReb;
+            rp.level = newLvl;
+            rp.ts = now;
+          }
+        }
+        try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+      }
+
       if (this.cloud && (entry.docId || entry.uid)) {
         await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
           name: newName,
           rebirths: newReb,
           level: newLvl,
-          ts: Date.now()
+          ts: now
         });
       }
     }
@@ -7175,9 +7658,7 @@ class IdleBreakoutGame {
     }
 
     const unlocked = this.getUnlockedCosmetics();
-    const normalCount = this.ballTypes.normal.count;
-
-    const allSkins = [{ id: 'default', name: 'Alapértelmezett (Sárga)' }];
+    const allSkins = [{ id: 'default', name: 'Alapértelmezett' }];
     const allEffects = [{ id: 'none', name: 'Nincs effekt' }];
 
     for (const stage of BATTLE_PASS_STAGES) {
@@ -7195,34 +7676,62 @@ class IdleBreakoutGame {
       }
     }
 
+    const armoryLabels = {
+      normal: { one: 'Normál labda', many: 'Normál labdák' },
+      speedy: { one: 'Speedy labda', many: 'Speedy labdák' },
+      heavy: { one: 'Heavy labda', many: 'Heavy labdák' },
+      smasher: { one: 'Smasher labda', many: 'Smasher labdák' },
+      poison: { one: 'Poison labda', many: 'Poison labdák' },
+      rocket: { one: 'Rocket labda', many: 'Rocket labdák' },
+      ghost: { one: 'Ghost labda', many: 'Ghost labdák' },
+      multiply: { one: 'Multiply labda', many: 'Multiply labdák' },
+      symbiot: { one: 'Symbiot labda', many: 'Symbiot labdák' }
+    };
+
+    const ownedBallTypes = Object.keys(this.ballTypes).filter(k => this.ballTypes[k].count > 0);
     let armoryHtml = '';
-    if (normalCount <= 0) {
+    if (ownedBallTypes.length === 0) {
       armoryHtml = `
         <div style="padding: 16px; text-align: center; color: #555; line-height: 1.4;">
-          🎱 <strong>Még nincs egyetlen Normál labdád sem!</strong><br><br>
-          Vásárolj legalább 1 Normál labdát a fenti menüből ($25), hogy felruházhasd a Breaker Pass-ből feloldott egyedi skinekkel és vizuális effektekkel!
+          🎱 <strong>Még nincs egyetlen labdád sem!</strong><br><br>
+          Vásárolj legalább 1 labdát a fenti menüből ($25-tól), hogy felruházhasd a Breaker Pass-ből feloldott egyedi skinekkel és vizuális effektekkel!
         </div>
       `;
     } else {
-      armoryHtml = `<div style="font-size:12px; color:#666; margin-bottom:4px; line-height:1.2;">
-        ℹ️ A feloldott effektek <strong>kizárólag Normál labdákra</strong> tehetők, és <strong>egy effekt egyszerre legfeljebb 1 labdára</strong> tehető fel!
+      armoryHtml = `<div style="font-size:12px; color:#555; margin-bottom:4px; line-height:1.25;">
+        ℹ️ Bármelyik labdatípusból <strong>1 db labdára</strong> tehetsz skint és effektet. <strong>Egy skin és egy effekt egyszerre csak 1 labdán lehet!</strong>
       </div>`;
 
-      for (let i = 0; i < normalCount; i++) {
-        const curEquip = this.normalBallEquips[i] || { skinId: 'default', effectId: 'none' };
+      for (const typeKey of ownedBallTypes) {
+        const cnt = this.ballTypes[typeKey].count;
+        const lbl = armoryLabels[typeKey] || { one: this.ballTypes[typeKey].name, many: this.ballTypes[typeKey].name };
+        const typeDisplay = cnt > 1 ? lbl.many : lbl.one;
+        const curEquip = (this.ballTypeEquips && this.ballTypeEquips[typeKey]) || { skinId: 'default', effectId: 'none' };
 
         const skinOptions = allSkins.map(s => {
           const sel = (s.id === curEquip.skinId) ? 'selected' : '';
-          return `<option value="${s.id}" ${sel}>${s.name}</option>`;
+          let note = '';
+          if (s.id !== 'default' && this.ballTypeEquips) {
+            for (const otherKey of Object.keys(this.ballTypeEquips)) {
+              if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].skinId === s.id) {
+                const otherLbl = armoryLabels[otherKey] ? armoryLabels[otherKey].one : otherKey;
+                note = ` (${otherLbl}-n van)`;
+                break;
+              }
+            }
+          }
+          return `<option value="${s.id}" ${sel}>${s.name}${note}</option>`;
         }).join('');
 
         const effectOptions = allEffects.map(fx => {
           const sel = (fx.id === curEquip.effectId) ? 'selected' : '';
           let note = '';
-          if (fx.id !== 'none') {
-            for (const otherIdx in this.normalBallEquips) {
-              if (parseInt(otherIdx) !== i && this.normalBallEquips[otherIdx].effectId === fx.id) {
-                note = ` (Normál #${parseInt(otherIdx) + 1}-en van)`;
+          if (fx.id !== 'none' && this.ballTypeEquips) {
+            for (const otherKey of Object.keys(this.ballTypeEquips)) {
+              if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].effectId === fx.id) {
+                const otherLbl = armoryLabels[otherKey] ? armoryLabels[otherKey].one : otherKey;
+                note = ` (${otherLbl}-n van)`;
+                break;
               }
             }
           }
@@ -7232,17 +7741,18 @@ class IdleBreakoutGame {
         armoryHtml += `
           <div class="armory-ball-card">
             <div class="armory-ball-header">
-              <span>🟡 Normál Labda #${i + 1}</span>
+              <span class="armory-ball-title"><span class="ball-dot ball-icon-${typeKey}"></span> ${typeDisplay} (${cnt}x)</span>
+              <span class="armory-ball-sub">1 db-on</span>
             </div>
             <div class="armory-select-row">
               <label>Skin:</label>
-              <select class="armory-select" data-ball-idx="${i}" data-cosmetic-type="skin">
+              <select class="armory-select" data-ball-type="${typeKey}" data-cosmetic-type="skin">
                 ${skinOptions}
               </select>
             </div>
             <div class="armory-select-row">
               <label>Effekt:</label>
-              <select class="armory-select" data-ball-idx="${i}" data-cosmetic-type="effect">
+              <select class="armory-select" data-ball-type="${typeKey}" data-cosmetic-type="effect">
                 ${effectOptions}
               </select>
             </div>
@@ -7256,34 +7766,56 @@ class IdleBreakoutGame {
       if (el) {
         el.innerHTML = armoryHtml;
         el.querySelectorAll('.armory-select').forEach(sel => {
-          sel.addEventListener('change', (e) => {
-            const ballIdx = parseInt(sel.getAttribute('data-ball-idx'));
+          sel.addEventListener('change', () => {
+            const ballType = sel.getAttribute('data-ball-type');
             const type = sel.getAttribute('data-cosmetic-type');
-            this.equipCosmeticToNormalBall(ballIdx, type, sel.value);
+            this.equipCosmeticToBallType(ballType, type, sel.value);
           });
         });
       }
     }
   }
 
-  equipCosmeticToNormalBall(normalIdx, type, cosmeticId) {
-    if (!this.normalBallEquips[normalIdx]) {
-      this.normalBallEquips[normalIdx] = { skinId: 'default', effectId: 'none' };
+  equipCosmeticToBallType(typeKey, type, cosmeticId) {
+    if (!this.ballTypeEquips) this.ballTypeEquips = {};
+    if (!this.ballTypeEquips[typeKey]) {
+      this.ballTypeEquips[typeKey] = { skinId: 'default', effectId: 'none' };
     }
+    const labelMap = {
+      normal: 'Normál labda',
+      speedy: 'Speedy labda',
+      heavy: 'Heavy labda',
+      smasher: 'Smasher labda',
+      poison: 'Poison labda',
+      rocket: 'Rocket labda',
+      ghost: 'Ghost labda',
+      multiply: 'Multiply labda',
+      symbiot: 'Symbiot labda'
+    };
+    const friendly = labelMap[typeKey] || typeKey;
+
     if (type === 'skin') {
-      this.normalBallEquips[normalIdx].skinId = cosmeticId;
-      this.showToast(`🎨 Normál #${normalIdx + 1} skin frissítve!`, 2200);
-    } else if (type === 'effect') {
-      // 1 effekt csak 1 normál labdára tehető fel összesen!
-      if (cosmeticId !== 'none') {
-        for (const idx in this.normalBallEquips) {
-          if (parseInt(idx) !== normalIdx && this.normalBallEquips[idx].effectId === cosmeticId) {
-            this.normalBallEquips[idx].effectId = 'none'; // Leveszi a korábbi labdáról!
+      // 1 skin egyszerre csak 1 labdán lehet az összes típus között!
+      if (cosmeticId !== 'default') {
+        for (const otherKey of Object.keys(this.ballTypeEquips)) {
+          if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].skinId === cosmeticId) {
+            this.ballTypeEquips[otherKey].skinId = 'default';
           }
         }
       }
-      this.normalBallEquips[normalIdx].effectId = cosmeticId;
-      this.showToast(`✨ Normál #${normalIdx + 1} effekt beállítva!`, 2200);
+      this.ballTypeEquips[typeKey].skinId = cosmeticId;
+      this.showToast(`🎨 ${friendly} skin frissítve (1 db-on aktív)!`, 2400);
+    } else if (type === 'effect') {
+      // 1 effekt egyszerre csak 1 labdán lehet az összes típus között!
+      if (cosmeticId !== 'none') {
+        for (const otherKey of Object.keys(this.ballTypeEquips)) {
+          if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].effectId === cosmeticId) {
+            this.ballTypeEquips[otherKey].effectId = 'none';
+          }
+        }
+      }
+      this.ballTypeEquips[typeKey].effectId = cosmeticId;
+      this.showToast(`✨ ${friendly} effekt beállítva (1 db-on aktív)!`, 2400);
     }
     if (window.soundEngine) window.soundEngine.playCosmeticEquip();
     this.renderBattlePass();
@@ -7304,7 +7836,7 @@ class IdleBreakoutGame {
         if (rew.currency === 'bt') this.bossTokens += rew.amount;
         this.showToast(`🎁 <strong>Jutalom átvéve:</strong> ${rew.name}!`, 3500);
       } else {
-        this.showToast(`🎉 <strong>Új Kozmetika Feloldva:</strong> ${rew.name}! Rendeld hozzá a Normál labdáidhoz a Testreszabás fülön!`, 4500);
+        this.showToast(`🎉 <strong>Új Kozmetika Feloldva:</strong> ${rew.name}! Húzd rá bármelyik labdádra a Labda Skinek fülön!`, 4500);
       }
     } else if (track === 'paid') {
       // A Prémium Battle Pass sáv semmilyen módon nem aktiválható / nem vehető át!
