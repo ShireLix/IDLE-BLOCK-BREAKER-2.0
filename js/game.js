@@ -665,6 +665,7 @@ class IdleBreakoutGame {
     this.normalBallEquips = {}; // legacy save migration
     this.ballTypeEquips = {};   // ballTypeKey -> { skinId, effectId }
     this.activeBPTab = 'stages'; // 'stages' | 'armory'
+    this.lastRenderedBPStage = null;
 
     // Base Speed Reference (1x = 3.7 - kicsit lassabb normál labda a kért 5-6 órás játékmenethez)
     this.BASE_SPEED = 3.7;
@@ -974,6 +975,7 @@ class IdleBreakoutGame {
       this.cloud = new CloudAuthManager(this);
       this.cloud.init();
     }
+    this.initWelcomeMenu();
     this.startDec24Countdown();
     this.updateGuestRetentionUI();
     this.renderPowerUpsHUD();
@@ -1549,7 +1551,10 @@ class IdleBreakoutGame {
       this.level++;
       this.renderLeaderboard();
       this.broadcastMyStatus(); // Valós idejű szintfrissítés a hálózaton
-      if (this.cloud) this.cloud.saveToCloud(false);
+      if (this.cloud) {
+        this.cloud.syncLeaderboardToCloud(false);
+        this.cloud.saveToCloud(false);
+      }
       this.onRoundCleared();
       if (!this.suppressAudioAndVisuals && !document.hidden && window.soundEngine) {
         window.soundEngine.playLevelUp();
@@ -3073,7 +3078,10 @@ class IdleBreakoutGame {
     this.renderLeaderboard();
     this.renderBattlePass();
     this.broadcastMyStatus(); // Valós idejű Rebirth szinkron a ranglistán
-    if (this.cloud) this.cloud.saveToCloud(true);
+    if (this.cloud) {
+      this.cloud.syncLeaderboardToCloud(true);
+      this.cloud.saveToCloud(true);
+    }
     this.showToast(`🔄 <strong>REBIRTH #${this.rebirthCount} SIKERES!</strong> +1 ⭐ BB | Szorzó: ${this.rebirthMultiplier.toFixed(2)}x | Max labda: ${this.getMaxBalls()}`, 5000);
   }
 
@@ -5698,6 +5706,7 @@ class IdleBreakoutGame {
         for (const k in this.btUpgrades) this.btUpgrades[k] = 0;
         this.coinBtHitCounter = 0;
         this.coinBbHitCounter = 0;
+        this.lastRenderedBPStage = null;
         this.pendingOfflineSeconds = 0;
       }
 
@@ -6343,6 +6352,127 @@ class IdleBreakoutGame {
     }
   }
 
+  needsWelcomeName() {
+    if (this.cloud && this.cloud.currentUser) return false;
+    let storedName = '';
+    try { storedName = (localStorage.getItem('idle_breakout_player_name') || '').trim(); } catch (e) {}
+    const curName = (this.playerName || '').trim();
+    if (!storedName && (!curName || curName.toLowerCase() === 'játékos')) return true;
+    if (!curName || curName.toLowerCase() === 'játékos') return true;
+    return false;
+  }
+
+  openWelcomeMenu() {
+    const modal = document.getElementById('welcome-menu-modal');
+    const input = document.getElementById('welcome-name-input');
+    const warn = document.getElementById('welcome-name-warn');
+    if (warn) {
+      warn.textContent = '';
+      warn.style.display = 'none';
+    }
+    if (input) {
+      input.classList.remove('input-over-limit');
+      const cur = (this.playerName || '').trim();
+      if (cur && cur.toLowerCase() !== 'játékos') input.value = cur;
+    }
+    if (modal) modal.classList.add('open');
+    if (input) setTimeout(() => input.focus(), 60);
+  }
+
+  closeWelcomeMenu() {
+    const modal = document.getElementById('welcome-menu-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  initWelcomeMenu() {
+    const form = document.getElementById('welcome-guest-form');
+    const nameInput = document.getElementById('welcome-name-input');
+    const warn = document.getElementById('welcome-name-warn');
+    const loginBtn = document.getElementById('btn-welcome-login');
+    const regBtn = document.getElementById('btn-welcome-register');
+
+    const showNameWarn = (msg) => {
+      if (warn) {
+        warn.textContent = msg;
+        warn.style.display = 'block';
+      }
+      if (nameInput) nameInput.classList.add('input-over-limit');
+    };
+
+    const clearNameWarn = () => {
+      if (warn) {
+        warn.textContent = '';
+        warn.style.display = 'none';
+      }
+      if (nameInput) nameInput.classList.remove('input-over-limit');
+    };
+
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        const val = nameInput.value.trim();
+        if (val.length > 12) {
+          showNameWarn('⚠️ A név legfeljebb 12 karakter lehet!');
+        } else {
+          clearNameWarn();
+        }
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const val = (nameInput ? nameInput.value : '').trim();
+        if (!val || val.toLowerCase() === 'játékos') {
+          showNameWarn('⚠️ Kötelező egyedi játékosnevet megadni!');
+          if (nameInput) nameInput.focus();
+          return;
+        }
+        if (val.length > 12) {
+          showNameWarn('⚠️ A név legfeljebb 12 karakter lehet!');
+          if (nameInput) nameInput.focus();
+          return;
+        }
+
+        clearNameWarn();
+        this.playerName = val;
+        try { localStorage.setItem('idle_breakout_player_name', this.playerName); } catch (err) {}
+        const pcInput = document.getElementById('player-name-input-pc');
+        const mobileInput = document.getElementById('player-name-input-mobile');
+        if (pcInput) pcInput.value = this.playerName;
+        if (mobileInput) mobileInput.value = this.playerName;
+
+        this.renderLeaderboard();
+        this.broadcastMyStatus();
+        this.save();
+        if (this.cloud) this.cloud.syncLeaderboardToCloud(true);
+        this.closeWelcomeMenu();
+        if (window.soundEngine) window.soundEngine.playCoin();
+        this.showToast(`👋 Üdvözlünk, <strong>${this.escapeHtml(this.playerName)}</strong>!`, 3200);
+      });
+    }
+
+    if (loginBtn) {
+      loginBtn.addEventListener('click', () => {
+        if (this.cloud && typeof this.cloud.openAuthModal === 'function') {
+          this.cloud.openAuthModal('login');
+        }
+      });
+    }
+
+    if (regBtn) {
+      regBtn.addEventListener('click', () => {
+        const typedName = (nameInput ? nameInput.value : '').trim();
+        if (this.cloud && typeof this.cloud.openAuthModal === 'function') {
+          this.cloud.openAuthModal('register', typedName);
+        }
+      });
+    }
+
+    if (this.needsWelcomeName()) {
+      this.openWelcomeMenu();
+    }
+  }
+
   // --- Real-Time Multiplayer Leaderboard System (EMQX MQTT over WebSocket) ---
   initLeaderboard() {
     this.renderLeaderboard();
@@ -6389,6 +6519,7 @@ class IdleBreakoutGame {
       this.save();
       if (this.cloud) {
         this.cloud.updateAuthUI();
+        this.cloud.syncLeaderboardToCloud(true);
         this.cloud.saveToCloud(true);
       }
     };
@@ -6498,13 +6629,14 @@ class IdleBreakoutGame {
                 (myUid && (data.uid === myUid || canonKey === myUid));
 
               if (!isSelf) {
+                const nowMs = Date.now();
                 const existing = this.remotePlayers[canonKey];
-                const dReb = Number(data.rebirths) || 0;
-                const dLvl = Number(data.level) || 1;
-                const dBrk = Number(data.bricks) || 0;
-                const dTs = Number(data.ts) || Date.now();
+                const dReb = Math.max(0, Number(data.rebirths) || 0);
+                const dLvl = Math.max(1, Number(data.level) || 1);
+                const dBrk = Math.max(0, Number(data.bricks) || 0);
+                const dTs = Math.min(Number(data.ts) || nowMs, nowMs);
                 const isProtectedRemote = !!(data.uid || (existing && (existing.uid || existing.fromFirestore || existing.keepInTop10)));
-                if (!isProtectedRemote && (Date.now() - dTs >= this.GUEST_RETENTION_MS)) {
+                if (!isProtectedRemote && (nowMs - dTs >= this.GUEST_RETENTION_MS)) {
                   // Csak a >3 napos inaktív, nem Top 10 vendég maradjon ki
                   return;
                 }
@@ -6512,10 +6644,21 @@ class IdleBreakoutGame {
                 let keepReb = dReb;
                 let keepLvl = dLvl;
                 let keepBrk = dBrk;
-                if (existing && (existing.ts || 0) > dTs) {
-                  keepReb = Math.max(0, Number(existing.rebirths) || 0);
-                  keepLvl = Math.max(1, Number(existing.level) || 1);
-                  keepBrk = Math.max(0, Number(existing.bricks) || 0);
+                if (existing) {
+                  const exReb = Math.max(0, Number(existing.rebirths) || 0);
+                  const exLvl = Math.max(1, Number(existing.level) || 1);
+                  const exBrk = Math.max(0, Number(existing.bricks) || 0);
+                  const exTs = Number(existing.ts) || 0;
+                  const exAdminTs = Number(existing.adminUpdatedAt) || 0;
+                  const incomingHigher = (dReb > exReb) || (dReb === exReb && dLvl > exLvl);
+                  const existingNewerAdmin = exAdminTs > 0 && dTs < exAdminTs + 15000;
+                  const existingStrictlyHigherAndFresher = (exReb > dReb || (exReb === dReb && exLvl > dLvl)) && dTs < exTs - 60000;
+
+                  if (existingNewerAdmin || (!incomingHigher && existingStrictlyHigherAndFresher)) {
+                    keepReb = exReb;
+                    keepLvl = exLvl;
+                    keepBrk = exBrk;
+                  }
                 }
 
                 const incomingName = (data.name || '').trim().slice(0, 12);
@@ -6530,12 +6673,14 @@ class IdleBreakoutGame {
                   docId: (existing && existing.docId) || null,
                   clientId: data.id || (existing && existing.clientId) || null,
                   fromFirestore: !!(existing && existing.fromFirestore),
+                  _liveMqttInSession: true,
                   keepInTop10: !!(existing && existing.keepInTop10),
                   name: resolvedName,
                   rebirths: keepReb,
                   level: keepLvl,
                   bricks: keepBrk,
-                  ts: Math.max(dTs, (existing && existing.ts) || 0)
+                  ts: Math.min(nowMs, Math.max(dTs, (existing && existing.ts) || 0)),
+                  adminUpdatedAt: (existing && existing.adminUpdatedAt) || 0
                 };
 
                 // Ha külön kliens-ID alatt is bent volt ugyanez az UID, töröljük a duplikált kulcsot
@@ -6809,8 +6954,11 @@ class IdleBreakoutGame {
       this.renderLeaderboard();
       this.save();
       this.broadcastMyStatus();
-      if (this.cloud && this.cloud.currentUser) {
-        this.cloud.saveToCloud(true);
+      if (this.cloud) {
+        this.cloud.syncLeaderboardToCloud(true);
+        if (this.cloud.currentUser) {
+          this.cloud.saveToCloud(true);
+        }
       }
       this.showToast(`🛠️ Fejlesztő frissítette az állapotod: Rebirth ${this.rebirthCount} | Szint ${this.level}!`, 4500);
     }
@@ -6897,6 +7045,7 @@ class IdleBreakoutGame {
           level: Number(rp.level) || 1,
           bricks: Number(rp.bricks) || 0,
           ts: Number(rp.ts) || 0,
+          adminUpdatedAt: Number(rp.adminUpdatedAt) || 0,
           isOnline: rpOnline
         });
         return;
@@ -6914,9 +7063,22 @@ class IdleBreakoutGame {
       const rLvl = Math.max(1, Number(rp.level) || 1);
       const rBrk = Math.max(0, Number(rp.bricks) || 0);
       const rTs = Number(rp.ts) || 0;
+      const rAdminTs = Number(rp.adminUpdatedAt) || 0;
+      const exAdminTs = Number(existing.adminUpdatedAt) || 0;
 
-      if (rTs >= existing.ts) {
-        existing.ts = rTs;
+      const adminWins = rAdminTs > exAdminTs;
+      const higherProgressWins = !exAdminTs && (
+        rReb > existing.rebirths ||
+        (rReb === existing.rebirths && rLvl > existing.level)
+      );
+      const sameProgressPreferFirestoreOrNewer =
+        rReb === existing.rebirths &&
+        rLvl === existing.level &&
+        ((rp.fromFirestore && !existing.fromFirestore) || rTs >= existing.ts);
+
+      if (adminWins || higherProgressWins || sameProgressPreferFirestoreOrNewer) {
+        existing.ts = Math.max(existing.ts, rTs);
+        existing.adminUpdatedAt = Math.max(exAdminTs, rAdminTs);
         existing.rebirths = rReb;
         existing.level = rLvl;
         existing.bricks = rBrk;
@@ -6984,28 +7146,8 @@ class IdleBreakoutGame {
   }
 
   applyEntryOverride(entry) {
-    const overrides = (this.lbAdminRules && this.lbAdminRules.overrides) || {};
-    const candidates = [
-      entry.uid,
-      entry.id,
-      entry.docId,
-      ...(entry.rawKeys || []),
-      entry.name ? `name:${entry.name.trim().toLowerCase()}` : null
-    ].filter(Boolean);
-
-    for (const key of candidates) {
-      const ov = overrides[key];
-      if (ov && typeof ov === 'object') {
-        return {
-          ...entry,
-          name: ov.name ? String(ov.name).slice(0, 12) : entry.name,
-          rebirths: ov.rebirths !== undefined ? Math.max(0, Number(ov.rebirths) || 0) : entry.rebirths,
-          level: ov.level !== undefined ? Math.max(1, Number(ov.level) || 1) : entry.level,
-          _hasOverride: true,
-          _overrideKey: key
-        };
-      }
-    }
+    // A régi fagyasztott kliensoldali felülírások helyett minden szerkesztés valós időben
+    // a játékos adatát és a Firestore ranglistát frissíti (playerCommands + adminUpdateLeaderboardDoc).
     return entry;
   }
 
@@ -7914,7 +8056,7 @@ class IdleBreakoutGame {
     this.renderBattlePass();
   }
 
-  updateBattlePassHUD() {
+  updateBattlePassHUD(skipStageRender = false) {
     let curStageIdx = 0;
     for (let i = 0; i < BATTLE_PASS_STAGES.length; i++) {
       if (this.totalBricksDestroyed >= BATTLE_PASS_STAGES[i].bricks) {
@@ -7950,6 +8092,17 @@ class IdleBreakoutGame {
       if (fillEl) fillEl.style.width = `${progressPercent.toFixed(1)}%`;
       if (textEl) textEl.textContent = progressLabel;
     }
+
+    const prevStage = this.lastRenderedBPStage;
+    this.lastRenderedBPStage = curStage.stage;
+    if (!skipStageRender && prevStage !== null && curStage.stage !== prevStage) {
+      this.renderBattlePass();
+      if (curStage.stage > prevStage && !this.suppressAudioAndVisuals) {
+        const rewardNote = curStage.free ? ` Átveheted: ${curStage.free.name}` : '';
+        this.showToast(`🎖️ <strong>BREAKER PASS STAGE ${curStage.stage} ELÉRVE!</strong>${rewardNote}`, 4500);
+        if (window.soundEngine) window.soundEngine.playLevelUp();
+      }
+    }
   }
 
   getUnlockedCosmetics() {
@@ -7970,7 +8123,7 @@ class IdleBreakoutGame {
   }
 
   renderBattlePass() {
-    this.updateBattlePassHUD();
+    this.updateBattlePassHUD(true);
 
     for (const suffix of ['-pc', '-mobile']) {
       const btn = document.getElementById(`btn-unlock-premium${suffix}`);
@@ -8045,7 +8198,9 @@ class IdleBreakoutGame {
     for (const suffix of ['-pc', '-mobile']) {
       const el = document.getElementById(`bp-stages-container${suffix}`);
       if (el) {
+        const prevScroll = el.scrollTop;
         el.innerHTML = stagesHtml;
+        el.scrollTop = prevScroll;
         el.querySelectorAll('.btn-claim-reward[data-bp-stage]').forEach(btn => {
           btn.addEventListener('click', (e) => {
             const stg = parseInt(btn.getAttribute('data-bp-stage'));
@@ -8268,6 +8423,7 @@ class IdleBreakoutGame {
 
     if (track === 'free') {
       if (!stage.free || this.battlePassClaimedFree[stageNum]) return;
+      if (this.totalBricksDestroyed < stage.bricks) return;
       this.battlePassClaimedFree[stageNum] = true;
       const rew = stage.free;
       if (rew.type === 'currency') {

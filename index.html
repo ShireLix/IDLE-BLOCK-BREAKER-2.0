@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=6.8">
+  <link rel="stylesheet" href="css/style.css?v=7.0">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
@@ -524,6 +524,32 @@
   </div>
 </div>
 
+<!-- Startup Mandatory Name / Login / Register Menu -->
+<div id="welcome-menu-modal" class="overlay-backdrop" role="dialog" aria-modal="true" aria-labelledby="welcome-menu-title">
+  <div class="retro-modal-window welcome-menu-window">
+    <div class="welcome-header">
+      <div id="welcome-menu-title" class="welcome-title">🎮 IDLE BREAKOUT</div>
+      <div class="welcome-subtitle">Üdv a játékban! A kezdéshez adj meg egy játékosnevet, vagy lépj be / regisztrálj.</div>
+    </div>
+
+    <form id="welcome-guest-form" class="welcome-guest-form" novalidate>
+      <label for="welcome-name-input" class="welcome-label">Játékosnév (kötelező):</label>
+      <input type="text" id="welcome-name-input" class="auth-input welcome-name-input" placeholder="Írd be a neved..." autocomplete="nickname">
+      <div id="welcome-name-warn" class="field-limit-warn" style="display: none;"></div>
+      <button id="btn-welcome-start-guest" type="submit" class="retro-btn welcome-start-btn">▶ JÁTÉK INDÍTÁSA</button>
+    </form>
+
+    <div class="welcome-divider"><span>VAGY FIÓKKAL (FELHŐMENTÉS)</span></div>
+
+    <div class="welcome-auth-row">
+      <button id="btn-welcome-login" type="button" class="retro-btn welcome-login-btn">🔑 BELÉPÉS</button>
+      <button id="btn-welcome-register" type="button" class="retro-btn welcome-register-btn">✨ REGISZTRÁCIÓ</button>
+    </div>
+
+    <div class="welcome-footer-note">☁️ Regisztrált fiókkal a haladásod örökre megmarad és bármelyik gépen folytatható.</div>
+  </div>
+</div>
+
 <!-- Cloud Login & Account Modal (Bejelentkezés Fül) -->
 <div id="auth-modal" class="overlay-backdrop">
   <div class="retro-modal-window auth-modal-window">
@@ -568,7 +594,7 @@
             <div class="auth-fields-split">
               <div class="auth-field-group">
                 <label for="auth-reg-name">Játékosnév:</label>
-                <input type="text" id="auth-reg-name" class="auth-input" placeholder="Pl. Shirelix" autocomplete="nickname">
+                <input type="text" id="auth-reg-name" class="auth-input" placeholder="Pl. Shirelix" required autocomplete="nickname">
                 <div id="auth-reg-name-warn" class="field-limit-warn" style="display: none;">⚠️ A név legfeljebb 12 karakter lehet!</div>
               </div>
               <div class="auth-field-group">
@@ -792,9 +818,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/mqtt.min.js"></script>
 <script src="js/firebase-config.js?v=4.5"></script>
-<script src="js/cloud.js?v=5.8"></script>
+<script src="js/cloud.js?v=6.0"></script>
 <script src="js/audio.js?v=4.8"></script>
-<script src="js/game.js?v=7.3"></script>
+<script src="js/game.js?v=7.6"></script>
 
 </body>
 </html>

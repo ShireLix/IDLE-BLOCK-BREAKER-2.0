@@ -14,6 +14,9 @@ class CloudAuthManager {
     this.lastCloudSaveMs = 0;
     this.pendingCloudSave = false;
     this.cloudAutoSaveTimer = 0;
+    this.lastLbSyncMs = 0;
+    this.lbSyncTimer = 0;
+    this.lastLbSyncSig = '';
     this.activeTab = 'login'; // 'login' | 'register'
     this.suppressNextAuthLoad = false;
     this.leaderboardUnsub = null;
@@ -54,6 +57,7 @@ class CloudAuthManager {
 
       // Globális Firestore ranglista figyelése (tartós mentés offline játékosokkal együtt)
       this.listenCloudLeaderboard();
+      this.syncLeaderboardToCloud(true);
     } catch (err) {
       console.error('Firebase init hiba:', err);
       this.showError('Firebase inicializálási hiba: ' + (err.message || err));
@@ -70,25 +74,40 @@ class CloudAuthManager {
     return true;
   }
 
-  bindModalEvents() {
+  openAuthModal(tab = 'login', prefillName = '') {
     const modal = document.getElementById('auth-modal');
+    this.clearError();
+    this.hideDeleteConfirm();
+    this.updateAuthUI();
+    if (!this.currentUser) {
+      this.switchAuthTab(tab === 'register' ? 'register' : 'login');
+      if (tab === 'register' && prefillName) {
+        const regNameEl = document.getElementById('auth-reg-name');
+        if (regNameEl && !regNameEl.value.trim()) {
+          regNameEl.value = String(prefillName).trim();
+        }
+      }
+    }
+    if (modal) modal.classList.add('open');
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
+  closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    this.hideDeleteConfirm();
+    if (modal) modal.classList.remove('open');
+  }
+
+  bindModalEvents() {
     const openBtn = document.getElementById('btn-open-auth');
     const lbPcTrigger = document.getElementById('lb-auth-status-pc');
     const lbMobTrigger = document.getElementById('lb-auth-status-mobile');
     const closeX = document.getElementById('btn-close-auth');
     const closeFooter = document.getElementById('btn-close-auth-footer');
 
-    const openModal = () => {
-      this.clearError();
-      this.hideDeleteConfirm();
-      this.updateAuthUI();
-      if (modal) modal.classList.add('open');
-      if (window.soundEngine) window.soundEngine.playClickHit();
-    };
-
+    const openModal = () => this.openAuthModal('login');
     const closeModal = () => {
-      this.hideDeleteConfirm();
-      if (modal) modal.classList.remove('open');
+      this.closeAuthModal();
       if (window.soundEngine) window.soundEngine.playClickHit();
     };
 
@@ -239,11 +258,15 @@ class CloudAuthManager {
     if (regNameWarn) regNameWarn.style.display = rawName.length > 12 ? 'block' : 'none';
     if (regPassWarn) regPassWarn.style.display = password.length > 20 ? 'block' : 'none';
 
+    if (!rawName || rawName.toLowerCase() === 'játékos') {
+      this.showError('Kérlek adj meg egy egyedi játékosnevet (ne maradjon üres)!');
+      return;
+    }
     if (rawName.length > 12) {
       this.showError('A játékosnév legfeljebb 12 karakter lehet!');
       return;
     }
-    const playerName = (rawName || this.game.playerName || 'Játékos').slice(0, 12);
+    const playerName = rawName.slice(0, 12);
     if (!email || !email.includes('@')) {
       this.showError('Kérlek adj meg egy érvényes e-mail címet!');
       return;
@@ -483,16 +506,25 @@ class CloudAuthManager {
     this.updateAuthUI();
 
     if (user) {
+      if (typeof this.game.closeWelcomeMenu === 'function') {
+        this.game.closeWelcomeMenu();
+      }
+      this.closeAuthModal();
+      if (this.db && this.game.myPlayerId && this.game.myPlayerId !== user.uid) {
+        this.db.collection('leaderboard').doc(this.game.myPlayerId).delete().catch(() => {});
+      }
       if (typeof this.game.cleanupDuplicateMqttForUid === 'function') {
         this.game.cleanupDuplicateMqttForUid(user.uid);
       }
       if (this.suppressNextAuthLoad) {
         this.suppressNextAuthLoad = false;
         this.game.broadcastMyStatus();
+        this.syncLeaderboardToCloud(true);
         return;
       }
       await this.syncOnLogin(user, false);
       this.game.broadcastMyStatus();
+      this.syncLeaderboardToCloud(true);
     } else {
       this.game.renderLeaderboard();
     }
@@ -576,6 +608,43 @@ class CloudAuthManager {
     }
   }
 
+  async syncLeaderboardToCloud(force = false) {
+    if (!this.isReady || !this.db) return;
+    const uid = this.currentUser ? this.currentUser.uid : null;
+    const docId = uid || this.game.myPlayerId;
+    if (!docId || docId === '__admin_rules__') return;
+
+    const now = Date.now();
+    const pName = (this.game.playerName || (this.currentUser && this.currentUser.displayName) || 'Játékos').slice(0, 12);
+    const reb = Math.max(0, Number(this.game.rebirthCount) || 0);
+    const lvl = Math.max(1, Number(this.game.level) || 1);
+    const brk = Math.max(0, Number(this.game.totalBricksDestroyed) || 0);
+    const sig = `${pName}|${reb}|${lvl}|${brk}|${uid || 'guest'}`;
+
+    if (!force) {
+      if (now - this.lastLbSyncMs < 4000) return;
+      if (sig === this.lastLbSyncSig && now - this.lastLbSyncMs < 20000) return;
+    }
+
+    try {
+      await this.db.collection('leaderboard').doc(docId).set({
+        id: this.game.myPlayerId,
+        uid: uid || null,
+        isGuest: !uid,
+        name: pName,
+        rebirths: reb,
+        level: lvl,
+        bricks: brk,
+        ts: now,
+        serverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      this.lastLbSyncMs = now;
+      this.lastLbSyncSig = sig;
+    } catch (err) {
+      // Csendes hibatűrés (pl. ha Firestore szabály később tiltja a vendégírást)
+    }
+  }
+
   async saveToCloud(force = false) {
     if (!this.isReady || !this.db || !this.currentUser) return;
     const now = Date.now();
@@ -590,26 +659,18 @@ class CloudAuthManager {
       const uid = this.currentUser.uid;
       const pName = (this.game.playerName || this.currentUser.displayName || 'Játékos').slice(0, 12);
 
-      await this.db.collection('users').doc(uid).set({
-        playerName: pName,
-        email: this.currentUser.email || '',
-        rebirths: this.game.rebirthCount || 0,
-        level: this.game.level || 1,
-        bricks: this.game.totalBricksDestroyed || 0,
-        updatedAt: now,
-        saveData
-      }, { merge: true });
-
-      // Ranglista rekord tartós szinkronizálása Firestore-ba is
-      await this.db.collection('leaderboard').doc(uid).set({
-        id: this.game.myPlayerId,
-        uid,
-        name: pName,
-        rebirths: this.game.rebirthCount || 0,
-        level: this.game.level || 1,
-        bricks: this.game.totalBricksDestroyed || 0,
-        ts: now
-      }, { merge: true });
+      await Promise.all([
+        this.db.collection('users').doc(uid).set({
+          playerName: pName,
+          email: this.currentUser.email || '',
+          rebirths: this.game.rebirthCount || 0,
+          level: this.game.level || 1,
+          bricks: this.game.totalBricksDestroyed || 0,
+          updatedAt: now,
+          saveData
+        }, { merge: true }),
+        this.syncLeaderboardToCloud(true)
+      ]);
 
       this.lastCloudSaveMs = now;
       this.updateAuthUI();
@@ -623,7 +684,15 @@ class CloudAuthManager {
   }
 
   tick(dt) {
-    if (!this.isReady || !this.currentUser) return;
+    if (!this.isReady || !this.db) return;
+
+    this.lbSyncTimer += dt;
+    if (this.lbSyncTimer >= 8.0) {
+      this.lbSyncTimer = 0;
+      this.syncLeaderboardToCloud(false);
+    }
+
+    if (!this.currentUser) return;
     this.cloudAutoSaveTimer += dt;
     if (this.cloudAutoSaveTimer >= 15.0 || (this.pendingCloudSave && this.cloudAutoSaveTimer >= 10.0)) {
       this.cloudAutoSaveTimer = 0;
@@ -638,8 +707,14 @@ class CloudAuthManager {
         .limit(500)
         .onSnapshot((snapshot) => {
           let removedAny = false;
+          const modifiedDocIds = new Set();
+          const liveDocIds = new Set();
+
           if (typeof snapshot.docChanges === 'function') {
             snapshot.docChanges().forEach((change) => {
+              if (change.type === 'modified' && change.doc.id !== '__admin_rules__') {
+                modifiedDocIds.add(change.doc.id);
+              }
               if (change.type === 'removed') {
                 if (change.doc.id === '__admin_rules__') return;
                 const d = change.doc.data() || {};
@@ -659,6 +734,7 @@ class CloudAuthManager {
           }
 
           let dirtyRemote = removedAny;
+          const nowMs = Date.now();
           snapshot.forEach((doc) => {
             const d = doc.data();
             if (!d) return;
@@ -668,11 +744,35 @@ class CloudAuthManager {
               }
               return;
             }
+
+            liveDocIds.add(doc.id);
+            if (d.uid) liveDocIds.add(d.uid);
+
             const docUid = d.uid || doc.id;
-            if ((this.currentUser && docUid === this.currentUser.uid) || d.id === this.game.myPlayerId) return;
+            if ((this.currentUser && docUid === this.currentUser.uid) || doc.id === this.game.myPlayerId || d.id === this.game.myPlayerId) return;
             const key = docUid;
             const existing = this.game.remotePlayers[key];
-            if (!existing || (d.ts || 0) >= (existing.ts || 0) || !existing.fromFirestore) {
+
+            const serverMs = (d.serverUpdatedAt && typeof d.serverUpdatedAt.toMillis === 'function') ? d.serverUpdatedAt.toMillis() : 0;
+            const rawTs = Math.max(serverMs, Number(d.ts) || 0);
+            const safeTs = Math.min(nowMs, rawTs);
+            const dReb = Math.max(0, Number(d.rebirths) || 0);
+            const dLvl = Math.max(1, Number(d.level) || 1);
+            const dBrk = Math.max(0, Number(d.bricks) || 0);
+            const dAdminTs = Number(d.adminUpdatedAt) || 0;
+
+            const isHigherProgress = existing
+              ? (dReb > (existing.rebirths || 0) || (dReb === (existing.rebirths || 0) && dLvl >= (existing.level || 1)))
+              : true;
+
+            const shouldAccept = !existing ||
+              modifiedDocIds.has(doc.id) ||
+              !existing._liveMqttInSession ||
+              dAdminTs > (existing.adminUpdatedAt || 0) ||
+              isHigherProgress ||
+              (safeTs >= (existing.ts || 0) - 5000);
+
+            if (shouldAccept) {
               const incomingName = (d.name || '').trim().slice(0, 12);
               const prevName = (existing && existing.name || '').trim().slice(0, 12);
               const resolvedName = (incomingName && incomingName !== 'Játékos')
@@ -681,16 +781,18 @@ class CloudAuthManager {
 
               this.game.remotePlayers[key] = {
                 id: key,
-                uid: docUid,
+                uid: d.uid || null,
                 docId: doc.id,
                 clientId: d.id || (existing && existing.clientId) || null,
                 fromFirestore: true,
+                _liveMqttInSession: false,
                 keepInTop10: !!(existing && existing.keepInTop10),
                 name: resolvedName,
-                rebirths: Math.max(0, Number(d.rebirths) || 0),
-                level: Math.max(1, Number(d.level) || 1),
-                bricks: Math.max(0, Number(d.bricks) || 0),
-                ts: Math.max(Number(d.ts) || 0, existing ? (Number(existing.ts) || 0) : 0)
+                rebirths: dReb,
+                level: dLvl,
+                bricks: dBrk,
+                ts: safeTs,
+                adminUpdatedAt: dAdminTs
               };
               dirtyRemote = true;
             }
@@ -700,6 +802,16 @@ class CloudAuthManager {
               dirtyRemote = true;
             }
           });
+
+          if (snapshot.size > 0 && !(snapshot.metadata && snapshot.metadata.fromCache) && this.game.remotePlayers) {
+            for (const k of Object.keys(this.game.remotePlayers)) {
+              const rp = this.game.remotePlayers[k];
+              if (rp && rp.fromFirestore && !liveDocIds.has(k) && !liveDocIds.has(rp.docId) && !liveDocIds.has(rp.uid)) {
+                delete this.game.remotePlayers[k];
+                dirtyRemote = true;
+              }
+            }
+          }
 
           if (dirtyRemote) {
             try {
@@ -854,6 +966,10 @@ class CloudAuthManager {
       }
       if (this.currentUser) this.saveToCloud(true);
       this.updateAuthUI();
+      const loadedName = String(this.game.playerName || '').trim();
+      if (loadedName && loadedName.toLowerCase() !== 'játékos' && typeof this.game.closeWelcomeMenu === 'function') {
+        this.game.closeWelcomeMenu();
+      }
       this.game.showToast(`✅ <strong>Mentés betöltve kódból!</strong> (Rebirth ${this.game.rebirthCount} | Szint ${this.game.level})`, 4000);
     } catch (e) {
       this.showError('Hibás vagy sérült mentési kód!');
@@ -891,7 +1007,11 @@ class CloudAuthManager {
   async adminUpdateLeaderboardDoc(docId, patch) {
     if (!this.db || !docId || docId === '__admin_rules__') return { ok: false };
     try {
-      await this.db.collection('leaderboard').doc(docId).set(patch, { merge: true });
+      await this.db.collection('leaderboard').doc(docId).set({
+        ...patch,
+        adminUpdatedAt: Date.now(),
+        serverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: (err && err.code) || 'error' };
