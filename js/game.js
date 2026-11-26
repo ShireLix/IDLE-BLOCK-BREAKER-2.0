@@ -858,16 +858,16 @@ class IdleBreakoutGame {
         count: 0,
         baseCost: 250000000,
         costMult: 1.50,
-        speedFactor: 2.0,
-        displaySpeedStepPct: 9,
-        basePower: 50.0,
-        powerStep: 25.0,
+        speedFactor: 2.6,
+        displaySpeedStepPct: 10,
+        basePower: 350.0,
+        powerStep: 175.0,
         speedLevel: 1,
         maxSpeedLevel: 40,
-        speedBaseCost: 15000000,
+        speedBaseCost: 10000000,
         powerLevel: 1,
         maxPowerLevel: 50,
-        powerBaseCost: 25000000,
+        powerBaseCost: 15000000,
         radius: 10.5
       }
     };
@@ -2272,9 +2272,9 @@ class IdleBreakoutGame {
       }
     }
 
-    const rocketSpeed = 9.5;
+    const rocketSpeed = ball.type === 'symbiot' ? 12.0 : 9.5;
     const baseRef = (this.ballTypes[ball.type] && this.ballTypes[ball.type].basePower) || this.ballTypes.rocket.basePower;
-    const powerScale = Math.max(1, ball.power / baseRef) * (ball.type === 'symbiot' ? 1.5 : 1);
+    const powerScale = Math.max(1, ball.power / baseRef) * (ball.type === 'symbiot' ? 4.5 : 1);
     this.rockets.push({
       x: ball.x,
       y: ball.y,
@@ -2690,7 +2690,8 @@ class IdleBreakoutGame {
   }
 
   spawnMultiplyChildren(parentBall) {
-    const maxTier = this.getMultiplyMaxSplitTier();
+    const isSym = parentBall.type === 'symbiot';
+    const maxTier = isSym ? Math.max(3, this.getMultiplyMaxSplitTier()) : this.getMultiplyMaxSplitTier();
     const nextTier = (parentBall.splitTier || 0) + 1;
     if (nextTier > maxTier) return;
 
@@ -2698,16 +2699,15 @@ class IdleBreakoutGame {
     const currentChildren = this.balls.filter(b => b.isSplitChild).length;
     if (currentChildren >= 160) return;
 
-    const isSym = parentBall.type === 'symbiot';
     const baseType = isSym ? 'symbiot' : 'multiply';
     const bDef = this.ballTypes[baseType];
     const powerScale = this.getBallPower(baseType) / bDef.basePower;
-    const tierBaseDamages = isSym ? [25, 14, 7, 4, 2] : [10, 5, 2, 1, 0.5];
+    const tierBaseDamages = isSym ? [180, 110, 65, 35, 20] : [10, 5, 2, 1, 0.5];
     const tierRadii = isSym ? [9.5, 7.5, 6.0, 4.8, 3.8] : [9.0, 6.8, 5.4, 4.3, 3.4];
     const tierColors = isSym
       ? ['#18181b', '#7e22ce', '#dc2626', '#c084fc', '#fca5a5']
       : ['#d900b8', '#f038d0', '#ff70e5', '#ffb8f2', '#ffe0fa'];
-    const childDmg = (tierBaseDamages[nextTier] ?? (isSym ? 2 : 0.5)) * powerScale;
+    const childDmg = (tierBaseDamages[nextTier] ?? (isSym ? 20 : 0.5)) * powerScale;
     const childSpeed = this.getBallSpeed(baseType) * (1 + nextTier * 0.06);
 
     const baseAngle = Math.atan2(parentBall.vy, parentBall.vx);
@@ -2859,12 +2859,12 @@ class IdleBreakoutGame {
 
       const newPower = this.getBallPower(typeKey);
       const multScale = newPower / bDef.basePower;
-      const tierBaseDamages = typeKey === 'symbiot' ? [25, 14, 7, 4, 2] : [10, 5, 2, 1, 0.5];
+      const tierBaseDamages = typeKey === 'symbiot' ? [180, 110, 65, 35, 20] : [10, 5, 2, 1, 0.5];
 
       this.balls.forEach(ball => {
         if (ball.type === typeKey && !ball.isPiercing) {
           if (ball.isSplitChild) {
-            ball.power = (tierBaseDamages[ball.splitTier] ?? (typeKey === 'symbiot' ? 2 : 0.5)) * multScale;
+            ball.power = (tierBaseDamages[ball.splitTier] ?? (typeKey === 'symbiot' ? 20 : 0.5)) * multScale;
           } else {
             ball.power = newPower;
           }
@@ -3380,7 +3380,7 @@ class IdleBreakoutGame {
         let hitRate = speed * 0.42;
         if (key === 'ghost') hitRate = speed * 0.85;
         if (key === 'multiply') hitRate = speed * 0.65;
-        if (key === 'symbiot') hitRate = speed * 2.2;
+        if (key === 'symbiot') hitRate = speed * 5.5;
         if (key === 'coin') {
           hitRate = speed * 0.45;
           const hits = b.count * hitRate * cappedSec;
@@ -3501,8 +3501,8 @@ class IdleBreakoutGame {
         }
       } else if (ball.type === 'symbiot' && !ball.isSplitChild) {
         const symGhostCfg = ghostCfg
-          ? { ...ghostCfg, cooldown: Math.min(ghostCfg.cooldown, 4.0), dmg: Math.max(ghostCfg.dmg, Math.round(ball.power * 2)) }
-          : { cooldown: 4.0, gridSpan: 5, fuse: 1.0, dmg: Math.max(80, Math.round(ball.power * 2)) };
+          ? { ...ghostCfg, cooldown: 1.8, gridSpan: 5, fuse: 0.75, dmg: Math.max(500, ghostCfg.dmg, Math.round(ball.power * 4.5)) }
+          : { cooldown: 1.8, gridSpan: 5, fuse: 0.75, dmg: Math.max(500, Math.round(ball.power * 4.5)) };
         ball.ghostBombTimer = (ball.ghostBombTimer || 0) + dt;
         if (ball.ghostBombTimer >= symGhostCfg.cooldown) {
           ball.ghostBombTimer -= symGhostCfg.cooldown;
@@ -3518,10 +3518,11 @@ class IdleBreakoutGame {
           this.spawnRocketFromBall(ball);
         }
       } else if (ball.type === 'symbiot' && !ball.isSplitChild) {
-        const symRocketCooldown = Math.min(rocketCooldown, 3.0);
+        const symRocketCooldown = 1.4;
         ball.rocketTimer = (ball.rocketTimer || 0) + dt;
         if (ball.rocketTimer >= symRocketCooldown) {
           ball.rocketTimer -= symRocketCooldown;
+          this.spawnRocketFromBall(ball, true);
           this.spawnRocketFromBall(ball, true);
         }
       }
@@ -3715,8 +3716,9 @@ class IdleBreakoutGame {
         this.spawnMultiplyChildren(ball);
       }
     } else if (ball.type === 'symbiot') {
-      // SYMBIOT: Heavy/Speedy direct damage + Poison + Smasher AoE + Multiply split!
-      this.damageBrick(brick, ball.power, 'symbiot', { ball });
+      // SYMBIOT: Boss-zúzó (2x Boss dmg) + Heavy/Speedy + Poison + 6-blokkos AoE Smash + gyors Multiply osztódás!
+      const directDmg = brick.isBoss ? ball.power * 2 : ball.power;
+      this.damageBrick(brick, directDmg, 'symbiot', { ball });
       if (!ball.isSplitChild) this.triggerScreenShake(2.8, 5.5);
       if (brick.hp > 0) {
         this.applyPoisonToBrick(brick);
@@ -3729,27 +3731,27 @@ class IdleBreakoutGame {
           x: cx,
           y: cy,
           radius: 7,
-          maxRadius: Math.max(brick.w, brick.h) * 1.6,
-          alpha: 0.85,
+          maxRadius: Math.max(brick.w, brick.h) * 2.1,
+          alpha: 0.88,
           color: '168, 85, 247',
-          speed: 145
+          speed: 170
         });
       }
 
-      const maxDist = Math.max(this.gridCellW, this.gridCellH) * 2.2;
+      const maxDist = Math.max(this.gridCellW, this.gridCellH) * 2.8;
       const neighbors = this.bricks
         .filter(b => b !== brick && b.hp > 0 && Math.hypot((b.x + b.w / 2) - cx, (b.y + b.h / 2) - cy) <= maxDist)
         .sort((a, b) => Math.hypot((a.x + a.w / 2) - cx, (a.y + a.h / 2) - cy) - Math.hypot((b.x + b.w / 2) - cx, (b.y + b.h / 2) - cy))
-        .slice(0, 3);
-      const splashDmg = Math.max(1, Math.round(ball.power * 0.5));
+        .slice(0, 6);
+      const splashDmg = Math.max(1, Math.round(ball.power * 0.75));
       for (const nb of neighbors) {
         this.damageBrick(nb, splashDmg, 'smasher_splash', { ball });
       }
 
-      const maxTier = this.getMultiplyMaxSplitTier();
+      const maxTier = Math.max(3, this.getMultiplyMaxSplitTier());
       if (!ball.isSplitChild) {
         if ((ball.splitCooldown || 0) <= 0) {
-          ball.splitCooldown = 1.6;
+          ball.splitCooldown = 0.85;
           this.spawnMultiplyChildren(ball);
         }
       } else if (!ball.hasSplit && ball.splitTier < maxTier) {
