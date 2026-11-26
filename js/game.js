@@ -6636,6 +6636,11 @@ class IdleBreakoutGame {
                 const dReb = Math.max(0, Number(data.rebirths) || 0);
                 const dLvl = Math.max(1, Number(data.level) || 1);
                 const dBrk = Math.max(0, Number(data.bricks) || 0);
+                const optNum = (v) => (v !== undefined && v !== null && !Number.isNaN(Number(v))) ? Math.max(0, Math.floor(Number(v))) : null;
+                const dMoney = optNum(data.money);
+                const dBb = optNum(data.bb);
+                const dBt = optNum(data.bt);
+                const dBpStage = optNum(data.bpStage);
                 const dTs = Math.min(Number(data.ts) || nowMs, nowMs);
                 const isProtectedRemote = !!(data.uid || (existing && (existing.uid || existing.fromFirestore || existing.keepInTop10)));
                 if (!isProtectedRemote && (nowMs - dTs >= this.GUEST_RETENTION_MS)) {
@@ -6646,6 +6651,10 @@ class IdleBreakoutGame {
                 let keepReb = dReb;
                 let keepLvl = dLvl;
                 let keepBrk = dBrk;
+                let keepMoney = dMoney ?? (existing ? existing.money ?? null : null);
+                let keepBb = dBb ?? (existing ? existing.bb ?? null : null);
+                let keepBt = dBt ?? (existing ? existing.bt ?? null : null);
+                let keepBpStage = dBpStage ?? (existing ? existing.bpStage ?? null : null);
                 if (existing) {
                   const exReb = Math.max(0, Number(existing.rebirths) || 0);
                   const exLvl = Math.max(1, Number(existing.level) || 1);
@@ -6660,6 +6669,10 @@ class IdleBreakoutGame {
                     keepReb = exReb;
                     keepLvl = exLvl;
                     keepBrk = exBrk;
+                    keepMoney = existing.money ?? keepMoney;
+                    keepBb = existing.bb ?? keepBb;
+                    keepBt = existing.bt ?? keepBt;
+                    keepBpStage = existing.bpStage ?? keepBpStage;
                   }
                 }
 
@@ -6681,6 +6694,10 @@ class IdleBreakoutGame {
                   rebirths: keepReb,
                   level: keepLvl,
                   bricks: keepBrk,
+                  money: keepMoney,
+                  bb: keepBb,
+                  bt: keepBt,
+                  bpStage: keepBpStage,
                   ts: Math.min(nowMs, Math.max(dTs, (existing && existing.ts) || 0)),
                   adminUpdatedAt: (existing && existing.adminUpdatedAt) || 0
                 };
@@ -6788,6 +6805,19 @@ class IdleBreakoutGame {
     }
   }
 
+  getCurrentBattlePassStage(bricks = this.totalBricksDestroyed) {
+    const count = Math.max(0, Number(bricks) || 0);
+    let stageNum = 1;
+    for (let i = 0; i < BATTLE_PASS_STAGES.length; i++) {
+      if (count >= BATTLE_PASS_STAGES[i].bricks) {
+        stageNum = BATTLE_PASS_STAGES[i].stage;
+      } else {
+        break;
+      }
+    }
+    return stageNum;
+  }
+
   broadcastMyStatus() {
     if (!this.mqttClient || !this.mqttConnected) return;
     try {
@@ -6800,6 +6830,10 @@ class IdleBreakoutGame {
         rebirths: this.rebirthCount || 0,
         level: this.level || 1,
         bricks: this.totalBricksDestroyed || 0,
+        money: Math.floor(Math.max(0, Number(this.money) || 0)),
+        bb: Math.max(0, Math.floor(Number(this.bb) || 0)),
+        bt: Math.max(0, Math.floor(Number(this.bossTokens) || 0)),
+        bpStage: this.getCurrentBattlePassStage(),
         ts: Date.now()
       });
       this.mqttClient.publish(`shirelix/idle_breakout_v4/players/${publishKey}`, payload, { retain: true, qos: 0 });
@@ -7144,6 +7178,10 @@ class IdleBreakoutGame {
           rebirths: Number(rp.rebirths) || 0,
           level: Number(rp.level) || 1,
           bricks: Number(rp.bricks) || 0,
+          money: (rp.money !== undefined && rp.money !== null) ? Number(rp.money) : null,
+          bb: (rp.bb !== undefined && rp.bb !== null) ? Number(rp.bb) : null,
+          bt: (rp.bt !== undefined && rp.bt !== null) ? Number(rp.bt) : null,
+          bpStage: (rp.bpStage !== undefined && rp.bpStage !== null) ? Number(rp.bpStage) : null,
           ts: Number(rp.ts) || 0,
           adminUpdatedAt: Number(rp.adminUpdatedAt) || 0,
           isOnline: rpOnline
@@ -7162,6 +7200,10 @@ class IdleBreakoutGame {
       const rReb = Math.max(0, Number(rp.rebirths) || 0);
       const rLvl = Math.max(1, Number(rp.level) || 1);
       const rBrk = Math.max(0, Number(rp.bricks) || 0);
+      const rMoney = (rp.money !== undefined && rp.money !== null) ? Number(rp.money) : null;
+      const rBb = (rp.bb !== undefined && rp.bb !== null) ? Number(rp.bb) : null;
+      const rBt = (rp.bt !== undefined && rp.bt !== null) ? Number(rp.bt) : null;
+      const rBpStage = (rp.bpStage !== undefined && rp.bpStage !== null) ? Number(rp.bpStage) : null;
       const rTs = Number(rp.ts) || 0;
       const rAdminTs = Number(rp.adminUpdatedAt) || 0;
       const exAdminTs = Number(existing.adminUpdatedAt) || 0;
@@ -7182,10 +7224,19 @@ class IdleBreakoutGame {
         existing.rebirths = rReb;
         existing.level = rLvl;
         existing.bricks = rBrk;
+        if (rMoney !== null) existing.money = rMoney;
+        if (rBb !== null) existing.bb = rBb;
+        if (rBt !== null) existing.bt = rBt;
+        if (rBpStage !== null) existing.bpStage = rBpStage;
         const rn = (rp.name || '').trim().slice(0, 12);
         if (rn && (rn !== 'Játékos' || !existing.name || existing.name === 'Játékos')) {
           existing.name = rn;
         }
+      } else {
+        if (existing.money === null && rMoney !== null) existing.money = rMoney;
+        if (existing.bb === null && rBb !== null) existing.bb = rBb;
+        if (existing.bt === null && rBt !== null) existing.bt = rBt;
+        if (existing.bpStage === null && rBpStage !== null) existing.bpStage = rBpStage;
       }
       if (!existing.uid && rp.uid) existing.uid = rp.uid;
       if (rpOnline) existing.isOnline = true;
@@ -7308,6 +7359,10 @@ class IdleBreakoutGame {
       rebirths: this.rebirthCount,
       level: this.level,
       bricks: this.totalBricksDestroyed,
+      money: Math.floor(Math.max(0, Number(this.money) || 0)),
+      bb: Math.max(0, Math.floor(Number(this.bb) || 0)),
+      bt: Math.max(0, Math.floor(Number(this.bossTokens) || 0)),
+      bpStage: this.getCurrentBattlePassStage(),
       ts: Date.now(),
       isPlayer: true,
       isOnline: true,
@@ -7328,6 +7383,10 @@ class IdleBreakoutGame {
         rebirths: rp.rebirths,
         level: rp.level,
         bricks: rp.bricks,
+        money: rp.money ?? null,
+        bb: rp.bb ?? null,
+        bt: rp.bt ?? null,
+        bpStage: rp.bpStage ?? this.getCurrentBattlePassStage(rp.bricks || 0),
         ts: rp.ts,
         isPlayer: false,
         isOnline: !!rp.isOnline,
@@ -7346,6 +7405,10 @@ class IdleBreakoutGame {
         rebirths: cp.rebirths,
         level: cp.level,
         bricks: cp.bricks || 0,
+        money: null,
+        bb: null,
+        bt: null,
+        bpStage: this.getCurrentBattlePassStage(cp.bricks || 0),
         ts: Date.now(),
         isPlayer: false,
         isOnline: cp.isOnline !== false,
@@ -8082,18 +8145,53 @@ class IdleBreakoutGame {
         const inWl = (this.lbAdminRules.whitelistNames || []).includes(wlCheckKey);
         const isBanned = entry._filterReason === 'Tiltott ID/UID' || entry._filterReason === 'Tiltott név';
         const idText = entry.uid || entry.id || '-';
+        const moneyTxt = (entry.money !== null && entry.money !== undefined) ? `$${this.formatNumber(entry.money)}` : '—';
+        const bbTxt = (entry.bb !== null && entry.bb !== undefined) ? this.formatNumber(entry.bb) : '—';
+        const btTxt = (entry.bt !== null && entry.bt !== undefined) ? this.formatNumber(entry.bt) : '—';
+        const rebMultTxt = this.getRebirthMultiplier(entry.rebirths || 0).toFixed(2);
+        const brkTxt = this.formatNumber(entry.bricks || 0);
+        const bpStg = entry.bpStage || this.getCurrentBattlePassStage(entry.bricks || 0);
+        const ageSec = entry.isOnline ? 0 : Math.max(0, Math.floor((Date.now() - (entry.ts || 0)) / 1000));
+        const seenTxt = entry.isOnline ? 'Online most' : (entry.ts ? `Aktív: ${this.formatDuration(ageSec)}e` : 'Offline');
 
         return `
           <div class="dev-player-card ${entry._filterReason ? 'is-filtered' : ''}" data-dev-idx="${idx}">
-            <div class="dev-pc-info">
-              <div class="dev-pc-top">
-                <span class="dev-pc-name">${dot} <strong>${this.escapeHtml(entry.name)}</strong> ${srcBadge} ${statusBadge}</span>
-                <span class="dev-pc-stats">REB: <strong>${entry.rebirths}</strong> | SZINT: <strong>${entry.level}</strong></span>
+            <div class="dev-pc-top">
+              <span class="dev-pc-name">${dot} <strong>${this.escapeHtml(entry.name)}</strong> ${srcBadge}</span>
+              ${statusBadge}
+            </div>
+            <div class="dev-pc-stat-grid">
+              <div class="dev-stat-chip chip-money">
+                <span class="dev-stat-lbl">💵 PÉNZ</span>
+                <span class="dev-stat-val">${moneyTxt}</span>
               </div>
-              <div class="dev-pc-id">ID/UID: <code>${this.escapeHtml(String(idText).slice(0, 26))}</code></div>
+              <div class="dev-stat-chip chip-bb">
+                <span class="dev-stat-lbl">⭐ BB</span>
+                <span class="dev-stat-val">${bbTxt}</span>
+              </div>
+              <div class="dev-stat-chip chip-bt">
+                <span class="dev-stat-lbl">👑 BT</span>
+                <span class="dev-stat-val">${btTxt}</span>
+              </div>
+              <div class="dev-stat-chip chip-reb">
+                <span class="dev-stat-lbl">🔄 REB (${rebMultTxt}x)</span>
+                <span class="dev-stat-val">${this.formatLeaderboardStat(entry.rebirths)}</span>
+              </div>
+              <div class="dev-stat-chip chip-lvl">
+                <span class="dev-stat-lbl">🚩 SZINT</span>
+                <span class="dev-stat-val">${this.formatLeaderboardStat(entry.level)}</span>
+              </div>
+              <div class="dev-stat-chip chip-brk">
+                <span class="dev-stat-lbl">🧱 BLOKK • BP</span>
+                <span class="dev-stat-val">${brkTxt} • Stg ${bpStg}</span>
+              </div>
+            </div>
+            <div class="dev-pc-id">
+              <span>ID: <code>${this.escapeHtml(String(idText).slice(0, 22))}</code></span>
+              <span>${seenTxt}</span>
             </div>
             <div class="dev-pc-actions">
-              <button type="button" class="dev-act-btn act-edit" data-act="edit" title="Név / Rebirth / Szint szerkesztése">✏️</button>
+              <button type="button" class="dev-act-btn act-edit" data-act="edit" title="Név / Rebirth / Szint / BB / BT / Pénz">✏️ Szerk</button>
               <button type="button" class="dev-act-btn ${inWl ? 'act-wl-on' : 'act-wl'}" data-act="wl" title="Engedélyezőlistára tesz / levesz">${inWl ? '✅ WL' : '+ WL'}</button>
               <button type="button" class="dev-act-btn ${isBanned ? 'act-unban' : 'act-ban'}" data-act="ban" title="${isBanned ? 'Tiltás feloldása' : 'Tiltás és elrejtés'}">${isBanned ? '🔓 Felold' : '🚫 Tilt'}</button>
               ${!entry.isPlayer ? '<button type="button" class="dev-act-btn act-del" data-act="del" title="Törlés (MQTT/Cache/Firestore)">🗑️</button>' : ''}

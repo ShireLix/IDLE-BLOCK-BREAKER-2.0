@@ -619,7 +619,11 @@ class CloudAuthManager {
     const reb = Math.max(0, Number(this.game.rebirthCount) || 0);
     const lvl = Math.max(1, Number(this.game.level) || 1);
     const brk = Math.max(0, Number(this.game.totalBricksDestroyed) || 0);
-    const sig = `${pName}|${reb}|${lvl}|${brk}|${uid || 'guest'}`;
+    const mon = Math.floor(Math.max(0, Number(this.game.money) || 0));
+    const bb = Math.max(0, Math.floor(Number(this.game.bb) || 0));
+    const bt = Math.max(0, Math.floor(Number(this.game.bossTokens) || 0));
+    const bpStage = (typeof this.game.getCurrentBattlePassStage === 'function') ? this.game.getCurrentBattlePassStage() : 1;
+    const sig = `${pName}|${reb}|${lvl}|${brk}|${mon}|${bb}|${bt}|${bpStage}|${uid || 'guest'}`;
 
     if (!force) {
       if (now - this.lastLbSyncMs < 4000) return;
@@ -635,6 +639,10 @@ class CloudAuthManager {
         rebirths: reb,
         level: lvl,
         bricks: brk,
+        money: mon,
+        bb,
+        bt,
+        bpStage,
         ts: now,
         serverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -759,6 +767,11 @@ class CloudAuthManager {
             const dReb = Math.max(0, Number(d.rebirths) || 0);
             const dLvl = Math.max(1, Number(d.level) || 1);
             const dBrk = Math.max(0, Number(d.bricks) || 0);
+            const optNum = (v) => (v !== undefined && v !== null && !Number.isNaN(Number(v))) ? Math.max(0, Math.floor(Number(v))) : null;
+            const dMoney = optNum(d.money) ?? (existing ? existing.money ?? null : null);
+            const dBb = optNum(d.bb) ?? (existing ? existing.bb ?? null : null);
+            const dBt = optNum(d.bt) ?? (existing ? existing.bt ?? null : null);
+            const dBpStage = optNum(d.bpStage) ?? (existing ? existing.bpStage ?? null : null);
             const dAdminTs = Number(d.adminUpdatedAt) || 0;
 
             const isHigherProgress = existing
@@ -791,6 +804,10 @@ class CloudAuthManager {
                 rebirths: dReb,
                 level: dLvl,
                 bricks: dBrk,
+                money: dMoney,
+                bb: dBb,
+                bt: dBt,
+                bpStage: dBpStage,
                 ts: safeTs,
                 adminUpdatedAt: dAdminTs
               };
