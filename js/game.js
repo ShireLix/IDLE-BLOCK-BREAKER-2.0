@@ -4338,8 +4338,7 @@ class IdleBreakoutGame {
 
       const curSpd = this.getBallSpeed(key);
       const spdStep = this.getBallSpeedStep(key);
-      const curSpdX = curSpd / this.BASE_SPEED;
-      const spdStepX = spdStep / this.BASE_SPEED;
+      const displaySpdPct = Math.round(b.speedFactor * 100) + (b.speedLevel - 1) * 5;
       const spdPct = calcBarPct(b.speedLevel, b.maxSpeedLevel);
       const spdNextPct = spdMaxed ? spdPct : Math.max(spdPct + 4, Math.min(100, calcBarPct(b.speedLevel + 1, b.maxSpeedLevel)));
 
@@ -4396,13 +4395,13 @@ class IdleBreakoutGame {
 
         <div class="ball-stat-chart" aria-label="${b.name} statisztikák">
           <div class="stat-col-item">
-            <div class="stat-col-val">${curSpdX.toFixed(2)}x</div>
+            <div class="stat-col-val">${displaySpdPct}%</div>
             <div class="stat-col-track">
               ${!spdMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${spdNextPct}%;"></div>` : ''}
               <div class="stat-col-fill speed-fill" style="height: ${spdPct}%;"></div>
             </div>
             <div class="stat-col-label">⚡ SEB.</div>
-            <div class="stat-col-gain">${spdMaxed ? 'MAX' : `+${spdStepX.toFixed(2)}x`}</div>
+            <div class="stat-col-gain">${spdMaxed ? 'MAX' : '+5%'}</div>
           </div>
           <div class="stat-col-item">
             <div class="stat-col-val">${fmtStat(curPwr)}</div>
@@ -4417,7 +4416,7 @@ class IdleBreakoutGame {
 
         <div class="ball-upg-btn-grid">
           <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
-            <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+${spdStepX.toFixed(2)}x)`}</div>
+            <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+5%)`}</div>
             <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
           </button>
 
