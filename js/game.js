@@ -8426,10 +8426,11 @@ class IdleBreakoutGame {
     const resetAt = Number(this.lbAdminRules && this.lbAdminRules.seasonResetAt) || 0;
     const resetToken = String((this.lbAdminRules && this.lbAdminRules.seasonResetToken) || '').trim();
     if (!resetAt || !rec || typeof rec !== 'object') return false;
-    if (resetToken && rec.seasonResetToken === resetToken) return false;
+    if (resetToken) {
+      return rec.seasonResetToken !== resetToken;
+    }
     const recAdminTs = Number(rec.adminUpdatedAt) || 0;
-    if (recAdminTs >= resetAt) return false;
-    return true;
+    return recAdminTs < resetAt;
   }
 
   applyIncomingAdminRules(raw, source = 'remote') {
@@ -8685,6 +8686,18 @@ class IdleBreakoutGame {
 
     const result = [...byKey.values()];
 
+    for (const e of result) {
+      if (this.isPreSeasonResetRecord(e)) {
+        e.rebirths = 0;
+        e.level = 1;
+        e.bricks = 0;
+        e.money = 0;
+        e.bb = 1;
+        e.bt = 5;
+        e.bpStage = 1;
+      }
+    }
+
     // Alkalmazzuk a még le nem futott (távoli/offline) admin parancsokat a ranglista-nézetre is,
     // hogy az újratöltés után se essen vissza a retained MQTT / korábbi felhő állapotra:
     const pendingCmds = Object.values((this.lbAdminRules && this.lbAdminRules.playerCommands) || {})
@@ -8703,10 +8716,10 @@ class IdleBreakoutGame {
           const nameHit = !!rule.targetNameLower && rule.targetNameLower !== 'játékos' && entryNameLower === rule.targetNameLower;
           return idHit || nameHit;
         };
+        const baseEffBaseline = Math.max(Number(e.ts) || 0, Number(e.adminUpdatedAt) || 0);
 
         for (const cmd of pendingCmds) {
-          const effBaseline = Math.max(Number(e.ts) || 0, Number(e.adminUpdatedAt) || 0);
-          if ((cmd.issuedAt || 0) <= effBaseline) continue;
+          if ((cmd.issuedAt || 0) <= baseEffBaseline) continue;
           if (!matchesRule(cmd)) continue;
           if (cmd.rebirths !== null && cmd.rebirths !== undefined) {
             e.rebirths = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
@@ -8721,26 +8734,13 @@ class IdleBreakoutGame {
         }
 
         for (const g of pendingGifts) {
-          const effBaseline = Math.max(Number(e.ts) || 0, Number(e.adminUpdatedAt) || 0);
-          if ((g.issuedAt || 0) <= effBaseline) continue;
+          if ((g.issuedAt || 0) <= baseEffBaseline) continue;
           if (!matchesRule(g)) continue;
           if (g.setBB !== null && g.setBB !== undefined) e.bb = Math.max(0, Math.floor(Number(g.setBB) || 0));
           if (g.setBT !== null && g.setBT !== undefined) e.bt = Math.max(0, Math.floor(Number(g.setBT) || 0));
           if (g.setMoney !== null && g.setMoney !== undefined) e.money = Math.max(0, Math.floor(Number(g.setMoney) || 0));
           e.adminUpdatedAt = Math.max(Number(e.adminUpdatedAt) || 0, Number(g.issuedAt) || 0);
         }
-      }
-    }
-
-    for (const e of result) {
-      if (this.isPreSeasonResetRecord(e)) {
-        e.rebirths = 0;
-        e.level = 1;
-        e.bricks = 0;
-        e.money = 0;
-        e.bb = 1;
-        e.bt = 5;
-        e.bpStage = 1;
       }
     }
 
@@ -10270,7 +10270,7 @@ class IdleBreakoutGame {
         rp.bt = 5;
         rp.bpStage = 1;
         rp.adminUpdatedAt = now;
-        rp.seasonResetToken = resetToken;
+        rp.seasonResetToken = '';
         if (this.cloud && (rp.docId || rp.uid || pid)) {
           const res = await this.cloud.adminUpdateLeaderboardDoc(rp.docId || rp.uid || pid, {
             rebirths: 0,
@@ -10280,7 +10280,7 @@ class IdleBreakoutGame {
             bb: 1,
             bt: 5,
             bpStage: 1,
-            seasonResetToken: resetToken,
+            seasonResetToken: '',
             adminUpdatedAt: now
           });
           if (res && res.ok) fsOkCount++;
