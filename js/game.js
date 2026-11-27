@@ -5,6 +5,7 @@
  * Background Tab & Offline Progression.
  */
 
+const APP_VERSION = '8.9';
 const BB_UPGRADE_COSTS = [1, 3, 5, 7, 10]; // 1., 2., 3., 4., 5. fejlesztés ára BB-ben
 
 const PIERCE_SPEED_COSTS = [
@@ -895,6 +896,7 @@ class IdleBreakoutGame {
     this.autoClickerTimer = 0;
     this.autoClickerStrikeCount = 0;
     this.lastAutoClickSoundAt = 0;
+    this.pirateShopCooldown = 0;
 
     // Quick Time Money (Coin Orb) Event
     this.bonusOrb = null;
@@ -924,11 +926,13 @@ class IdleBreakoutGame {
     this.autosaveTimer = 0;
     this.suppressAudioAndVisuals = false;
     this.pendingOfflineSeconds = 0;
+    this.offlineProgressAppliedAt = 0;
     this.bgWorker = null;
     this.bgInterval = null;
     this.isResetting = false;
     this.dec24TimerInterval = null;
     this.activeTooltipKind = null;
+    this.activeUpgradeCardIndex = 0;
     this.cloud = null;
 
     // 3-Day Unregistered Guest Retention State
@@ -999,6 +1003,16 @@ class IdleBreakoutGame {
     // Start 60 FPS visual Game Loop
     this.lastTickMs = Date.now();
     requestAnimationFrame((t) => this.gameLoop(t));
+
+    // URL cache-buster paraméter eltávolítása + automatikus verziófigyelő indítása
+    try {
+      const curUrl = new URL(window.location.href);
+      if (curUrl.searchParams.has('v')) {
+        curUrl.searchParams.delete('v');
+        window.history.replaceState({}, document.title, curUrl.toString());
+      }
+    } catch (e) {}
+    this.startAutoUpdateWatcher();
   }
 
   // --- Canvas Setup ---
@@ -1018,6 +1032,10 @@ class IdleBreakoutGame {
     this.setupCanvas();
     this.createPerimeterBricks();
     this.generateLevel(this.level);
+    const upgModal = document.getElementById('upgrades-modal');
+    if (upgModal && upgModal.classList.contains('open')) {
+      this.renderUpgradesMenu();
+    }
   }
 
   // --- White Perimeter Border Bricks ---
@@ -1093,28 +1111,31 @@ class IdleBreakoutGame {
   //   - 25% eséllyel 1.000.000 – 1.950.000 HP (2 millió alatt)
   //   - 5% eséllyel (20-ból 1) 5.000.000 HP Mega Boss!
   getBossHpForLevel(lvl) {
+    const lateHpMult = this.getLateGameHpMultiplier();
+    let baseHp;
     if (lvl > 400) {
       const r = Math.random();
       if (r < 0.05) {
-        return 5_000_000; // 1 a 20-ból (5%): 5 milliós Boss!
-      }
-      if (r < 0.75) {
+        baseHp = 5_000_000; // 1 a 20-ból (5%): 5 milliós Boss!
+      } else if (r < 0.75) {
         // 70% esély: 500.000 – 1.000.000 HP
-        return Math.round((500_000 + Math.random() * 500_000) / 1000) * 1000;
+        baseHp = Math.round((500_000 + Math.random() * 500_000) / 1000) * 1000;
+      } else {
+        // 25% esély: 1.000.000 – 1.950.000 HP (2 millió alatti)
+        baseHp = Math.round((1_000_000 + Math.random() * 950_000) / 1000) * 1000;
       }
-      // 25% esély: 1.000.000 – 1.950.000 HP (2 millió alatti)
-      return Math.round((1_000_000 + Math.random() * 950_000) / 1000) * 1000;
+      return Math.round((baseHp * lateHpMult) / 1000) * 1000;
     }
     if (BOSS_HP_TABLE[lvl] !== undefined) {
-      return BOSS_HP_TABLE[lvl];
-    }
-    if (lvl === 175) return 65000;
-    if (lvl === 225) return 77500;
-    if (lvl === 275) return 86250;
-    if (lvl === 325) return 95000;
-    if (lvl === 375) return 300000;
-    if (lvl === 400) return 500000;
-    return lvl * 40;
+      baseHp = BOSS_HP_TABLE[lvl];
+    } else if (lvl === 175) baseHp = 65000;
+    else if (lvl === 225) baseHp = 77500;
+    else if (lvl === 275) baseHp = 86250;
+    else if (lvl === 325) baseHp = 95000;
+    else if (lvl === 375) baseHp = 300000;
+    else if (lvl === 400) baseHp = 500000;
+    else baseHp = lvl * 40;
+    return Math.max(1, Math.round(baseHp * lateHpMult));
   }
 
   // --- Balanced Boss Money Calculation (Boss 1 legkevesebb -> magas szintű Bossok legtöbb) ---
@@ -1181,9 +1202,9 @@ class IdleBreakoutGame {
       this.nextLevelIsGold = false;
       this.isGoldLevelActive = true;
       delete this.activePowerUps['gold_level'];
-      this.activatePowerUp('gold_level_active', '🌟', 'GOLD LEVEL (20x $ + BB/BT)', '500–2000 HP, 20x pénz, aranyblokkokból BB/BT esély + teljesítéskor +15 BB & +25 BT!', { mode: 'rounds', rounds: 1 });
+      this.activatePowerUp('gold_level_active', '🌟', 'GOLD LEVEL (20x $ + BB/BT)', '500–2000 HP, 20x pénz, aranyblokkokból BB/BT esély + teljesítéskor +10 BB & +15 BT!', { mode: 'rounds', rounds: 1 });
       if (!this.suppressAudioAndVisuals) {
-        this.showToast('🌟 <strong>GOLD LEVEL INDUL!</strong> 500–2000 HP-s aranyblokkok: 20x pénz, BB/BT esés + teljesítéskor +15 ⭐ BB & +25 👑 BT!', 5000);
+        this.showToast('🌟 <strong>GOLD LEVEL INDUL!</strong> 500–2000 HP-s aranyblokkok: 20x pénz, BB/BT esés + teljesítéskor +10 ⭐ BB & +15 👑 BT!', 5000);
       }
     }
 
@@ -1194,7 +1215,8 @@ class IdleBreakoutGame {
     const brickH = arenaH / rows;
     this.gridCellW = brickW;
     this.gridCellH = brickH;
-    const blockHp = lvl;
+    const lateHpMult = this.getLateGameHpMultiplier();
+    const blockHp = Math.max(1, Math.round(lvl * lateHpMult));
     const isGoldLevel = !!this.isGoldLevelActive;
 
     // Kizárólag a legalsó sor marad üresen (r < rows - 1), a labdák pozícióját nem kerüli ki!
@@ -1203,7 +1225,8 @@ class IdleBreakoutGame {
 
     for (let r = 0; r < activeRows; r++) {
       for (let c = 0; c < cols; c++) {
-        const brickHp = isGoldLevel ? (500 + Math.floor(Math.random() * 1501)) : blockHp;
+        const goldBase = 500 + Math.floor(Math.random() * 1501);
+        const brickHp = isGoldLevel ? Math.round(goldBase * Math.sqrt(lateHpMult)) : blockHp;
         this.bricks.push({
           id: `b_${lvl}_${idCounter++}`,
           x: perimeterPadding + c * brickW,
@@ -1729,13 +1752,15 @@ class IdleBreakoutGame {
     // Kiegyensúlyozott power-up esély-eloszlás:
     // - Erős bónuszok (2x Money, 2x Damage, Gold Boss, Shock Wave): mérsékelt 2.2 - 2.6 esély
     // - Hasznos ritkább bónuszok (Speed, Discount, Pierce, Auto Clicker, Free Upg): 0.70 - 0.95 esély
+    // - Maxolt Pirate Shop (Discount Lv 5): nagyon ritka (0.12 súly + 5 perc cooldown)
     // - Gold Level (csak Rebirth 15 fölött!): 0.08 esély (~0.6% power-up dobásból)
+    const discountWeight = (this.bbUpgrades.discount >= 5) ? 0.12 : 0.85;
     const candidates = [
       { id: '2x_money',     weight: 2.2  },
       { id: '2x_dmg',       weight: 2.2  },
       { id: 'gold_boss',    weight: 2.4  },
       { id: 'shockwave',    weight: 2.6  },
-      { id: 'discount',     weight: 0.95 },
+      { id: 'discount',     weight: discountWeight },
       { id: 'piercing',     weight: 0.95 },
       { id: 'speed_boost',  weight: 0.90 },
       { id: 'auto_clicker', weight: 0.85 },
@@ -1744,6 +1769,7 @@ class IdleBreakoutGame {
     ].filter(c => {
       if (c.id === 'gold_boss' && this.nextBossIsGold) return false;
       if (c.id === 'gold_level' && (this.rebirthCount <= 15 || this.nextLevelIsGold || this.isGoldLevelActive)) return false;
+      if (c.id === 'discount' && this.bbUpgrades.discount >= 5 && (this.pirateShopCooldown || 0) > 0) return false;
       if (c.id === 'auto_clicker' && this.bbUpgrades.autoClicker >= 1) return false;
       const active = this.activePowerUps[c.id];
       if (active && (active.mode === 'until_rebirth' || active.mode === 'forever') && c.id !== 'piercing') return false;
@@ -1883,6 +1909,7 @@ class IdleBreakoutGame {
       case 'discount': {
         const lvl = this.bbUpgrades.discount;
         if (lvl >= 5) {
+          this.pirateShopCooldown = 300;
           this.activatePowerUp('discount', '🏴‍☠️', 'PIRATE SHOP', 'MINDEN labda és kurzor fejlesztés INGYENES 5 mp-ig!', { mode: 'timed', duration: 5, extra: { discountPct: 100 } });
           this.showToast('🏴‍☠️ <strong>PIRATE SHOP AKTÍV (5 mp)!</strong> Minden labda és kurzor upgrade INGYENES!');
         } else {
@@ -3029,15 +3056,26 @@ class IdleBreakoutGame {
 
   // --- Rebirth System ---
   getRebirthMultiplier(rebirthCount = this.rebirthCount) {
-    return Math.pow(1.15, Math.max(0, Number(rebirthCount) || 0));
+    const r = Math.max(0, Number(rebirthCount) || 0);
+    if (r <= 20) return Math.pow(1.15, r);
+    return Math.pow(1.15, 20) * Math.pow(1.05, r - 20);
+  }
+
+  getLateGameHpMultiplier(rebirthCount = this.rebirthCount) {
+    const r = Math.max(0, Number(rebirthCount) || 0);
+    if (r <= 20) return 1.0;
+    return Math.pow(1.10, r - 20);
   }
 
   getPowerUpDropChancePercent(rebirthCount = this.rebirthCount) {
-    return (100 / 800) + (Math.max(0, Number(rebirthCount) || 0) * 0.005);
+    const cappedR = Math.min(25, Math.max(0, Number(rebirthCount) || 0));
+    return (100 / 800) + (cappedR * 0.005);
   }
 
-  getRequiredRebirthLevel() {
-    return (this.rebirthCount + 1) * 25;
+  getRequiredRebirthLevel(rebirthCount = this.rebirthCount) {
+    const r = Math.max(0, Number(rebirthCount) || 0);
+    if (r < 20) return (r + 1) * 25;
+    return 500 + (r - 19) * 35;
   }
 
   canRebirth() {
@@ -3319,10 +3357,17 @@ class IdleBreakoutGame {
     }
 
     // Multiplayer Leaderboard Heartbeat (minden 6 mp-ben frissíti a pontszámot a többi játékos felé)
+    if (this.pirateShopCooldown > 0) {
+      this.pirateShopCooldown = Math.max(0, this.pirateShopCooldown - dt);
+    }
     this.heartbeatTimer += dt;
     if (this.heartbeatTimer >= 6.0) {
       this.heartbeatTimer = 0;
       this.broadcastMyStatus();
+      if (!isBackground) {
+        this._lbAgeRefreshCount = (this._lbAgeRefreshCount || 0) + 1;
+        if (this._lbAgeRefreshCount % 2 === 0) this.renderLeaderboard();
+      }
     }
 
     // 7. Autosave every 3s (local) + Cloud autosave tick (15s)
@@ -3436,7 +3481,7 @@ class IdleBreakoutGame {
 
       while (remainingDamage > 0) {
         const isBoss = this.isBossLevel(this.level);
-        const levelTotalHp = isBoss ? this.getBossHpForLevel(this.level) : (this.level * 85);
+        const levelTotalHp = isBoss ? this.getBossHpForLevel(this.level) : Math.max(1, Math.round(this.level * 85 * this.getLateGameHpMultiplier()));
         const dmgOnLevel = Math.min(remainingDamage, levelTotalHp);
         const rewardMult = isBoss ? this.getBossRewardPerDamage(this.level) : 1;
 
@@ -3467,12 +3512,15 @@ class IdleBreakoutGame {
       this.generateLevel(this.level);
     }
 
+    if (this.level > startLevel || this.money > startMoney) {
+      this.offlineProgressAppliedAt = Date.now();
+    }
     this.updateHUD();
     this.renderLeaderboard();
     this.save();
     this.syncWalletChangeNow(true);
     if (this.cloud && this.cloud.currentUser) {
-      this.cloud.saveToCloud(true, { silent: true });
+      this.cloud.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
     }
 
     if (showToast) {
@@ -3486,13 +3534,31 @@ class IdleBreakoutGame {
   }
 
   formatDuration(sec) {
-    const s = Math.floor(sec);
+    const s = Math.max(0, Math.floor(sec));
     if (s < 60) return `${s} mp`;
     const m = Math.floor(s / 60);
     if (m < 60) return `${m} perc`;
     const h = Math.floor(m / 60);
-    const remM = m % 60;
-    return remM > 0 ? `${h} óra ${remM} perc` : `${h} óra`;
+    if (h < 24) {
+      const remM = m % 60;
+      return remM > 0 ? `${h} óra ${remM} perc` : `${h} óra`;
+    }
+    const d = Math.floor(h / 24);
+    const remH = h % 24;
+    return remH > 0 ? `${d} nap ${remH} óra` : `${d} nap`;
+  }
+
+  formatLastSeenAgo(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    if (s < 60) return 'épp most';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} perce`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h} órája`;
+    const d = Math.floor(h / 24);
+    const remH = h % 24;
+    if (d < 3 && remH > 0) return `${d} nap ${remH} órája`;
+    return `${d} napja`;
   }
 
   gameLoop(timestamp) {
@@ -4654,6 +4720,19 @@ class IdleBreakoutGame {
     }
   }
 
+  isMobileUpgradesCarouselMode() {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(max-width: 980px), (hover: none) and (pointer: coarse) and (max-width: 1180px)').matches;
+  }
+
+  stepMobileUpgradeCard(delta) {
+    const total = this._lastUpgradeCardCount || 0;
+    if (total <= 1) return;
+    this.activeUpgradeCardIndex = (this.activeUpgradeCardIndex + delta + total) % total;
+    this.renderUpgradesMenu();
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
   // --- $ Upgrades Menu Rendering (Balls + Click Power + Pierce Ball $ Speed Upgrade) ---
   renderUpgradesMenu() {
     this.updateBossTokenExchangeUI();
@@ -4662,6 +4741,7 @@ class IdleBreakoutGame {
     const container = document.getElementById('upgrades-content-grid');
     if (!container) return;
     container.innerHTML = '';
+    const builtCards = [];
 
     // Discount / Pirate Shop Banner
     const discBanner = document.getElementById('upgrades-discount-banner');
@@ -4803,7 +4883,7 @@ class IdleBreakoutGame {
         <button class="delete-ball-btn" id="btn-del-ball-${key}">DELETE x1</button>
       `;
 
-      container.appendChild(col);
+      builtCards.push({ label: b.name, el: col });
 
       if (!spdMaxed) col.querySelector(`#btn-upg-spd-${key}`).addEventListener('click', () => this.upgradeBallSpeed(key));
       if (!pwrMaxed) col.querySelector(`#btn-upg-pwr-${key}`).addEventListener('click', () => this.upgradeBallPower(key));
@@ -4873,7 +4953,7 @@ class IdleBreakoutGame {
           <div class="btn-cost-bottom">${pierceMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pCost))}</div>
         </button>
       `;
-      container.appendChild(pierceCol);
+      builtCards.push({ label: '⚡ PIERCE SPEED', el: pierceCol });
       if (!pierceMaxed) pierceCol.querySelector('#btn-upg-pierce-spd').addEventListener('click', () => this.upgradePierceSpeed());
     }
 
@@ -4918,8 +4998,37 @@ class IdleBreakoutGame {
       </button>
     `;
 
-    container.appendChild(clickCol);
+    builtCards.push({ label: 'CLICK POWER', el: clickCol });
     if (!clickMaxed) clickCol.querySelector('#btn-upg-click').addEventListener('click', () => this.upgradeClick());
+
+    this._lastUpgradeCardCount = builtCards.length;
+    if (this.activeUpgradeCardIndex >= builtCards.length) {
+      this.activeUpgradeCardIndex = Math.max(0, builtCards.length - 1);
+    }
+    if (this.activeUpgradeCardIndex < 0) this.activeUpgradeCardIndex = 0;
+
+    const useMobileCarousel = this.isMobileUpgradesCarouselMode();
+    const mobileNav = document.getElementById('upgrades-mobile-nav');
+    const prevBtn = document.getElementById('btn-upg-prev');
+    const nextBtn = document.getElementById('btn-upg-next');
+    const indicatorEl = document.getElementById('upg-mobile-indicator');
+
+    container.classList.toggle('mobile-carousel-mode', useMobileCarousel);
+
+    if (useMobileCarousel && builtCards.length > 0) {
+      const current = builtCards[this.activeUpgradeCardIndex];
+      container.appendChild(current.el);
+      if (mobileNav) mobileNav.style.display = 'flex';
+      if (indicatorEl) indicatorEl.textContent = `${this.activeUpgradeCardIndex + 1} / ${builtCards.length} • ${current.label}`;
+      const disableNav = builtCards.length <= 1;
+      if (prevBtn) prevBtn.disabled = disableNav;
+      if (nextBtn) nextBtn.disabled = disableNav;
+    } else {
+      for (const item of builtCards) {
+        container.appendChild(item.el);
+      }
+      if (mobileNav) mobileNav.style.display = 'none';
+    }
   }
 
   // --- All-Phases & Currency Hover Tooltip (slightly translucent + top-right X button!) ---
@@ -5303,6 +5412,35 @@ class IdleBreakoutGame {
         upgradesModal.classList.remove('open');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
+    }
+
+    const upgPrevBtn = document.getElementById('btn-upg-prev');
+    const upgNextBtn = document.getElementById('btn-upg-next');
+    const upgGridEl = document.getElementById('upgrades-content-grid');
+    if (upgPrevBtn) upgPrevBtn.addEventListener('click', () => this.stepMobileUpgradeCard(-1));
+    if (upgNextBtn) upgNextBtn.addEventListener('click', () => this.stepMobileUpgradeCard(1));
+    if (upgGridEl) {
+      let swipeStartX = 0;
+      let swipeStartY = 0;
+      let swiping = false;
+      upgGridEl.addEventListener('touchstart', (e) => {
+        if (!this.isMobileUpgradesCarouselMode() || !e.touches || e.touches.length !== 1) return;
+        swipeStartX = e.touches[0].clientX;
+        swipeStartY = e.touches[0].clientY;
+        swiping = true;
+      }, { passive: true });
+      upgGridEl.addEventListener('touchend', (e) => {
+        if (!swiping || !this.isMobileUpgradesCarouselMode() || !e.changedTouches || !e.changedTouches[0]) {
+          swiping = false;
+          return;
+        }
+        swiping = false;
+        const dx = e.changedTouches[0].clientX - swipeStartX;
+        const dy = e.changedTouches[0].clientY - swipeStartY;
+        if (Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+          this.stepMobileUpgradeCard(dx < 0 ? 1 : -1);
+        }
+      }, { passive: true });
     }
 
     // Power-Up Upgrades (BB) Modal
@@ -5779,6 +5917,7 @@ class IdleBreakoutGame {
         this.coinBbHitCounter = 0;
         this.lastRenderedBPStage = null;
         this.pendingOfflineSeconds = 0;
+        this.offlineProgressAppliedAt = 0;
       }
 
       this.saveOwnerUid = ownerUid || data.saveOwnerUid || this.saveOwnerUid || null;
@@ -5963,6 +6102,8 @@ class IdleBreakoutGame {
     this.coinBbHitCounter = 0;
     this.lastRenderedBPStage = null;
     this.pendingOfflineSeconds = 0;
+    this.offlineProgressAppliedAt = 0;
+    this.pirateShopCooldown = 0;
     this.guestCreatedAt = now;
     this.guestDeadlineAt = now + this.GUEST_RETENTION_MS;
     this.guestLastActiveAt = now;
@@ -6757,6 +6898,16 @@ class IdleBreakoutGame {
                   ? incomingName
                   : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
 
+                const prevLocalSeen = (existing && existing.lastSeenLocalMs) ? Number(existing.lastSeenLocalMs) : 0;
+                const mqttChangedProgressOrTs = !!(existing && (
+                  dReb !== (existing.rebirths || 0) ||
+                  dLvl !== (existing.level || 1) ||
+                  dBrk !== (existing.bricks || 0) ||
+                  dTs > (existing.ts || 0) + 1000
+                ));
+                const mqttFreshTs = (nowMs - dTs) < 45000;
+                const nextLocalSeen = (mqttChangedProgressOrTs || mqttFreshTs) ? nowMs : prevLocalSeen;
+
                 this.remotePlayers[canonKey] = {
                   id: canonKey,
                   uid: data.uid || (existing && existing.uid) || null,
@@ -6774,6 +6925,7 @@ class IdleBreakoutGame {
                   bt: keepBt,
                   bpStage: keepBpStage,
                   ts: Math.min(nowMs, Math.max(dTs, (existing && existing.ts) || 0)),
+                  lastSeenLocalMs: nextLocalSeen,
                   adminUpdatedAt: (existing && existing.adminUpdatedAt) || 0
                 };
 
@@ -6947,6 +7099,83 @@ class IdleBreakoutGame {
     } catch (e) {}
   }
 
+  compareAppVersions(a, b) {
+    const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const da = pa[i] || 0;
+      const db = pb[i] || 0;
+      if (da !== db) return da - db;
+    }
+    return 0;
+  }
+
+  startAutoUpdateWatcher() {
+    if (typeof window === 'undefined' || window.location.protocol === 'file:') return;
+    if (this._updateWatcherStarted) return;
+    this._updateWatcherStarted = true;
+    this._lastVersionCheckAt = 0;
+
+    const checkVersionJson = async () => {
+      const now = Date.now();
+      if (now - this._lastVersionCheckAt < 15000) return;
+      this._lastVersionCheckAt = now;
+      try {
+        const res = await fetch(`./version.json?t=${now}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data && data.version && this.compareAppVersions(data.version, APP_VERSION) > 0) {
+          this.triggerSafeAutoUpdate(String(data.version), 'ver:' + data.version);
+        }
+      } catch (e) {}
+    };
+
+    setTimeout(checkVersionJson, 12000);
+    setInterval(checkVersionJson, 45000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        checkVersionJson();
+      }
+    });
+  }
+
+  async triggerSafeAutoUpdate(targetVersion, reloadKey) {
+    if (this._autoUpdateTriggered) return;
+    const key = String(reloadKey || targetVersion || 'auto');
+    try {
+      if (sessionStorage.getItem('idle_breakout_last_reload_key') === key) return;
+      const lastAt = Number(sessionStorage.getItem('idle_breakout_last_reload_at') || 0);
+      if (lastAt > 0 && (Date.now() - lastAt) < 30000) return;
+      sessionStorage.setItem('idle_breakout_last_reload_key', key);
+      sessionStorage.setItem('idle_breakout_last_reload_at', String(Date.now()));
+    } catch (e) {}
+
+    this._autoUpdateTriggered = true;
+    this.showToast(`🔄 <strong>Új frissítés érkezett (v${this.escapeHtml(targetVersion)})!</strong> Haladás mentése és automatikus újratöltés...`, 3500);
+
+    try {
+      this.save();
+      this.broadcastMyStatus();
+      if (this.cloud && this.cloud.currentUser) {
+        await Promise.race([
+          this.cloud.saveToCloud(true, { silent: true }),
+          new Promise(r => setTimeout(r, 1800))
+        ]);
+      }
+    } catch (e) {}
+
+    setTimeout(() => {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('v', `${targetVersion}_${Date.now().toString(36)}`);
+        window.location.replace(url.toString());
+      } catch (e) {
+        window.location.reload();
+      }
+    }, 1600);
+  }
+
   escapeHtml(str) {
     return String(str ?? '')
       .replace(/&/g, '&amp;')
@@ -6960,6 +7189,8 @@ class IdleBreakoutGame {
     return {
       version: 2,
       updatedAt: 0,
+      minClientVersion: '',
+      forceReloadToken: 0,
       hideDefaultName: false,
       hideGuests: false,
       hideOffline: false,
@@ -7071,6 +7302,8 @@ class IdleBreakoutGame {
     return {
       version: 2,
       updatedAt: Number(raw.updatedAt) || 0,
+      minClientVersion: String(raw.minClientVersion || '').trim().slice(0, 16),
+      forceReloadToken: Math.max(0, Number(raw.forceReloadToken) || 0),
       hideDefaultName: !!raw.hideDefaultName,
       hideGuests: !!raw.hideGuests,
       hideOffline: !!raw.hideOffline,
@@ -7129,11 +7362,12 @@ class IdleBreakoutGame {
 
     for (const cmd of cmdList) {
       if (!cmd || !cmd.cmdId) continue;
+      if ((this.appliedAdminCmdIds || []).includes(cmd.cmdId)) {
+        continue;
+      }
       if (hasReloadCtx) {
         const alreadyInLoadedSave = saveCmdSet.has(cmd.cmdId) || (saveTs > 0 && saveTs >= (cmd.issuedAt || 0));
         if (alreadyInLoadedSave) continue;
-      } else if ((this.appliedAdminCmdIds || []).includes(cmd.cmdId)) {
-        continue;
       }
 
       const idMatch = Array.isArray(cmd.targetIds) && cmd.targetIds.some(id => myIds.includes(String(id)));
@@ -7246,6 +7480,12 @@ class IdleBreakoutGame {
     } else {
       this.processPendingAdminCommands();
     }
+
+    if (incoming.minClientVersion && this.compareAppVersions(incoming.minClientVersion, APP_VERSION) > 0) {
+      this.triggerSafeAutoUpdate(incoming.minClientVersion, 'ver:' + incoming.minClientVersion);
+    } else if (incoming.forceReloadToken > 0 && (Date.now() - incoming.forceReloadToken) < 5 * 60 * 1000 && !this.isDevUnlocked()) {
+      this.triggerSafeAutoUpdate(incoming.minClientVersion || APP_VERSION, 'tok:' + incoming.forceReloadToken);
+    }
   }
 
   async syncAdminRulesGlobally(showToast = true) {
@@ -7294,7 +7534,8 @@ class IdleBreakoutGame {
     const byKey = new Map();
     const mergeInto = (groupKey, rp, rawKey = null) => {
       const existing = byKey.get(groupKey);
-      const rpOnline = (now - (rp.ts || 0)) < 25000;
+      const rpEffTs = Math.max(Number(rp.ts) || 0, Number(rp.lastSeenLocalMs) || 0);
+      const rpOnline = (rpEffTs > 0) && ((now - rpEffTs) < 45000);
       const keysToAdd = [rawKey, rp.id, rp.uid, rp.docId, rp.clientId].filter(Boolean);
       if (!existing) {
         byKey.set(groupKey, {
@@ -7314,6 +7555,7 @@ class IdleBreakoutGame {
           bt: (rp.bt !== undefined && rp.bt !== null) ? Number(rp.bt) : null,
           bpStage: (rp.bpStage !== undefined && rp.bpStage !== null) ? Number(rp.bpStage) : null,
           ts: Number(rp.ts) || 0,
+          lastSeenLocalMs: Number(rp.lastSeenLocalMs) || 0,
           adminUpdatedAt: Number(rp.adminUpdatedAt) || 0,
           isOnline: rpOnline
         });
@@ -7336,6 +7578,7 @@ class IdleBreakoutGame {
       const rBt = (rp.bt !== undefined && rp.bt !== null) ? Number(rp.bt) : null;
       const rBpStage = (rp.bpStage !== undefined && rp.bpStage !== null) ? Number(rp.bpStage) : null;
       const rTs = Number(rp.ts) || 0;
+      const rLocalSeen = Number(rp.lastSeenLocalMs) || 0;
       const rAdminTs = Number(rp.adminUpdatedAt) || 0;
       const exAdminTs = Number(existing.adminUpdatedAt) || 0;
 
@@ -7348,6 +7591,9 @@ class IdleBreakoutGame {
         rReb === existing.rebirths &&
         rLvl === existing.level &&
         ((rp.fromFirestore && !existing.fromFirestore) || rTs >= existing.ts);
+
+      existing.lastSeenLocalMs = Math.max(existing.lastSeenLocalMs || 0, rLocalSeen);
+      existing.ts = Math.max(existing.ts || 0, rTs);
 
       if (adminWins || higherProgressWins || sameProgressPreferFirestoreOrNewer) {
         existing.ts = Math.max(existing.ts, rTs);
@@ -7519,6 +7765,7 @@ class IdleBreakoutGame {
         bt: rp.bt ?? null,
         bpStage: rp.bpStage ?? this.getCurrentBattlePassStage(rp.bricks || 0),
         ts: rp.ts,
+        lastSeenLocalMs: rp.lastSeenLocalMs || 0,
         isPlayer: false,
         isOnline: !!rp.isOnline,
         isCustom: false
@@ -7633,11 +7880,19 @@ class IdleBreakoutGame {
       const pinnedClass = pinnedAfterTop10 ? 'player-pinned-after-top10' : '';
       const meBadge = entry.isPlayer ? '<span class="badge-me">TE</span>' : '';
 
-      // Online státusz: ha 25 másodpercen belül küldött jelet
-      const isOnline = entry.isPlayer || entry.isOnline || (now - (entry.ts || 0) < 25000);
+      // Online státusz: ha 45 mp-en belül jött élő jel (vagy élő Firestore/MQTT frissítés), különben utoljára online idő
+      const effTs = Math.max(Number(entry.ts) || 0, Number(entry.lastSeenLocalMs) || 0);
+      const isOnline = entry.isPlayer || entry.isOnline || (effTs > 0 && (now - effTs) < 45000);
+      const ageSec = isOnline ? 0 : (effTs > 0 ? Math.max(0, Math.floor((now - effTs) / 1000)) : null);
+      const lastSeenLabel = isOnline
+        ? 'Online'
+        : (ageSec !== null ? this.formatLastSeenAgo(ageSec) : 'Offline');
+      const dotTitle = isOnline
+        ? 'Élőben online'
+        : (ageSec !== null ? `Utoljára online: ${this.formatLastSeenAgo(ageSec)}` : 'Offline (mentett pontszám)');
       const dotHtml = isOnline
-        ? '<span class="live-dot online" title="Élőben online">🟢</span>'
-        : '<span class="live-dot offline" title="Offline (mentett pontszám)">⚪</span>';
+        ? `<span class="live-dot online" title="${dotTitle}">🟢</span>`
+        : `<span class="live-dot offline" title="${dotTitle}">⚪</span>`;
 
       const dividerHtml = (pinnedAfterTop10 && rank > 11)
         ? '<div class="leaderboard-gap-divider">• • •</div>'
@@ -7646,7 +7901,10 @@ class IdleBreakoutGame {
       return `${dividerHtml}
         <div class="leaderboard-row ${rankClass} ${meClass} ${pinnedClass}">
           <span class="col-rank">${medal}</span>
-          <span class="col-name">${dotHtml}${this.escapeHtml(entry.name)}${meBadge}</span>
+          <span class="col-name" title="${dotTitle}">
+            <span class="lb-name-main">${dotHtml}<span class="lb-name-txt">${this.escapeHtml(entry.name)}</span>${meBadge}</span>
+            <span class="lb-last-seen ${isOnline ? 'is-online' : ''}">${lastSeenLabel}</span>
+          </span>
           <span class="col-reb">${this.formatLeaderboardStat(entry.rebirths)}</span>
           <span class="col-lvl">${this.formatLeaderboardStat(entry.level)}</span>
         </div>
@@ -7807,11 +8065,20 @@ class IdleBreakoutGame {
     // Quick toolbar actions
     const pruneBtn = document.getElementById('btn-dev-prune-cache');
     const syncBtn = document.getElementById('btn-dev-sync-now');
+    const forceReloadBtn = document.getElementById('btn-dev-force-reload');
     if (pruneBtn) pruneBtn.addEventListener('click', () => this.devPruneStaleEntries());
     if (syncBtn) {
       syncBtn.addEventListener('click', () => {
         this.requestLivePeersSync();
         this.syncAdminRulesGlobally(true);
+      });
+    }
+    if (forceReloadBtn) {
+      forceReloadBtn.addEventListener('click', async () => {
+        this.lbAdminRules.minClientVersion = APP_VERSION;
+        this.lbAdminRules.forceReloadToken = Date.now();
+        await this.syncAdminRulesGlobally(false);
+        this.showToast(`🔄 <strong>Frissítési parancs kiküldve (v${APP_VERSION})!</strong> Minden online játékos pár másodpercen belül automatikusan újratölt.`, 4500);
       });
     }
 
@@ -8754,8 +9021,10 @@ class IdleBreakoutGame {
         const rebMultTxt = this.getRebirthMultiplier(entry.rebirths || 0).toFixed(2);
         const brkTxt = this.formatNumber(entry.bricks || 0);
         const bpStg = entry.bpStage || this.getCurrentBattlePassStage(entry.bricks || 0);
-        const ageSec = entry.isOnline ? 0 : Math.max(0, Math.floor((Date.now() - (entry.ts || 0)) / 1000));
-        const seenTxt = entry.isOnline ? 'Online most' : (entry.ts ? `Aktív: ${this.formatDuration(ageSec)}e` : 'Offline');
+        const effTs = Math.max(Number(entry.ts) || 0, Number(entry.lastSeenLocalMs) || 0);
+        const isOnlineNow = entry.isPlayer || entry.isOnline || (effTs > 0 && (Date.now() - effTs) < 45000);
+        const ageSec = isOnlineNow ? 0 : (effTs > 0 ? Math.max(0, Math.floor((Date.now() - effTs) / 1000)) : null);
+        const seenTxt = isOnlineNow ? 'Online most' : (ageSec !== null ? `Online volt: ${this.formatLastSeenAgo(ageSec)}` : 'Offline');
 
         return `
           <div class="dev-player-card ${entry._filterReason ? 'is-filtered' : ''}" data-dev-idx="${idx}">

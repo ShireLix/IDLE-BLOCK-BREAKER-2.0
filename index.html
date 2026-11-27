@@ -2,12 +2,12 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8">
+  <title>Idle Breakout v8.9 - Classic Retro Edition</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Idle Breakout - Classic Retro Edition</title>
-  <link rel="stylesheet" href="css/style.css?v=7.3">
+  <link rel="stylesheet" href="css/style.css?v=7.5">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23ffee00' stroke='%23000' stroke-width='8'/></svg>">
 </head>
 <body>
@@ -453,6 +453,12 @@
       </div>
     </div>
 
+    <div id="upgrades-mobile-nav" class="upgrades-mobile-nav" style="display: none;">
+      <button id="btn-upg-prev" class="retro-btn upg-nav-arrow" type="button" aria-label="Előző kártya">◀</button>
+      <div id="upg-mobile-indicator" class="upg-mobile-indicator">1 / 1</div>
+      <button id="btn-upg-next" class="retro-btn upg-nav-arrow" type="button" aria-label="Következő kártya">▶</button>
+    </div>
+
     <div class="upgrades-content-grid" id="upgrades-content-grid">
       <!-- Dynamically rendered ball upgrades, BT Ball Abilities, Pierce Speed & Click X -->
     </div>
@@ -676,7 +682,7 @@
     <div class="mobile-sheet-header dev-modal-header">
       <div class="mobile-sheet-title-wrap">
         <div class="mobile-sheet-title">🛠️ FEJLESZTŐI FELÜLET</div>
-        <span id="dev-sync-badge" class="dev-sync-pill">🌍 GLOBÁLIS KEZELŐ</span>
+        <span id="dev-sync-badge" class="dev-sync-pill">🌍 GLOBÁLIS KEZELŐ • v8.9</span>
       </div>
       <div class="modal-header-actions">
         <button id="btn-dev-lock" class="mobile-switch-pill dev-lock-pill" type="button" title="Fejlesztői felület zárolása" style="display: none;">🔒 Zárolás</button>
@@ -709,6 +715,7 @@
         <div class="dev-quick-actions">
           <button id="btn-dev-prune-cache" class="retro-btn dev-tool-btn" type="button" title="Offline és duplikált cache/MQTT maradványok takarítása">🧹 TISZTÍTÁS</button>
           <button id="btn-dev-sync-now" class="retro-btn dev-tool-btn sync-accent" type="button" title="Szabályok azonnali kiküldése minden kliensnek">📡 SZINKRON</button>
+          <button id="btn-dev-force-reload" class="retro-btn dev-tool-btn" type="button" title="Minden online játékos böngészőjének azonnali frissítése">🔄 FRISSÍTÉS</button>
         </div>
       </div>
 
@@ -825,9 +832,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/mqtt.min.js"></script>
 <script src="js/firebase-config.js?v=4.5"></script>
-<script src="js/cloud.js?v=6.3"></script>
+<script src="js/cloud.js?v=6.5"></script>
 <script src="js/audio.js?v=4.8"></script>
-<script src="js/game.js?v=8.4"></script>
+<script src="js/game.js?v=8.9"></script>
 
 </body>
 </html>

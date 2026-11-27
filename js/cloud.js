@@ -21,6 +21,7 @@ class CloudAuthManager {
     this.lastSyncedBt = null;
     this.activeTab = 'login'; // 'login' | 'register'
     this.suppressNextAuthLoad = false;
+    this.initialCloudSyncDone = false;
     this.leaderboardUnsub = null;
   }
 
@@ -300,7 +301,9 @@ class CloudAuthManager {
 
         this.game.setPlayerNameDirect(playerName);
         this.currentUser = user;
-        await this.saveToCloud(true);
+        this.game.saveOwnerUid = user.uid;
+        this.initialCloudSyncDone = true;
+        await this.saveToCloud(true, { allowBeforeInitialSync: true });
         this.updateAuthUI();
         this.game.showToast(`🎉 <strong>Sikeres regisztráció!</strong> Üdvözlünk, ${playerName}! A haladásod mostantól a felhőbe mentődik.`, 4500);
         const modal = document.getElementById('auth-modal');
@@ -365,6 +368,7 @@ class CloudAuthManager {
       }
       await this.auth.signOut();
       this.currentUser = null;
+      this.initialCloudSyncDone = false;
       this.game.resetToFreshGuestState(true);
       this.updateAuthUI();
       this.game.showToast('🚪 Sikeres kijelentkezés. A felhőmentésed biztonságban megmaradt!', 4000);
@@ -503,12 +507,25 @@ class CloudAuthManager {
     }
   }
 
+  compareSaveProgress(a, b) {
+    const rebA = Math.max(0, Number(a?.rebirthCount) || 0);
+    const rebB = Math.max(0, Number(b?.rebirthCount) || 0);
+    if (rebA !== rebB) return rebA - rebB;
+    const lvlA = Math.max(1, Number(a?.level) || 1);
+    const lvlB = Math.max(1, Number(b?.level) || 1);
+    if (lvlA !== lvlB) return lvlA - lvlB;
+    const brkA = Math.max(0, Number(a?.totalBricksDestroyed) || 0);
+    const brkB = Math.max(0, Number(b?.totalBricksDestroyed) || 0);
+    return brkA - brkB;
+  }
+
   async handleAuthStateChanged(user) {
     this.currentUser = user || null;
     this.updateAuthUI();
 
     if (user) {
       this.game.saveOwnerUid = user.uid;
+      this.initialCloudSyncDone = false;
       if (typeof this.game.closeWelcomeMenu === 'function') {
         this.game.closeWelcomeMenu();
       }
@@ -521,14 +538,20 @@ class CloudAuthManager {
       }
       if (this.suppressNextAuthLoad) {
         this.suppressNextAuthLoad = false;
+        this.initialCloudSyncDone = true;
         this.game.broadcastMyStatus();
         this.syncLeaderboardToCloud(true);
         return;
       }
-      await this.syncOnLogin(user, false);
+      try {
+        await this.syncOnLogin(user, false);
+      } finally {
+        this.initialCloudSyncDone = true;
+      }
       this.game.broadcastMyStatus();
       this.syncLeaderboardToCloud(true);
     } else {
+      this.initialCloudSyncDone = false;
       this.game.renderLeaderboard();
     }
   }
@@ -544,19 +567,36 @@ class CloudAuthManager {
         const cloudSave = cloudDoc && cloudDoc.saveData ? cloudDoc.saveData : null;
         if (cloudSave) {
           const localRaw = this.game.readRawLocalSave();
+          const hasForeignOwner = !!(localRaw && localRaw.saveOwnerUid && localRaw.saveOwnerUid !== user.uid);
           const sameOwner = !!(localRaw && localRaw.saveOwnerUid === user.uid);
-          const localReb = Number(localRaw?.rebirthCount) || 0;
-          const cloudReb = Number(cloudSave.rebirthCount) || 0;
-          const localLvl = Number(localRaw?.level) || 1;
-          const cloudLvl = Number(cloudSave.level) || 1;
-          const localAhead = sameOwner && (localReb > cloudReb || (localReb === cloudReb && localLvl > cloudLvl));
-          const localIsNewer = sameOwner && (((Number(localRaw.lastSavedAt) || 0) > (Number(cloudSave.lastSavedAt) || 0)) || localAhead);
 
-          if (localIsNewer && !fromExplicitLogin) {
-            // Ugyanazon a gépen ugyanazzal a fiókkal offline tovább haladt -> NE írjuk felül a régi felhőmentéssel, hanem töltsük fel az újabbat!
-            await this.saveToCloud(true, { silent: true });
+          const liveSnap = {
+            rebirthCount: this.game.rebirthCount || 0,
+            level: this.game.level || 1,
+            totalBricksDestroyed: this.game.totalBricksDestroyed || 0,
+            lastSavedAt: this.game.offlineProgressAppliedAt || Number(localRaw?.lastSavedAt) || 0
+          };
+          const rawSnap = localRaw || { rebirthCount: 0, level: 1, totalBricksDestroyed: 0, lastSavedAt: 0 };
+          const bestLocal = (!hasForeignOwner && this.compareSaveProgress(liveSnap, rawSnap) >= 0) ? liveSnap : rawSnap;
+
+          const progressCmp = hasForeignOwner ? -1 : this.compareSaveProgress(bestLocal, cloudSave);
+          const localOfflineDidAdvance = !hasForeignOwner && !fromExplicitLogin && ((this.game.offlineProgressAppliedAt || 0) > 0);
+          const localIsStrictlyNewerSameOwner = sameOwner && ((Number(bestLocal.lastSavedAt) || 0) > (Number(cloudSave.lastSavedAt) || 0)) && progressCmp >= 0;
+
+          const shouldKeepLocalAndUpload = !fromExplicitLogin && !hasForeignOwner && (
+            progressCmp > 0 ||
+            (localOfflineDidAdvance && progressCmp >= 0) ||
+            localIsStrictlyNewerSameOwner
+          );
+
+          if (shouldKeepLocalAndUpload) {
+            // A helyi / offline haladás frissebb vagy előrébb tart (még akkor is, ha a régi verzió null UID-val mentette) ->
+            // NE írjuk felül a régi felhőmentéssel, hanem rögzítsük az UID-t és töltsük fel a felhőbe!
+            this.game.saveOwnerUid = user.uid;
+            this.game.save();
+            await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
           } else {
-            // Ha másik gépen lépett be, vagy a felhő frissebb:
+            // Ha másik gépen / másik fiókban előrébb járt, vagy belépéskor felhőmentést töltünk:
             const isGuestProgress = !fromExplicitLogin ? false : (!sameOwner && (this.game.level > 1 || this.game.getTotalBalls() > 0 || this.game.rebirthCount > 0));
             let shouldLoadCloud = true;
             if (isGuestProgress && !localRaw?.saveOwnerUid) {
@@ -579,19 +619,22 @@ class CloudAuthManager {
               const cloudOfflineSec = cloudSave.lastSavedAt ? ((Date.now() - Number(cloudSave.lastSavedAt)) / 1000) : 0;
               if (cloudOfflineSec >= 5 && (this.game.getTotalBalls() > 0 || this.game.bbUpgrades.autoClicker >= 1)) {
                 this.game.applyOfflineProgress(cloudOfflineSec, true);
-                await this.saveToCloud(true, { silent: true });
+                await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
               } else {
                 this.game.showToast(`☁️ <strong>Felhőmentés betöltve!</strong> Folytatás: Rebirth ${this.game.rebirthCount} | Szint ${this.game.level}`, 4500);
               }
             } else {
-              await this.saveToCloud(true);
+              this.game.saveOwnerUid = user.uid;
+              this.game.save();
+              await this.saveToCloud(true, { allowBeforeInitialSync: true });
             }
           }
         }
       } else if (fromExplicitLogin) {
         // Még nincs felhő dokumentum ehhez a fiókhoz -> hozzuk létre a jelenlegiből!
-        await this.saveToCloud(true);
+        await this.saveToCloud(true, { allowBeforeInitialSync: true });
       }
+      this.initialCloudSyncDone = true;
     } catch (err) {
       console.error('Felhő betöltési hiba:', err);
       this.showError(this.translateFirebaseError(err));
@@ -676,6 +719,7 @@ class CloudAuthManager {
 
   async saveToCloud(force = false, opts = {}) {
     if (!this.isReady || !this.db || !this.currentUser) return;
+    if (!this.initialCloudSyncDone && !opts.allowBeforeInitialSync) return;
     const now = Date.now();
     if (!force && now - this.lastCloudSaveMs < 10000) {
       this.pendingCloudSave = true;
@@ -721,7 +765,7 @@ class CloudAuthManager {
       this.syncLeaderboardToCloud(false);
     }
 
-    if (!this.currentUser) return;
+    if (!this.currentUser || !this.initialCloudSyncDone) return;
     this.cloudAutoSaveTimer += dt;
     if (this.cloudAutoSaveTimer >= 15.0 || (this.pendingCloudSave && this.cloudAutoSaveTimer >= 10.0)) {
       this.cloudAutoSaveTimer = 0;
@@ -818,6 +862,10 @@ class CloudAuthManager {
                 ? incomingName
                 : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
 
+              const isLivePlayerUpdate = modifiedDocIds.has(doc.id) && !(dAdminTs > ((existing && existing.adminUpdatedAt) || 0));
+              const prevLocalSeen = (existing && existing.lastSeenLocalMs) ? Number(existing.lastSeenLocalMs) : 0;
+              const nextLocalSeen = isLivePlayerUpdate ? nowMs : prevLocalSeen;
+
               this.game.remotePlayers[key] = {
                 id: key,
                 uid: d.uid || null,
@@ -835,6 +883,7 @@ class CloudAuthManager {
                 bt: dBt,
                 bpStage: dBpStage,
                 ts: safeTs,
+                lastSeenLocalMs: nextLocalSeen,
                 adminUpdatedAt: dAdminTs
               };
               dirtyRemote = true;
