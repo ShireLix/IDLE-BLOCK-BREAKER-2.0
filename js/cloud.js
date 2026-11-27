@@ -508,6 +508,7 @@ class CloudAuthManager {
     this.updateAuthUI();
 
     if (user) {
+      this.game.saveOwnerUid = user.uid;
       if (typeof this.game.closeWelcomeMenu === 'function') {
         this.game.closeWelcomeMenu();
       }
@@ -543,12 +544,17 @@ class CloudAuthManager {
         const cloudSave = cloudDoc && cloudDoc.saveData ? cloudDoc.saveData : null;
         if (cloudSave) {
           const localRaw = this.game.readRawLocalSave();
-          const sameOwner = localRaw && localRaw.saveOwnerUid === user.uid;
-          const localIsNewer = sameOwner && ((localRaw.lastSavedAt || 0) > (cloudSave.lastSavedAt || 0));
+          const sameOwner = !!(localRaw && localRaw.saveOwnerUid === user.uid);
+          const localReb = Number(localRaw?.rebirthCount) || 0;
+          const cloudReb = Number(cloudSave.rebirthCount) || 0;
+          const localLvl = Number(localRaw?.level) || 1;
+          const cloudLvl = Number(cloudSave.level) || 1;
+          const localAhead = sameOwner && (localReb > cloudReb || (localReb === cloudReb && localLvl > cloudLvl));
+          const localIsNewer = sameOwner && (((Number(localRaw.lastSavedAt) || 0) > (Number(cloudSave.lastSavedAt) || 0)) || localAhead);
 
           if (localIsNewer && !fromExplicitLogin) {
-            // Ugyanazon a gépen ugyanazzal a fiókkal offline tovább játszott -> töltsük fel a frissebbet
-            await this.saveToCloud(true);
+            // Ugyanazon a gépen ugyanazzal a fiókkal offline tovább haladt -> NE írjuk felül a régi felhőmentéssel, hanem töltsük fel az újabbat!
+            await this.saveToCloud(true, { silent: true });
           } else {
             // Ha másik gépen lépett be, vagy a felhő frissebb:
             const isGuestProgress = !fromExplicitLogin ? false : (!sameOwner && (this.game.level > 1 || this.game.getTotalBalls() > 0 || this.game.rebirthCount > 0));
@@ -568,7 +574,15 @@ class CloudAuthManager {
               this.game.applySaveData(effectiveCloudSave, { isLiveReload: true, ownerUid: user.uid });
               this.lastCloudSaveMs = cloudSave.lastSavedAt || Date.now();
               this.updateAuthUI();
-              this.game.showToast(`☁️ <strong>Felhőmentés betöltve!</strong> Folytatás: Rebirth ${this.game.rebirthCount} | Szint ${this.game.level}`, 4500);
+
+              // Ha a felhőmentés régebbi (pl. másik gépről belépés), számoljuk ki és mentsük el rá az offline haladást is!
+              const cloudOfflineSec = cloudSave.lastSavedAt ? ((Date.now() - Number(cloudSave.lastSavedAt)) / 1000) : 0;
+              if (cloudOfflineSec >= 5 && (this.game.getTotalBalls() > 0 || this.game.bbUpgrades.autoClicker >= 1)) {
+                this.game.applyOfflineProgress(cloudOfflineSec, true);
+                await this.saveToCloud(true, { silent: true });
+              } else {
+                this.game.showToast(`☁️ <strong>Felhőmentés betöltve!</strong> Folytatás: Rebirth ${this.game.rebirthCount} | Szint ${this.game.level}`, 4500);
+              }
             } else {
               await this.saveToCloud(true);
             }
@@ -660,7 +674,7 @@ class CloudAuthManager {
     }
   }
 
-  async saveToCloud(force = false) {
+  async saveToCloud(force = false, opts = {}) {
     if (!this.isReady || !this.db || !this.currentUser) return;
     const now = Date.now();
     if (!force && now - this.lastCloudSaveMs < 10000) {
@@ -689,7 +703,7 @@ class CloudAuthManager {
 
       this.lastCloudSaveMs = now;
       this.updateAuthUI();
-      if (force) {
+      if (force && !opts.silent) {
         this.game.showToast('☁️ Haladás elmentve a felhőbe!', 2500);
       }
     } catch (err) {

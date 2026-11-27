@@ -386,19 +386,19 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 2,
     bricks: 5000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 3, name: '+2 ⭐ BB & +3 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 1, bt: 2, name: '+1 ⭐ BB & +2 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_obsidian', name: 'Obszidián Éj Skin', color: '#27272a', desc: 'Sötét vulkáni obszidián páncélzat' }
   },
   {
     stage: 3,
     bricks: 12000,
     free: { type: 'effect', id: 'fx_saturn', name: '🪐 Szaturnusz Gyűrű Effekt', desc: 'Döntött arany-kozmikus bolygógyűrű és keringő hold a labda körül!' },
-    paid: { type: 'currency', currency: 'money', amount: 1500, name: '$1,500 Pénzbónusz', desc: 'Azonnali prémium tőkeinjekció' }
+    paid: { type: 'currency', currency: 'money', amount: 1000, name: '$1,000 Pénzbónusz', desc: 'Azonnali prémium tőkeinjekció' }
   },
   {
     stage: 4,
     bricks: 25000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 4, name: '+2 ⭐ BB & +4 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 1, bt: 3, name: '+1 ⭐ BB & +3 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_matrix', name: 'Mátrix Kód Skin', color: '#22c55e', desc: 'Zöld digitális neon mátrixfény' }
   },
   {
@@ -411,24 +411,24 @@ const BATTLE_PASS_STAGES = [
     stage: 6,
     bricks: 70000,
     free: { type: 'skin', id: 'skin_violet', name: 'Neon Ibolya Skin', color: '#8b5cf6', desc: 'Elektromos ibolya villámkorona' },
-    paid: { type: 'currency', currency: 'bb', amount: 5, name: '+5 Black Brick (BB)', desc: 'Ritka prestige valuta csomag' }
+    paid: { type: 'currency', currency: 'bb', amount: 3, name: '+3 Black Brick (BB)', desc: 'Ritka prestige valuta csomag' }
   },
   {
     stage: 7,
     bricks: 105000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 3, bt: 5, name: '+3 ⭐ BB & +5 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 3, name: '+2 ⭐ BB & +3 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'effect', id: 'fx_p_golddust', name: 'Aranypor Uszály Effekt', desc: 'Fényes keringő aranyporszemek' }
   },
   {
     stage: 8,
     bricks: 150000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 6, name: '+4 ⭐ BB & +6 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 25000, name: '$25,000 Pénzbónusz', desc: 'Haladó fejlesztési alap' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 4, name: '+2 ⭐ BB & +4 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'money', amount: 18000, name: '$18,000 Pénzbónusz', desc: 'Haladó fejlesztési alap' }
   },
   {
     stage: 9,
     bricks: 210000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 7, name: '+4 ⭐ BB & +7 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 3, bt: 5, name: '+3 ⭐ BB & +5 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_quantum', name: 'Kvantum Cián Skin', color: '#06b6d4', desc: 'Kibernetikus kvantumrezgés aura' }
   },
   {
@@ -440,20 +440,20 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 11,
     bricks: 390000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 5, bt: 8, name: '+5 ⭐ BB & +8 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 2, name: '+2 Boss Token (BT)', desc: 'Prémium szintlépő tokenek' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 3, bt: 5, name: '+3 ⭐ BB & +5 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bt', amount: 1, name: '+1 Boss Token (BT)', desc: 'Prémium szintlépő tokenek' }
   },
   {
     stage: 12,
     bricks: 510000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 6, bt: 9, name: '+6 ⭐ BB & +9 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 6, name: '+4 ⭐ BB & +6 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_chrome', name: 'Króm Acél Skin', color: '#94a3b8', desc: 'Tükörfényes folyékony fémburkolat' }
   },
   {
     stage: 13,
     bricks: 650000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 6, bt: 10, name: '+6 ⭐ BB & +10 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 15, name: '+15 Black Brick (BB)', desc: 'Erőteljes BB erősítő csomag' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 7, name: '+4 ⭐ BB & +7 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bb', amount: 10, name: '+10 Black Brick (BB)', desc: 'Erőteljes BB erősítő csomag' }
   },
   {
     stage: 14,
@@ -464,20 +464,20 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 15,
     bricks: 1020000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 12, name: '+8 ⭐ BB & +12 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 250000, name: '$250,000 Pénzbónusz', desc: 'Nagy tétű aranytartalék' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 5, bt: 8, name: '+5 ⭐ BB & +8 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'money', amount: 175000, name: '$175,000 Pénzbónusz', desc: 'Nagy tétű aranytartalék' }
   },
   {
     stage: 16,
     bricks: 1250000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 14, name: '+8 ⭐ BB & +14 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 5, bt: 9, name: '+5 ⭐ BB & +9 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'effect', id: 'fx_p_violetlightning', name: 'Ibolya Villám Effekt', desc: 'Pulzáló lila villámcsapás ív' }
   },
   {
     stage: 17,
     bricks: 1510000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 10, bt: 15, name: '+10 ⭐ BB & +15 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 4, name: '+4 Boss Token (BT)', desc: 'Különleges boss token jutalom' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 6, bt: 10, name: '+6 ⭐ BB & +10 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bt', amount: 3, name: '+3 Boss Token (BT)', desc: 'Különleges boss token jutalom' }
   },
   {
     stage: 18,
@@ -488,20 +488,20 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 19,
     bricks: 2130000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 10, bt: 16, name: '+10 ⭐ BB & +16 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 30, name: '+30 Black Brick (BB)', desc: 'Elit Black Brick támogatás' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 7, bt: 11, name: '+7 ⭐ BB & +11 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bb', amount: 20, name: '+20 Black Brick (BB)', desc: 'Elit Black Brick támogatás' }
   },
   {
     stage: 20,
     bricks: 2490000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 12, bt: 18, name: '+12 ⭐ BB & +18 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 12, name: '+8 ⭐ BB & +12 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
     paid: { type: 'skin', id: 'skin_p_godlight', name: 'Mennyei Fény Skin', color: '#fef08a', desc: 'Ragyogó arany-fehér szakrális aura' }
   },
   {
     stage: 21,
     bricks: 2890000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 12, bt: 20, name: '+12 ⭐ BB & +20 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 2500000, name: '$2.5M Pénzbónusz', desc: 'Prémium milliomos csomag' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 13, name: '+8 ⭐ BB & +13 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'money', amount: 1750000, name: '$1.75M Pénzbónusz', desc: 'Prémium milliomos csomag' }
   },
   {
     stage: 22,
@@ -512,14 +512,14 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 23,
     bricks: 3810000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 14, bt: 22, name: '+14 ⭐ BB & +22 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 6, name: '+6 Boss Token (BT)', desc: 'Mesterfokú Boss Token láda' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 9, bt: 14, name: '+9 ⭐ BB & +14 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bt', amount: 4, name: '+4 Boss Token (BT)', desc: 'Mesterfokú Boss Token láda' }
   },
   {
     stage: 24,
     bricks: 4330000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 15, bt: 24, name: '+15 ⭐ BB & +24 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 60, name: '+60 Black Brick (BB)', desc: 'Kiemelt prestige BB láda' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 10, bt: 16, name: '+10 ⭐ BB & +16 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bb', amount: 40, name: '+40 Black Brick (BB)', desc: 'Kiemelt prestige BB láda' }
   },
   {
     stage: 25,
@@ -530,14 +530,14 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 26,
     bricks: 5520000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 16, bt: 25, name: '+16 ⭐ BB & +25 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 15000000, name: '$15M Pénzbónusz', desc: 'Titáni vagyon injekció' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 11, bt: 17, name: '+11 ⭐ BB & +17 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'money', amount: 10000000, name: '$10M Pénzbónusz', desc: 'Titáni vagyon injekció' }
   },
   {
     stage: 27,
     bricks: 6190000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 18, bt: 28, name: '+18 ⭐ BB & +28 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 10, name: '+10 Boss Token (BT)', desc: 'Legendás Boss Token készlet' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 12, bt: 19, name: '+12 ⭐ BB & +19 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bt', amount: 7, name: '+7 Boss Token (BT)', desc: 'Legendás Boss Token készlet' }
   },
   {
     stage: 28,
@@ -548,8 +548,8 @@ const BATTLE_PASS_STAGES = [
   {
     stage: 29,
     bricks: 7690000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 20, bt: 30, name: '+20 ⭐ BB & +30 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 120, name: '+120 Black Brick (BB)', desc: 'Végső hajrá prémium BB tartalék' }
+    free: { type: 'currency', currency: 'bb_bt', bb: 14, bt: 20, name: '+14 ⭐ BB & +20 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
+    paid: { type: 'currency', currency: 'bb', amount: 80, name: '+80 Black Brick (BB)', desc: 'Végső hajrá prémium BB tartalék' }
   },
   {
     stage: 30,
@@ -564,6 +564,7 @@ class IdleBreakoutGame {
     // Új mentési kulcs (v3): a régi v2-es mentések egyszer, most automatikusan törlődnek mindenkinél,
     // de minden későbbi frissítésnél (amíg v3 marad) a játékosok haladása megmarad!
     this.SAVE_KEY = 'idle_breakout_classic_v3';
+    this.saveOwnerUid = null;
     try {
       localStorage.removeItem('idle_breakout_classic_v2');
     } catch (e) {}
@@ -572,8 +573,8 @@ class IdleBreakoutGame {
     this.money = 0;
     this.level = 1;
     this.bb = 0; // Breakout Badges
-    this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 10 Boss Token = 1 BB
-    this.BOSS_TOKEN_COST = 10;
+    this.bossTokens = 0; // 1 Boss kill = +1 Boss Token; 5 Boss Token = 1 BB
+    this.BOSS_TOKEN_COST = 5;
     this.MAX_MULTIPLY_BALLS = 7;
     this.MAX_GHOST_BALLS = 10;
     this.MAX_ROCKET_BALLS = 5;
@@ -1503,14 +1504,14 @@ class IdleBreakoutGame {
         if (brick.isGoldBrick) {
           // Gold Level blokkokból plusz ⭐ BB és 👑 BT is eshet!
           let goldWalletChanged = false;
-          if (Math.random() < 0.15) {
+          if (Math.random() < 0.12) {
             this.bossTokens += 1;
             goldWalletChanged = true;
             if (!silent) {
               this.addFloatingText('+1 👑 BT!', brick.x + brick.w / 2, brick.y + brick.h / 2 - 14, '#fbbf24');
             }
           }
-          if (Math.random() < 0.07) {
+          if (Math.random() < 0.05) {
             this.bb += 1;
             goldWalletChanged = true;
             if (!silent) {
@@ -1553,8 +1554,8 @@ class IdleBreakoutGame {
     if (remaining === 0) {
       const clearedGoldLevel = !!this.isGoldLevelActive;
       if (clearedGoldLevel) {
-        const goldClearBB = 15;
-        const goldClearBT = 25;
+        const goldClearBB = 10;
+        const goldClearBT = 15;
         this.bb += goldClearBB;
         this.bossTokens += goldClearBT;
         if (!this.suppressAudioAndVisuals) {
@@ -3359,7 +3360,7 @@ class IdleBreakoutGame {
     }
     this.suppressAudioAndVisuals = false;
 
-    if (elapsedSec > maxRealSimSec && this.getTotalBalls() > 0) {
+    if (elapsedSec > maxRealSimSec && (this.getTotalBalls() > 0 || this.bbUpgrades.autoClicker >= 1)) {
       this.applyOfflineProgress(elapsedSec - maxRealSimSec, false);
     }
 
@@ -3370,7 +3371,7 @@ class IdleBreakoutGame {
   // --- Offline Progress (when closed) ---
   applyOfflineProgress(seconds, showToast = true) {
     const cappedSec = Math.min(seconds, 86400);
-    if (cappedSec < 5 || this.getTotalBalls() === 0) return;
+    if (cappedSec < 5 || (this.getTotalBalls() === 0 && this.bbUpgrades.autoClicker < 1)) return;
 
     const startMoney = this.money;
     const startLevel = this.level;
@@ -3407,6 +3408,12 @@ class IdleBreakoutGame {
         totalDps += b.count * power * hitRate;
       }
 
+      if (this.bbUpgrades.autoClicker >= 1) {
+        const acCfg = this.getAutoClickerConfig();
+        const acAreaFactor = acCfg.areaRadius > 0 ? 2.2 : 1.0;
+        totalDps += (this.clickPower * acCfg.dmgMult * acAreaFactor) / Math.max(0.1, acCfg.interval);
+      }
+
       if (offlineCoinHits > 0) {
         const coinThresholds = this.getCoinBallTokenThresholds();
         if (coinThresholds) {
@@ -3425,6 +3432,7 @@ class IdleBreakoutGame {
 
       let remainingDamage = totalDps * cappedSec;
       let earned = offlineCoinBonus;
+      let offlineBricks = 0;
 
       while (remainingDamage > 0) {
         const isBoss = this.isBossLevel(this.level);
@@ -3436,14 +3444,23 @@ class IdleBreakoutGame {
         remainingDamage -= dmgOnLevel;
 
         if (dmgOnLevel >= levelTotalHp) {
+          offlineBricks += isBoss ? 1 : 38;
           if (isBoss) {
             earned += this.getBossKillBonus(this.level) * this.rebirthMultiplier;
             this.bossTokens += 1;
           }
           this.level++;
         } else {
+          if (!isBoss && levelTotalHp > 0) {
+            offlineBricks += Math.floor((dmgOnLevel / levelTotalHp) * 38);
+          }
           break;
         }
+      }
+
+      if (offlineBricks > 0) {
+        this.totalBricksDestroyed += offlineBricks;
+        this.updateBattlePassHUD();
       }
 
       this.money += earned;
@@ -3454,6 +3471,9 @@ class IdleBreakoutGame {
     this.renderLeaderboard();
     this.save();
     this.syncWalletChangeNow(true);
+    if (this.cloud && this.cloud.currentUser) {
+      this.cloud.saveToCloud(true, { silent: true });
+    }
 
     if (showToast) {
       const gainedMoney = Math.floor(this.money - startMoney);
@@ -4967,7 +4987,7 @@ class IdleBreakoutGame {
         title: '⭐ Breakout Badge (BB)',
         body: `
           <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> Ritka, <strong>Rebirth után is megmaradó</strong> prémium valuta.</div>
-          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Rebirth-tel (+1 BB), 10 Boss Token beváltásával (10 BT ➔ 1 BB), vagy Lvl 5 Quick Time Money coinokkal.</div>
+          <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Rebirth-tel (+1 BB), 5 Boss Token beváltásával (5 BT ➔ 1 BB), vagy Lvl 5 Quick Time Money coinokkal.</div>
           <div class="bb-phase-row"><strong>Mire jó?</strong> Tartós kattintás- és power-up fejlesztésekre a <strong>⚡ POWERUP UPGRADES</strong> menüben (1, 3, 5, 7, 10 BB).</div>
         `
       },
@@ -4976,7 +4996,7 @@ class IdleBreakoutGame {
         body: `
           <div class="bb-phase-row unlocked"><strong>Mi ez?</strong> Különleges Boss valuta, amely <strong>Rebirth után is megmarad</strong>!</div>
           <div class="bb-phase-row next-phase"><strong>Hogyan szerezhető?</strong> Minden Boss blokk legyőzése után automatikusan kapsz <strong>+1 BT</strong>-t.</div>
-          <div class="bb-phase-row"><strong>Mire jó?</strong> Beváltóható BB-re (<strong>10 BT ➔ 1 BB</strong>), illetve kimaxolt labdák (Poison, Ghost, Multiply, Rocket) különleges képességeinek fejlesztésére az <strong>UPGRADES</strong> menüben!</div>
+          <div class="bb-phase-row"><strong>Mire jó?</strong> Beváltóható BB-re (<strong>5 BT ➔ 1 BB</strong>), illetve kimaxolt labdák (Poison, Ghost, Multiply, Rocket) különleges képességeinek fejlesztésére az <strong>UPGRADES</strong> menüben!</div>
         `
       }
     };
@@ -5549,7 +5569,7 @@ class IdleBreakoutGame {
 
     const activeUid = ownerUid !== null
       ? ownerUid
-      : (this.cloud && this.cloud.currentUser ? this.cloud.currentUser.uid : null);
+      : ((this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : (this.saveOwnerUid || null));
 
     const data = {
       saveOwnerUid: activeUid,
@@ -5761,6 +5781,7 @@ class IdleBreakoutGame {
         this.pendingOfflineSeconds = 0;
       }
 
+      this.saveOwnerUid = ownerUid || data.saveOwnerUid || this.saveOwnerUid || null;
       this.money = data.money ?? 0;
       this.level = data.level ?? 1;
       const loadNow = Date.now();
@@ -5937,6 +5958,11 @@ class IdleBreakoutGame {
 
   resetToFreshGuestState(refreshUI = true) {
     const now = Date.now();
+    this.saveOwnerUid = null;
+    this.coinBtHitCounter = 0;
+    this.coinBbHitCounter = 0;
+    this.lastRenderedBPStage = null;
+    this.pendingOfflineSeconds = 0;
     this.guestCreatedAt = now;
     this.guestDeadlineAt = now + this.GUEST_RETENTION_MS;
     this.guestLastActiveAt = now;
