@@ -649,16 +649,19 @@ class CloudAuthManager {
             totalBricksDestroyed: this.game.totalBricksDestroyed || 0,
             lastSavedAt: this.game.offlineProgressAppliedAt || Number(localRaw?.lastSavedAt) || 0,
             lastAdminEditAt: this.game.lastAdminEditAt || Number(localRaw?.lastAdminEditAt) || 0,
-            appliedSeasonResetId: this.game.appliedSeasonResetId || localRaw?.appliedSeasonResetId || null
+            appliedSeasonResetId: this.game.appliedSeasonResetId || localRaw?.appliedSeasonResetId || null,
+            appliedSeasonResetToken: this.game.appliedSeasonResetToken || localRaw?.appliedSeasonResetToken || null
           };
-          const rawSnap = localRaw || { rebirthCount: 0, level: 1, totalBricksDestroyed: 0, lastSavedAt: 0, lastAdminEditAt: 0, appliedSeasonResetId: null };
+          const rawSnap = localRaw || { rebirthCount: 0, level: 1, totalBricksDestroyed: 0, lastSavedAt: 0, lastAdminEditAt: 0, appliedSeasonResetId: null, appliedSeasonResetToken: null };
           const bestLocal = (!hasForeignOwner && this.compareSaveProgress(liveSnap, rawSnap) >= 0) ? liveSnap : rawSnap;
 
+          const activeResetToken = (this.game.lbAdminRules && this.game.lbAdminRules.seasonResetToken) || '';
           const localHasSeason = !hasForeignOwner && (
             bestLocal.appliedSeasonResetId === 'fair_restart_s2_v9_4' ||
             this.game.appliedSeasonResetId === 'fair_restart_s2_v9_4'
-          );
-          const cloudHasSeason = cloudSave.appliedSeasonResetId === 'fair_restart_s2_v9_4';
+          ) && (!activeResetToken || bestLocal.appliedSeasonResetToken === activeResetToken || this.game.appliedSeasonResetToken === activeResetToken);
+          const cloudHasSeason = (cloudSave.appliedSeasonResetId === 'fair_restart_s2_v9_4') &&
+            (!activeResetToken || cloudSave.appliedSeasonResetToken === activeResetToken);
 
           if (localHasSeason && !cloudHasSeason) {
             if (typeof this.game.collectLegacyCosmeticsFromSave === 'function') {
@@ -800,6 +803,7 @@ class CloudAuthManager {
         bb,
         bt,
         bpStage,
+        seasonResetToken: this.game.appliedSeasonResetToken || '',
         ts: now,
         serverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
@@ -939,9 +943,19 @@ class CloudAuthManager {
             const dBpStage = optNum(d.bpStage) ?? (existing ? existing.bpStage ?? null : null);
             const dAdminTs = Number(d.adminUpdatedAt) || 0;
             const exAdminTs = (existing && existing.adminUpdatedAt) || 0;
+            const dSeasonToken = String(d.seasonResetToken || '').trim();
+            const incomingPreReset = (typeof this.game.isPreSeasonResetRecord === 'function')
+              ? this.game.isPreSeasonResetRecord({ ts: safeTs, adminUpdatedAt: dAdminTs, seasonResetToken: dSeasonToken })
+              : false;
+            const existingPreReset = (existing && typeof this.game.isPreSeasonResetRecord === 'function')
+              ? this.game.isPreSeasonResetRecord(existing)
+              : false;
+            const isSeasonResetTransition = !incomingPreReset && existingPreReset;
+            const stalePreResetBlocked = !!(existing && incomingPreReset && !existingPreReset);
 
-            const isAdminOverride = (dAdminTs > exAdminTs) || (dAdminTs > 0 && dAdminTs === exAdminTs && modifiedDocIds.has(doc.id));
-            const existingStrictlyHigher = !!(existing && (
+            const isAdminOverride = isSeasonResetTransition || (dAdminTs > exAdminTs) || (dAdminTs > 0 && dAdminTs === exAdminTs && modifiedDocIds.has(doc.id));
+            const existingHasNewerAdmin = exAdminTs > dAdminTs && !isSeasonResetTransition;
+            const existingStrictlyHigher = !stalePreResetBlocked && !existingHasNewerAdmin && !!(existing && (
               (existing.rebirths || 0) > dReb ||
               ((existing.rebirths || 0) === dReb && (existing.level || 1) > dLvl)
             ));
@@ -954,13 +968,16 @@ class CloudAuthManager {
               ? (dBb !== existing.bb || dBt !== existing.bt || dMoney !== existing.money)
               : false;
 
-            const shouldAccept = !existing ||
+            const shouldAccept = !stalePreResetBlocked && !existingHasNewerAdmin && (
+              !existing ||
+              isSeasonResetTransition ||
               modifiedDocIds.has(doc.id) ||
               !existing._liveMqttInSession ||
               isAdminOverride ||
               isHigherProgress ||
               walletChanged ||
-              (safeTs >= (existing.ts || 0) - 5000);
+              (safeTs >= (existing.ts || 0) - 5000)
+            );
 
             if (shouldAccept) {
               const incomingName = (d.name || '').trim().slice(0, 12);
@@ -998,6 +1015,7 @@ class CloudAuthManager {
                 bb: finalBb,
                 bt: finalBt,
                 bpStage: finalBpStage,
+                seasonResetToken: keepExistingHigher ? ((existing && existing.seasonResetToken) || dSeasonToken || null) : (dSeasonToken || null),
                 ts: safeTs,
                 lastSeenLocalMs: nextLocalSeen,
                 adminUpdatedAt: Math.max(exAdminTs, dAdminTs)

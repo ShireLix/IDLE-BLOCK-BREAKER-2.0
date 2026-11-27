@@ -685,6 +685,7 @@ class IdleBreakoutGame {
 
     // Battle Pass System (50 Stages Season 2 + Preserved Legacy Cosmetics)
     this.appliedSeasonResetId = null;
+    this.appliedSeasonResetToken = null;
     this.preservedCosmetics = { skins: [], effects: [], breakEffects: [] };
     this.totalBricksDestroyed = 0;
     this.battlePassClaimedFree = {};
@@ -6378,6 +6379,7 @@ class IdleBreakoutGame {
       normalBallEquips: this.normalBallEquips,
       ballTypeEquips: this.ballTypeEquips,
       appliedSeasonResetId: this.appliedSeasonResetId || null,
+      appliedSeasonResetToken: this.appliedSeasonResetToken || null,
       preservedCosmetics: this.preservedCosmetics || { skins: [], effects: [], breakEffects: [] },
       pirateShopCooldownUntil: this.pirateShopCooldownUntil || 0,
       goldLevelCooldownUntil: this.goldLevelCooldownUntil || 0,
@@ -6425,6 +6427,7 @@ class IdleBreakoutGame {
         this.applySeasonResetMigration(null, false);
       } else {
         this.appliedSeasonResetId = SEASON_RESET_ID;
+        try { this.appliedSeasonResetToken = localStorage.getItem('idle_breakout_season_reset_token') || SEASON_RESET_ID; } catch (e) { this.appliedSeasonResetToken = SEASON_RESET_ID; }
       }
       return;
     }
@@ -6488,8 +6491,9 @@ class IdleBreakoutGame {
     };
   }
 
-  applySeasonResetMigration(sourceData = null, notify = true) {
+  applySeasonResetMigration(sourceData = null, notify = true, resetToken = null) {
     this.collectLegacyCosmeticsFromSave(sourceData);
+    const effectiveToken = String(resetToken || (this.lbAdminRules && this.lbAdminRules.seasonResetToken) || SEASON_RESET_ID);
     this.money = 0;
     this.level = 1;
     this.rebirthCount = 0;
@@ -6521,8 +6525,10 @@ class IdleBreakoutGame {
     this.battlePassClaimedFree = {};
     this.battlePassClaimedPaid = {};
     this.appliedSeasonResetId = SEASON_RESET_ID;
+    this.appliedSeasonResetToken = effectiveToken;
     this.lastAdminEditAt = Date.now();
     try { localStorage.setItem('idle_breakout_season_reset_id', SEASON_RESET_ID); } catch (e) {}
+    try { localStorage.setItem('idle_breakout_season_reset_token', effectiveToken); } catch (e) {}
 
     if (this.width && this.height) {
       this.generateLevel(1);
@@ -6532,8 +6538,11 @@ class IdleBreakoutGame {
     this.renderBattlePass();
     this.updateMailUnreadBadge(false);
     this.broadcastMyStatus();
-    if (this.cloud && this.cloud.currentUser && this.cloud.initialCloudSyncDone) {
-      this.cloud.saveToCloud(true, { silent: true });
+    if (this.cloud) {
+      this.cloud.syncLeaderboardToCloud(true);
+      if (this.cloud.currentUser && this.cloud.initialCloudSyncDone) {
+        this.cloud.saveToCloud(true, { silent: true });
+      }
     }
     if (notify && typeof this.showToast === 'function') {
       setTimeout(() => {
@@ -6693,6 +6702,7 @@ class IdleBreakoutGame {
 
       this.totalBricksDestroyed = data.totalBricksDestroyed ?? 0;
       this.appliedSeasonResetId = data.appliedSeasonResetId || null;
+      this.appliedSeasonResetToken = data.appliedSeasonResetToken || (this.appliedSeasonResetId === SEASON_RESET_ID ? SEASON_RESET_ID : null);
       if (data.preservedCosmetics && typeof data.preservedCosmetics === 'object') {
         this.collectLegacyCosmeticsFromSave(data);
       }
@@ -6856,8 +6866,9 @@ class IdleBreakoutGame {
         } catch (e) {}
       }
 
-      if (this.appliedSeasonResetId !== SEASON_RESET_ID) {
-        this.applySeasonResetMigration(data, true);
+      const activeResetToken = (this.lbAdminRules && this.lbAdminRules.seasonResetToken) || SEASON_RESET_ID;
+      if (this.appliedSeasonResetId !== SEASON_RESET_ID || (this.lbAdminRules && this.lbAdminRules.seasonResetToken && this.appliedSeasonResetToken !== this.lbAdminRules.seasonResetToken)) {
+        this.applySeasonResetMigration(data, true, activeResetToken);
       }
     } catch (e) {
       console.error('Load failed:', e);
@@ -7754,6 +7765,12 @@ class IdleBreakoutGame {
                 }
 
                 const dAdminTs = Number(data.adminUpdatedAt) || 0;
+                const dSeasonToken = String(data.seasonResetToken || '').trim();
+                const incomingPreReset = this.isPreSeasonResetRecord({ ts: dTs, adminUpdatedAt: dAdminTs, seasonResetToken: dSeasonToken });
+                const existingPreReset = existing ? this.isPreSeasonResetRecord(existing) : false;
+                const isSeasonResetTransition = !incomingPreReset && existingPreReset;
+                const incomingStalePreReset = !!(existing && incomingPreReset && !existingPreReset);
+
                 let keepReb = dReb;
                 let keepLvl = dLvl;
                 let keepBrk = dBrk;
@@ -7761,19 +7778,19 @@ class IdleBreakoutGame {
                 let keepBb = dBb ?? (existing ? existing.bb ?? null : null);
                 let keepBt = dBt ?? (existing ? existing.bt ?? null : null);
                 let keepBpStage = dBpStage ?? (existing ? existing.bpStage ?? null : null);
+                let keepSeasonToken = dSeasonToken || null;
                 if (existing) {
                   const exReb = Math.max(0, Number(existing.rebirths) || 0);
                   const exLvl = Math.max(1, Number(existing.level) || 1);
                   const exBrk = Math.max(0, Number(existing.bricks) || 0);
-                  const exTs = Number(existing.ts) || 0;
                   const exAdminTs = Number(existing.adminUpdatedAt) || 0;
-                  const incomingNewerAdmin = dAdminTs > exAdminTs;
+                  const incomingNewerAdmin = isSeasonResetTransition || dAdminTs > exAdminTs;
                   const existingStrictlyHigher = !incomingNewerAdmin && ((exReb > dReb) || (exReb === dReb && exLvl > dLvl));
-                  const existingNewerAdmin = exAdminTs > dAdminTs && dTs <= exAdminTs + 5000;
+                  const existingNewerAdmin = !isSeasonResetTransition && exAdminTs > dAdminTs && dTs <= exAdminTs + 5000;
 
                   // Egy normál játékos sosem esik vissza alacsonyabb Rebirth-re vagy ugyanazon Rebirth-en alacsonyabb szintre
-                  // (kivéve újabb admin szerkesztés, ami adminUpdatedAt-tal érkezik). Ezzel a 2 nyitott fül miatti ugrálás megszűnik!
-                  if (existingNewerAdmin || existingStrictlyHigher) {
+                  // (kivéve újabb admin szerkesztés vagy globális Szezon Reset).
+                  if (incomingStalePreReset || existingNewerAdmin || existingStrictlyHigher) {
                     keepReb = exReb;
                     keepLvl = exLvl;
                     keepBrk = exBrk;
@@ -7781,6 +7798,7 @@ class IdleBreakoutGame {
                     keepBb = existing.bb ?? keepBb;
                     keepBt = existing.bt ?? keepBt;
                     keepBpStage = existing.bpStage ?? keepBpStage;
+                    keepSeasonToken = existing.seasonResetToken || keepSeasonToken;
                   }
                 }
 
@@ -7816,6 +7834,7 @@ class IdleBreakoutGame {
                   bb: keepBb,
                   bt: keepBt,
                   bpStage: keepBpStage,
+                  seasonResetToken: keepSeasonToken,
                   ts: Math.min(nowMs, Math.max(dTs, (existing && existing.ts) || 0)),
                   lastSeenLocalMs: nextLocalSeen,
                   adminUpdatedAt: Math.max((existing && existing.adminUpdatedAt) || 0, dAdminTs)
@@ -7964,6 +7983,7 @@ class IdleBreakoutGame {
         bb: Math.max(0, Math.floor(Number(this.bb) || 0)),
         bt: Math.max(0, Math.floor(Number(this.bossTokens) || 0)),
         bpStage: this.getCurrentBattlePassStage(),
+        seasonResetToken: this.appliedSeasonResetToken || '',
         adminUpdatedAt: this.lastAdminEditAt || 0,
         ts: Date.now()
       });
@@ -8092,6 +8112,8 @@ class IdleBreakoutGame {
       updatedAt: 0,
       minClientVersion: '',
       forceReloadToken: 0,
+      seasonResetAt: 0,
+      seasonResetToken: '',
       maintenanceMode: false,
       maintenanceMessage: 'Technikai karbantartás zajlik. Kérjük, várj egy pillanatot — amint elkészültünk, a játék automatikusan visszatölt!',
       maintenanceUpdatedAt: 0,
@@ -8193,18 +8215,21 @@ class IdleBreakoutGame {
             addBB: cAddBB,
             addBT: cAddBT,
             addMoney: cAddMoney,
+            setBB: optSet(c.setBB),
+            setBT: optSet(c.setBT),
+            setMoney: optSet(c.setMoney),
             issuedAt: Number(c.issuedAt) || 0
           }]);
         }
       }
       entries.sort((a, b) => (a[1].issuedAt || 0) - (b[1].issuedAt || 0));
-      for (const [k, v] of entries.slice(-80)) {
+      for (const [k, v] of entries.slice(-140)) {
         playerCommands[k] = v;
       }
     }
 
     giftEntries.sort((a, b) => (a[1].issuedAt || 0) - (b[1].issuedAt || 0));
-    for (const [k, v] of giftEntries.slice(-80)) {
+    for (const [k, v] of giftEntries.slice(-140)) {
       currencyGifts[k] = v;
     }
 
@@ -8230,6 +8255,8 @@ class IdleBreakoutGame {
       updatedAt: Number(raw.updatedAt) || 0,
       minClientVersion: String(raw.minClientVersion || '').trim().slice(0, 16),
       forceReloadToken: Math.max(0, Number(raw.forceReloadToken) || 0),
+      seasonResetAt: Math.max(0, Number(raw.seasonResetAt) || 0),
+      seasonResetToken: String(raw.seasonResetToken || '').trim().slice(0, 64),
       maintenanceMode: !!raw.maintenanceMode,
       maintenanceMessage: String(raw.maintenanceMessage || def.maintenanceMessage || '').trim().slice(0, 300) || def.maintenanceMessage,
       maintenanceUpdatedAt: Math.max(0, Number(raw.maintenanceUpdatedAt) || 0),
@@ -8395,13 +8422,25 @@ class IdleBreakoutGame {
     return changed;
   }
 
+  isPreSeasonResetRecord(rec) {
+    const resetAt = Number(this.lbAdminRules && this.lbAdminRules.seasonResetAt) || 0;
+    const resetToken = String((this.lbAdminRules && this.lbAdminRules.seasonResetToken) || '').trim();
+    if (!resetAt || !rec || typeof rec !== 'object') return false;
+    if (resetToken && rec.seasonResetToken === resetToken) return false;
+    const recAdminTs = Number(rec.adminUpdatedAt) || 0;
+    if (recAdminTs >= resetAt) return false;
+    return true;
+  }
+
   applyIncomingAdminRules(raw, source = 'remote') {
     if (!raw || typeof raw !== 'object') return;
     const incoming = this.normalizeAdminRules(raw);
     const curUpdated = (this.lbAdminRules && this.lbAdminRules.updatedAt) || 0;
+    let rulesUpdated = false;
     if (incoming.updatedAt > curUpdated) {
       this.lbAdminRules = incoming;
       this.saveAdminRulesLocally();
+      rulesUpdated = true;
       this.processPendingAdminCommands();
       this.renderLeaderboard();
       const devModal = document.getElementById('dev-leaderboard-modal');
@@ -8410,6 +8449,39 @@ class IdleBreakoutGame {
       }
     } else {
       this.processPendingAdminCommands();
+    }
+
+    const activeResetAt = Number(this.lbAdminRules && this.lbAdminRules.seasonResetAt) || 0;
+    const activeResetToken = String((this.lbAdminRules && this.lbAdminRules.seasonResetToken) || '').trim();
+    let migratedSeasonNow = false;
+    if (activeResetAt > 0 && activeResetToken && this.appliedSeasonResetToken !== activeResetToken && !this._applyingSeasonReset) {
+      const alreadyFreshS2 = (
+        this.appliedSeasonResetId === SEASON_RESET_ID &&
+        (this.rebirthCount || 0) === 0 &&
+        (this.level || 1) <= 1 &&
+        (this.totalBricksDestroyed || 0) === 0 &&
+        (this.money || 0) === 0 &&
+        (this.bb || 0) === 1 &&
+        (this.bossTokens || 0) === 5
+      );
+      if (alreadyFreshS2) {
+        this.appliedSeasonResetToken = activeResetToken;
+        try { localStorage.setItem('idle_breakout_season_reset_token', activeResetToken); } catch (e) {}
+        this.save();
+        this.broadcastMyStatus();
+        if (this.cloud) this.cloud.syncLeaderboardToCloud(true);
+      } else {
+        this._applyingSeasonReset = true;
+        migratedSeasonNow = true;
+        try {
+          this.applySeasonResetMigration(null, true, activeResetToken);
+        } finally {
+          this._applyingSeasonReset = false;
+        }
+      }
+    }
+    if (activeResetAt > 0 && (!rulesUpdated || migratedSeasonNow)) {
+      this.renderLeaderboard();
     }
 
     if (incoming.minClientVersion && this.compareAppVersions(incoming.minClientVersion, APP_VERSION) > 0) {
@@ -8492,6 +8564,7 @@ class IdleBreakoutGame {
           bb: (rp.bb !== undefined && rp.bb !== null) ? Number(rp.bb) : null,
           bt: (rp.bt !== undefined && rp.bt !== null) ? Number(rp.bt) : null,
           bpStage: (rp.bpStage !== undefined && rp.bpStage !== null) ? Number(rp.bpStage) : null,
+          seasonResetToken: rp.seasonResetToken || null,
           ts: Number(rp.ts) || 0,
           lastSeenLocalMs: Number(rp.lastSeenLocalMs) || 0,
           adminUpdatedAt: Number(rp.adminUpdatedAt) || 0,
@@ -8519,9 +8592,13 @@ class IdleBreakoutGame {
       const rLocalSeen = Number(rp.lastSeenLocalMs) || 0;
       const rAdminTs = Number(rp.adminUpdatedAt) || 0;
       const exAdminTs = Number(existing.adminUpdatedAt) || 0;
+      const rPreReset = this.isPreSeasonResetRecord({ ts: rTs, adminUpdatedAt: rAdminTs, seasonResetToken: rp.seasonResetToken || '' });
+      const exPreReset = this.isPreSeasonResetRecord(existing);
+      const isSeasonResetTransition = !rPreReset && exPreReset;
+      const incomingStalePreReset = rPreReset && !exPreReset;
 
-      const adminWins = rAdminTs > exAdminTs;
-      const existingHasNewerAdmin = exAdminTs > rAdminTs;
+      const adminWins = isSeasonResetTransition || (rAdminTs > exAdminTs);
+      const existingHasNewerAdmin = incomingStalePreReset || (!isSeasonResetTransition && exAdminTs > rAdminTs);
       const higherProgressWins = !existingHasNewerAdmin && (
         rReb > existing.rebirths ||
         (rReb === existing.rebirths && rLvl > existing.level)
@@ -8541,6 +8618,7 @@ class IdleBreakoutGame {
         existing.rebirths = rReb;
         existing.level = rLvl;
         existing.bricks = rBrk;
+        if (rp.seasonResetToken) existing.seasonResetToken = rp.seasonResetToken;
         if (rMoney !== null) existing.money = rMoney;
         if (rBb !== null) existing.bb = rBb;
         if (rBt !== null) existing.bt = rBt;
@@ -8651,6 +8729,18 @@ class IdleBreakoutGame {
           if (g.setMoney !== null && g.setMoney !== undefined) e.money = Math.max(0, Math.floor(Number(g.setMoney) || 0));
           e.adminUpdatedAt = Math.max(Number(e.adminUpdatedAt) || 0, Number(g.issuedAt) || 0);
         }
+      }
+    }
+
+    for (const e of result) {
+      if (this.isPreSeasonResetRecord(e)) {
+        e.rebirths = 0;
+        e.level = 1;
+        e.bricks = 0;
+        e.money = 0;
+        e.bb = 1;
+        e.bt = 5;
+        e.bpStage = 1;
       }
     }
 
@@ -10091,9 +10181,19 @@ class IdleBreakoutGame {
       return;
     }
     const now = Date.now();
-    this.appliedSeasonResetId = null;
-    this.applySeasonResetMigration(null, false);
+    const resetToken = `${SEASON_RESET_ID}_${now}`;
 
+    this.lbAdminRules.seasonResetAt = now;
+    this.lbAdminRules.seasonResetToken = resetToken;
+    this.lbAdminRules.overrides = {};
+    if (Array.isArray(this.lbAdminRules.customPlayers)) {
+      for (const cp of this.lbAdminRules.customPlayers) {
+        if (!cp) continue;
+        cp.rebirths = 0;
+        cp.level = 1;
+        cp.bricks = 0;
+      }
+    }
     if (!this.lbAdminRules.adminMails || !Array.isArray(this.lbAdminRules.adminMails)) {
       this.lbAdminRules.adminMails = [];
     }
@@ -10102,7 +10202,62 @@ class IdleBreakoutGame {
     }
     this.lbAdminRules.minClientVersion = APP_VERSION;
     this.lbAdminRules.forceReloadToken = now;
+    if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
+      this.lbAdminRules.playerCommands = {};
+    }
+    if (!this.lbAdminRules.currencyGifts || typeof this.lbAdminRules.currencyGifts !== 'object') {
+      this.lbAdminRules.currencyGifts = {};
+    }
 
+    const roster = this.getRawLeaderboardRoster().filter(e => !e.isPlayer && !e.isCustom);
+    let cmdIdx = 0;
+    for (const entry of roster) {
+      const matchIds = this.getEntryMatchIds(entry);
+      const nameLower = (entry._origName || entry.name || '').trim().toLowerCase();
+      if (matchIds.length === 0 && (!nameLower || nameLower === 'játékos')) continue;
+      cmdIdx++;
+      const statCmdId = 'sr_stat_' + now.toString(36) + '_' + cmdIdx;
+      const curCmdId = 'sr_cur_' + now.toString(36) + '_' + cmdIdx;
+      this.lbAdminRules.playerCommands[statCmdId] = {
+        cmdId: statCmdId,
+        targetIds: matchIds,
+        targetNameLower: nameLower,
+        name: '',
+        rebirths: 0,
+        level: 1,
+        addBB: 0,
+        addBT: 0,
+        addMoney: 0,
+        issuedAt: now
+      };
+      this.lbAdminRules.currencyGifts[curCmdId] = {
+        cmdId: curCmdId,
+        targetIds: matchIds,
+        targetNameLower: nameLower,
+        addBB: 0,
+        addBT: 0,
+        addMoney: 0,
+        setBB: 1,
+        setBT: 5,
+        setMoney: 0,
+        issuedAt: now
+      };
+    }
+
+    const trimAdminMap = (obj) => {
+      const keys = Object.keys(obj);
+      if (keys.length > 140) {
+        keys
+          .sort((a, b) => (obj[a].issuedAt || 0) - (obj[b].issuedAt || 0))
+          .slice(0, keys.length - 140)
+          .forEach(k => delete obj[k]);
+      }
+    };
+    trimAdminMap(this.lbAdminRules.playerCommands);
+    trimAdminMap(this.lbAdminRules.currencyGifts);
+
+    let fsOkCount = 0;
+    let fsDeniedCount = 0;
     if (this.remotePlayers) {
       for (const pid of Object.keys(this.remotePlayers)) {
         const rp = this.remotePlayers[pid];
@@ -10115,8 +10270,9 @@ class IdleBreakoutGame {
         rp.bt = 5;
         rp.bpStage = 1;
         rp.adminUpdatedAt = now;
+        rp.seasonResetToken = resetToken;
         if (this.cloud && (rp.docId || rp.uid || pid)) {
-          await this.cloud.adminUpdateLeaderboardDoc(rp.docId || rp.uid || pid, {
+          const res = await this.cloud.adminUpdateLeaderboardDoc(rp.docId || rp.uid || pid, {
             rebirths: 0,
             level: 1,
             bricks: 0,
@@ -10124,16 +10280,28 @@ class IdleBreakoutGame {
             bb: 1,
             bt: 5,
             bpStage: 1,
+            seasonResetToken: resetToken,
             adminUpdatedAt: now
           });
+          if (res && res.ok) fsOkCount++;
+          else if (res && res.reason === 'permission-denied') fsDeniedCount++;
         }
       }
       try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
     }
 
+    this.appliedSeasonResetId = null;
+    this.appliedSeasonResetToken = null;
+    this.applySeasonResetMigration(null, false, resetToken);
+
     await this.syncAdminRulesGlobally(false);
+    this.renderLeaderboard();
     this.renderDevLeaderboardPanel(true);
-    this.showToast('🧹 Szezon 2 Globális Reset + 5 BT & 1 BB kárpótlás + Levél kiküldve!', 5000);
+
+    const fsNote = fsDeniedCount > 0 && fsOkCount === 0
+      ? ' (Globális szabály + élő parancsok aktívak mindenkinek!)'
+      : '';
+    this.showToast(`🧹 Szezon 2 Globális Reset + 5 BT & 1 BB kárpótlás + Levél kiküldve!${fsNote}`, 5500);
   }
 
   updateMailUnreadBadge(notifyNew = false) {
