@@ -839,6 +839,12 @@ class CloudAuthManager {
             const dBpStage = optNum(d.bpStage) ?? (existing ? existing.bpStage ?? null : null);
             const dAdminTs = Number(d.adminUpdatedAt) || 0;
 
+            const isAdminOverride = dAdminTs > ((existing && existing.adminUpdatedAt) || 0);
+            const existingStrictlyHigher = !!(existing && (
+              (existing.rebirths || 0) > dReb ||
+              ((existing.rebirths || 0) === dReb && (existing.level || 1) > dLvl)
+            ));
+
             const isHigherProgress = existing
               ? (dReb > (existing.rebirths || 0) || (dReb === (existing.rebirths || 0) && dLvl >= (existing.level || 1)))
               : true;
@@ -850,7 +856,7 @@ class CloudAuthManager {
             const shouldAccept = !existing ||
               modifiedDocIds.has(doc.id) ||
               !existing._liveMqttInSession ||
-              dAdminTs > (existing.adminUpdatedAt || 0) ||
+              isAdminOverride ||
               isHigherProgress ||
               walletChanged ||
               (safeTs >= (existing.ts || 0) - 5000);
@@ -862,9 +868,18 @@ class CloudAuthManager {
                 ? incomingName
                 : ((prevName && prevName !== 'Játékos') ? prevName : (incomingName || prevName || 'Játékos'));
 
-              const isLivePlayerUpdate = modifiedDocIds.has(doc.id) && !(dAdminTs > ((existing && existing.adminUpdatedAt) || 0));
+              const isLivePlayerUpdate = modifiedDocIds.has(doc.id) && !isAdminOverride;
               const prevLocalSeen = (existing && existing.lastSeenLocalMs) ? Number(existing.lastSeenLocalMs) : 0;
               const nextLocalSeen = isLivePlayerUpdate ? nowMs : prevLocalSeen;
+
+              const keepExistingHigher = existingStrictlyHigher && !isAdminOverride;
+              const finalReb = keepExistingHigher ? (existing.rebirths || 0) : dReb;
+              const finalLvl = keepExistingHigher ? (existing.level || 1) : dLvl;
+              const finalBrk = keepExistingHigher ? (existing.bricks || 0) : dBrk;
+              const finalMoney = keepExistingHigher ? (existing.money ?? dMoney) : dMoney;
+              const finalBb = keepExistingHigher ? (existing.bb ?? dBb) : dBb;
+              const finalBt = keepExistingHigher ? (existing.bt ?? dBt) : dBt;
+              const finalBpStage = keepExistingHigher ? (existing.bpStage ?? dBpStage) : dBpStage;
 
               this.game.remotePlayers[key] = {
                 id: key,
@@ -875,13 +890,13 @@ class CloudAuthManager {
                 _liveMqttInSession: false,
                 keepInTop10: !!(existing && existing.keepInTop10),
                 name: resolvedName,
-                rebirths: dReb,
-                level: dLvl,
-                bricks: dBrk,
-                money: dMoney,
-                bb: dBb,
-                bt: dBt,
-                bpStage: dBpStage,
+                rebirths: finalReb,
+                level: finalLvl,
+                bricks: finalBrk,
+                money: finalMoney,
+                bb: finalBb,
+                bt: finalBt,
+                bpStage: finalBpStage,
                 ts: safeTs,
                 lastSeenLocalMs: nextLocalSeen,
                 adminUpdatedAt: dAdminTs

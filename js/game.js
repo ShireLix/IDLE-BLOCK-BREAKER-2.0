@@ -5,7 +5,7 @@
  * Background Tab & Offline Progression.
  */
 
-const APP_VERSION = '9.0';
+const APP_VERSION = '9.1';
 const BB_UPGRADE_COSTS = [1, 3, 5, 7, 10]; // 1., 2., 3., 4., 5. fejlesztés ára BB-ben
 
 const PIERCE_SPEED_COSTS = [
@@ -6888,11 +6888,12 @@ class IdleBreakoutGame {
                   const exBrk = Math.max(0, Number(existing.bricks) || 0);
                   const exTs = Number(existing.ts) || 0;
                   const exAdminTs = Number(existing.adminUpdatedAt) || 0;
-                  const incomingHigher = (dReb > exReb) || (dReb === exReb && dLvl > exLvl);
+                  const existingStrictlyHigher = (exReb > dReb) || (exReb === dReb && exLvl > dLvl);
                   const existingNewerAdmin = exAdminTs > 0 && dTs < exAdminTs + 15000;
-                  const existingStrictlyHigherAndFresher = (exReb > dReb || (exReb === dReb && exLvl > dLvl)) && dTs < exTs - 60000;
 
-                  if (existingNewerAdmin || (!incomingHigher && existingStrictlyHigherAndFresher)) {
+                  // Egy normál játékos sosem esik vissza alacsonyabb Rebirth-re vagy ugyanazon Rebirth-en alacsonyabb szintre
+                  // (kivéve admin szerkesztés, ami Firestore-on jön adminUpdatedAt-tal). Ezzel a 2 nyitott fül miatti ugrálás megszűnik!
+                  if (existingNewerAdmin || existingStrictlyHigher) {
                     keepReb = exReb;
                     keepLvl = exLvl;
                     keepBrk = exBrk;
