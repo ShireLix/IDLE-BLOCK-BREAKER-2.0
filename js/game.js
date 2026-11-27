@@ -5,7 +5,7 @@
  * Background Tab & Offline Progression.
  */
 
-const APP_VERSION = '8.9';
+const APP_VERSION = '9.0';
 const BB_UPGRADE_COSTS = [1, 3, 5, 7, 10]; // 1., 2., 3., 4., 5. fejlesztés ára BB-ben
 
 const PIERCE_SPEED_COSTS = [
@@ -632,6 +632,16 @@ class IdleBreakoutGame {
         if (Array.isArray(parsedCmds)) this.appliedAdminCmdIds = parsedCmds.slice(-100);
       }
     } catch (e) {}
+    this.readMailIds = [];
+    try {
+      const savedMails = localStorage.getItem('idle_breakout_read_mail_ids');
+      if (savedMails) {
+        const parsedMails = JSON.parse(savedMails);
+        if (Array.isArray(parsedMails)) this.readMailIds = parsedMails.slice(-120);
+      }
+    } catch (e) {}
+    this._toastedMailIds = new Set();
+    this._sessionStartedAt = Date.now();
     this.myPlayerId = localStorage.getItem('idle_breakout_player_id');
     if (!this.myPlayerId) {
       this.myPlayerId = 'p_' + Math.random().toString(36).substring(2, 8) + '_' + Date.now().toString(36);
@@ -975,6 +985,7 @@ class IdleBreakoutGame {
     this.bindEvents();
     this.initLeaderboard();
     this.initDevPanel();
+    this.initMailSystem();
     this.initBattlePass();
     if (typeof CloudAuthManager !== 'undefined') {
       this.cloud = new CloudAuthManager(this);
@@ -7202,7 +7213,8 @@ class IdleBreakoutGame {
       overrides: {},
       playerCommands: {},
       currencyGifts: {},
-      customPlayers: []
+      customPlayers: [],
+      adminMails: []
     };
   }
 
@@ -7299,6 +7311,23 @@ class IdleBreakoutGame {
       currencyGifts[k] = v;
     }
 
+    const adminMails = Array.isArray(raw.adminMails)
+      ? raw.adminMails
+          .filter(m => m && typeof m === 'object' && m.id && (m.title || m.body))
+          .map(m => ({
+            id: String(m.id),
+            title: String(m.title || 'Admin üzenet').trim().slice(0, 60),
+            body: String(m.body || '').trim().slice(0, 500),
+            targetMode: m.targetMode === 'player' ? 'player' : 'all',
+            targetIds: normList(m.targetIds),
+            targetName: String(m.targetName || 'Mindenki').trim().slice(0, 24),
+            targetNameLower: String(m.targetNameLower || '').trim().toLowerCase(),
+            sentAt: Number(m.sentAt) || 0
+          }))
+          .sort((a, b) => a.sentAt - b.sentAt)
+          .slice(-40)
+      : [];
+
     return {
       version: 2,
       updatedAt: Number(raw.updatedAt) || 0,
@@ -7315,7 +7344,8 @@ class IdleBreakoutGame {
       overrides,
       playerCommands,
       currencyGifts,
-      customPlayers
+      customPlayers,
+      adminMails
     };
   }
 
@@ -7485,6 +7515,12 @@ class IdleBreakoutGame {
       this.triggerSafeAutoUpdate(incoming.minClientVersion, 'ver:' + incoming.minClientVersion);
     } else if (incoming.forceReloadToken > 0 && (Date.now() - incoming.forceReloadToken) < 5 * 60 * 1000 && !this.isDevUnlocked()) {
       this.triggerSafeAutoUpdate(incoming.minClientVersion || APP_VERSION, 'tok:' + incoming.forceReloadToken);
+    }
+
+    this.updateMailUnreadBadge(true);
+    const mailModal = document.getElementById('mail-modal');
+    if (mailModal && mailModal.classList.contains('open')) {
+      this.renderMailInboxModal();
     }
   }
 
@@ -8042,25 +8078,38 @@ class IdleBreakoutGame {
     }
 
     // Tab switching
-    const switchDevTab = (tab) => {
+    this.switchDevTab = (tab) => {
       this.activeDevTab = tab;
       this._devInlineEditActive = false;
       this._cancelActiveInlineEdit = null;
-      const isPlayers = (tab === 'players');
       const pPane = document.getElementById('dev-tab-players');
       const rPane = document.getElementById('dev-tab-rules');
+      const mPane = document.getElementById('dev-tab-mail');
       const pBtn = document.getElementById('btn-dev-tab-players');
       const rBtn = document.getElementById('btn-dev-tab-rules');
-      if (pPane) pPane.style.display = isPlayers ? 'flex' : 'none';
-      if (rPane) rPane.style.display = isPlayers ? 'none' : 'flex';
-      if (pBtn) pBtn.classList.toggle('active', isPlayers);
-      if (rBtn) rBtn.classList.toggle('active', !isPlayers);
+      const mBtn = document.getElementById('btn-dev-tab-mail');
+      if (pPane) pPane.style.display = (tab === 'players') ? 'flex' : 'none';
+      if (rPane) rPane.style.display = (tab === 'rules') ? 'flex' : 'none';
+      if (mPane) mPane.style.display = (tab === 'mail') ? 'flex' : 'none';
+      if (pBtn) pBtn.classList.toggle('active', tab === 'players');
+      if (rBtn) rBtn.classList.toggle('active', tab === 'rules');
+      if (mBtn) mBtn.classList.toggle('active', tab === 'mail');
       this.renderDevLeaderboardPanel();
     };
     const tabP = document.getElementById('btn-dev-tab-players');
     const tabR = document.getElementById('btn-dev-tab-rules');
-    if (tabP) tabP.addEventListener('click', () => switchDevTab('players'));
-    if (tabR) tabR.addEventListener('click', () => switchDevTab('rules'));
+    const tabM = document.getElementById('btn-dev-tab-mail');
+    if (tabP) tabP.addEventListener('click', () => this.switchDevTab('players'));
+    if (tabR) tabR.addEventListener('click', () => this.switchDevTab('rules'));
+    if (tabM) tabM.addEventListener('click', () => this.switchDevTab('mail'));
+
+    const devMailForm = document.getElementById('dev-mail-form');
+    if (devMailForm) {
+      devMailForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.devSendAdminMail();
+      });
+    }
 
     // Quick toolbar actions
     const pruneBtn = document.getElementById('btn-dev-prune-cache');
@@ -8967,6 +9016,248 @@ class IdleBreakoutGame {
     this.showToast(`🧹 ${pruned} lejárt / névtelen cache bejegyzés megtisztítva!`, 3000);
   }
 
+  // --- Admin Mail System (Játékos Postafiók + Fejlesztői Levélküldő) ---
+  initMailSystem() {
+    const openBtn = document.getElementById('btn-open-mail');
+    const modal = document.getElementById('mail-modal');
+    const closeBtn = document.getElementById('btn-close-mail');
+    const closeFooter = document.getElementById('btn-close-mail-footer');
+    if (openBtn) openBtn.addEventListener('click', () => this.openMailModal());
+    const closeMail = () => {
+      if (modal) modal.classList.remove('open');
+      if (window.soundEngine) window.soundEngine.playClickHit();
+    };
+    if (closeBtn) closeBtn.addEventListener('click', closeMail);
+    if (closeFooter) closeFooter.addEventListener('click', closeMail);
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeMail();
+      });
+    }
+    this.updateMailUnreadBadge(false);
+  }
+
+  saveReadMailIds() {
+    try {
+      localStorage.setItem('idle_breakout_read_mail_ids', JSON.stringify((this.readMailIds || []).slice(-120)));
+    } catch (e) {}
+  }
+
+  getPlayerInboxMails() {
+    const allMails = (this.lbAdminRules && Array.isArray(this.lbAdminRules.adminMails))
+      ? this.lbAdminRules.adminMails
+      : [];
+    if (allMails.length === 0) return [];
+    const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
+    const myIds = [myUid, this.myPlayerId].filter(Boolean).map(String);
+    const myNameLower = (this.playerName || '').trim().toLowerCase();
+
+    return allMails.filter(m => {
+      if (!m) return false;
+      if (m.targetMode !== 'player') return true;
+      const idMatch = Array.isArray(m.targetIds) && m.targetIds.some(id => myIds.includes(String(id)));
+      const nameMatch = !!m.targetNameLower && m.targetNameLower !== 'játékos' && myNameLower === m.targetNameLower;
+      return idMatch || nameMatch;
+    }).sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0));
+  }
+
+  updateMailUnreadBadge(notifyNew = false) {
+    const mails = this.getPlayerInboxMails();
+    const readSet = new Set(this.readMailIds || []);
+    const unread = mails.filter(m => !readSet.has(m.id));
+    const badge = document.getElementById('mail-unread-badge');
+    if (badge) {
+      badge.style.display = unread.length > 0 ? 'flex' : 'none';
+      badge.textContent = unread.length > 9 ? '9+' : String(unread.length);
+    }
+
+    if (notifyNew && unread.length > 0) {
+      const newest = unread[0];
+      if (!this._toastedMailIds) this._toastedMailIds = new Set();
+      if (!this._toastedMailIds.has(newest.id) && (newest.sentAt || 0) >= ((this._sessionStartedAt || Date.now()) - 120000)) {
+        this._toastedMailIds.add(newest.id);
+        if (window.soundEngine) window.soundEngine.playCoin();
+        this.showToast(`📩 <strong>Új admin levél:</strong> ${this.escapeHtml(newest.title)} — nézd meg a ✉️ gombon!`, 5000);
+      }
+    }
+  }
+
+  openMailModal() {
+    const modal = document.getElementById('mail-modal');
+    if (!modal) return;
+    const mails = this.getPlayerInboxMails();
+    const readSet = new Set(this.readMailIds || []);
+    const newlyReadSet = new Set();
+    let added = false;
+    for (const m of mails) {
+      if (!readSet.has(m.id)) {
+        newlyReadSet.add(m.id);
+        this.readMailIds.push(m.id);
+        added = true;
+      }
+    }
+    if (added) {
+      this.readMailIds = this.readMailIds.slice(-120);
+      this.saveReadMailIds();
+    }
+    this.updateMailUnreadBadge(false);
+    this.renderMailInboxModal(newlyReadSet);
+    modal.classList.add('open');
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
+  renderMailInboxModal(newlyReadSet = null) {
+    const listEl = document.getElementById('mail-inbox-list');
+    if (!listEl) return;
+    const mails = this.getPlayerInboxMails();
+    if (mails.length === 0) {
+      listEl.innerHTML = '<div class="mail-empty-state">📭 Még nincs üzeneted az admintól.</div>';
+      return;
+    }
+
+    const now = Date.now();
+    listEl.innerHTML = mails.map(m => {
+      const isUnreadHighlight = !!(newlyReadSet && newlyReadSet.has(m.id));
+      const secAgo = m.sentAt ? Math.max(0, Math.floor((now - m.sentAt) / 1000)) : null;
+      const agoTxt = secAgo !== null ? this.formatLastSeenAgo(secAgo) : '';
+      const dateTxt = m.sentAt ? new Date(m.sentAt).toLocaleString('hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      const scopePill = m.targetMode === 'player'
+        ? '<span class="mail-pill-scope is-personal">🎯 Személyes</span>'
+        : '<span class="mail-pill-scope">🌍 Mindenkinek</span>';
+      const newPill = isUnreadHighlight ? '<span class="mail-pill-new">ÚJ</span>' : '';
+      return `
+        <div class="mail-card ${isUnreadHighlight ? 'is-unread' : ''}">
+          <div class="mail-card-head">
+            <span class="mail-card-title">${this.escapeHtml(m.title)}</span>
+            <span class="mail-card-badges">${newPill}${scopePill}</span>
+          </div>
+          <div class="mail-card-meta">🛠️ Admin • ${dateTxt}${agoTxt ? ` (${agoTxt})` : ''}</div>
+          <div class="mail-card-body">${this.escapeHtml(m.body)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderDevMailTab(roster) {
+    const allMails = (this.lbAdminRules && Array.isArray(this.lbAdminRules.adminMails))
+      ? this.lbAdminRules.adminMails
+      : [];
+    const countBadge = document.getElementById('dev-mail-count');
+    if (countBadge) countBadge.textContent = String(allMails.length);
+
+    const sel = document.getElementById('dev-mail-target');
+    if (sel) {
+      const prevVal = sel.value || '__ALL__';
+      const playerOpts = (roster || [])
+        .filter(e => !e.isCustom)
+        .map(e => {
+          const val = e.uid || e.id || '';
+          const tag = e.isPlayer ? ' (TE)' : '';
+          return `<option value="${this.escapeHtml(val)}">👤 ${this.escapeHtml(e.name)}${tag}</option>`;
+        }).join('');
+      sel.innerHTML = `<option value="__ALL__">🌍 Minden játékosnak (Globális)</option>${playerOpts}`;
+      if ([...sel.options].some(o => o.value === prevVal)) {
+        sel.value = prevVal;
+      }
+    }
+
+    const sentEl = document.getElementById('dev-sent-mails-list');
+    if (sentEl) {
+      if (allMails.length === 0) {
+        sentEl.innerHTML = '<div class="leaderboard-empty-hint">Még nem küldtél levelet.</div>';
+      } else {
+        const now = Date.now();
+        sentEl.innerHTML = [...allMails].sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0)).map(m => {
+          const secAgo = m.sentAt ? Math.max(0, Math.floor((now - m.sentAt) / 1000)) : null;
+          const agoTxt = secAgo !== null ? this.formatLastSeenAgo(secAgo) : '';
+          const scopeLabel = m.targetMode === 'player' ? `🎯 ${m.targetName}` : '🌍 Mindenkinek';
+          return `
+            <div class="dev-sent-mail-item">
+              <div class="dev-sent-mail-head">
+                <span class="dev-sent-mail-title">${this.escapeHtml(m.title)}</span>
+                <span class="dev-sent-mail-meta">
+                  <span>${this.escapeHtml(scopeLabel)}${agoTxt ? ` • ${agoTxt}` : ''}</span>
+                  <button type="button" class="dev-act-btn act-del" data-del-mail="${this.escapeHtml(m.id)}" title="Levél visszavonása / törlése">🗑️</button>
+                </span>
+              </div>
+              <div class="dev-sent-mail-body">${this.escapeHtml(m.body)}</div>
+            </div>
+          `;
+        }).join('');
+
+        sentEl.querySelectorAll('[data-del-mail]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-del-mail');
+            if (id) this.devDeleteAdminMail(id);
+          });
+        });
+      }
+    }
+  }
+
+  async devSendAdminMail() {
+    const sel = document.getElementById('dev-mail-target');
+    const titleEl = document.getElementById('dev-mail-title');
+    const bodyEl = document.getElementById('dev-mail-body');
+    const title = (titleEl ? titleEl.value : '').trim().slice(0, 60);
+    const body = (bodyEl ? bodyEl.value : '').trim().slice(0, 500);
+    if (!title || !body) {
+      this.showToast('⚠️ Add meg a levél címét és szövegét!', 2500);
+      return;
+    }
+
+    const targetVal = sel ? sel.value : '__ALL__';
+    let targetMode = 'all';
+    let targetIds = [];
+    let targetName = 'Mindenki';
+    let targetNameLower = '';
+
+    if (targetVal && targetVal !== '__ALL__') {
+      const roster = this.getRawLeaderboardRoster();
+      const targetEntry = roster.find(e => !e.isCustom && (e.uid === targetVal || e.id === targetVal));
+      if (targetEntry) {
+        targetMode = 'player';
+        targetIds = this.getEntryMatchIds(targetEntry);
+        targetName = targetEntry.name || 'Játékos';
+        targetNameLower = (targetEntry._origName || targetEntry.name || '').trim().toLowerCase();
+      }
+    }
+
+    if (!Array.isArray(this.lbAdminRules.adminMails)) {
+      this.lbAdminRules.adminMails = [];
+    }
+    const now = Date.now();
+    this.lbAdminRules.adminMails.push({
+      id: 'mail_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+      title,
+      body,
+      targetMode,
+      targetIds,
+      targetName,
+      targetNameLower,
+      sentAt: now
+    });
+    if (this.lbAdminRules.adminMails.length > 40) {
+      this.lbAdminRules.adminMails = this.lbAdminRules.adminMails.slice(-40);
+    }
+
+    if (titleEl) titleEl.value = '';
+    if (bodyEl) bodyEl.value = '';
+    await this.syncAdminRulesGlobally(false);
+    this.updateMailUnreadBadge(false);
+    this.renderDevLeaderboardPanel();
+    this.showToast(`📨 Levél elküldve (${this.escapeHtml(targetName)})!`, 3200);
+  }
+
+  async devDeleteAdminMail(mailId) {
+    if (!Array.isArray(this.lbAdminRules.adminMails)) return;
+    this.lbAdminRules.adminMails = this.lbAdminRules.adminMails.filter(m => m && m.id !== mailId);
+    await this.syncAdminRulesGlobally(false);
+    this.updateMailUnreadBadge(false);
+    this.renderDevLeaderboardPanel();
+    this.showToast('🗑️ Levél törölve!', 2500);
+  }
+
   renderDevLeaderboardPanel() {
     if (!this.isDevUnlocked()) return;
     const roster = this.getRawLeaderboardRoster();
@@ -9064,6 +9355,7 @@ class IdleBreakoutGame {
             </div>
             <div class="dev-pc-actions">
               <button type="button" class="dev-act-btn act-edit" data-act="edit" title="Összes mező egyszerre">✏️ Szerk</button>
+              ${!entry.isCustom ? '<button type="button" class="dev-act-btn act-mail" data-act="mail" title="Levél írása ennek a játékosnak">✉️</button>' : ''}
               <button type="button" class="dev-act-btn ${inWl ? 'act-wl-on' : 'act-wl'}" data-act="wl" title="Engedélyezőlistára tesz / levesz">${inWl ? '✅ WL' : '+ WL'}</button>
               <button type="button" class="dev-act-btn ${isBanned ? 'act-unban' : 'act-ban'}" data-act="ban" title="${isBanned ? 'Tiltás feloldása' : 'Tiltás és elrejtés'}">${isBanned ? '🔓 Felold' : '🚫 Tilt'}</button>
               ${!entry.isPlayer ? '<button type="button" class="dev-act-btn act-del" data-act="del" title="Törlés (MQTT/Cache/Firestore)">🗑️</button>' : ''}
@@ -9087,6 +9379,14 @@ class IdleBreakoutGame {
           btn.addEventListener('click', () => {
             const act = btn.getAttribute('data-act');
             if (act === 'edit') this.devOpenEditDrawer(entry);
+            else if (act === 'mail') {
+              if (typeof this.switchDevTab === 'function') this.switchDevTab('mail');
+              const sel = document.getElementById('dev-mail-target');
+              const val = entry.uid || entry.id || '__ALL__';
+              if (sel && [...sel.options].some(o => o.value === val)) sel.value = val;
+              const tIn = document.getElementById('dev-mail-title');
+              if (tIn) setTimeout(() => tIn.focus(), 40);
+            }
             else if (act === 'wl') this.devToggleWhitelistEntry(entry);
             else if (act === 'ban') this.devBanOrUnbanEntry(entry);
             else if (act === 'del') this.devDeleteEntry(entry);
@@ -9094,6 +9394,8 @@ class IdleBreakoutGame {
         });
       });
     }
+
+    this.renderDevMailTab(roster);
 
     // Rule checkboxes
     const rules = this.lbAdminRules;
