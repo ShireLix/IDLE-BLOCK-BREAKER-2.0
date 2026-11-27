@@ -23,6 +23,10 @@ class CloudAuthManager {
     this.suppressNextAuthLoad = false;
     this.initialCloudSyncDone = false;
     this.leaderboardUnsub = null;
+    this.ownSaveUnsub = null;
+    this._liveCloudSyncTimer = null;
+    this._lastRemoteSyncToastAt = 0;
+    this.deviceSessionId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
   }
 
   init() {
@@ -35,14 +39,24 @@ class CloudAuthManager {
     }
 
     if (!this.isConfigured) {
+      for (const btnId of ['btn-auth-submit-login', 'btn-auth-submit-register']) {
+        const b = document.getElementById(btnId);
+        if (b) { b.disabled = true; b.title = 'Előbb állítsd be a js/firebase-config.js fájlt!'; }
+      }
       this.updateAuthUI();
+      if (this.game && typeof this.game.updateLeaderboardConnUI === 'function') {
+        this.game.updateLeaderboardConnUI(this.game.mqttConnected);
+      }
       return;
     }
 
     if (typeof firebase === 'undefined' || !firebase.initializeApp) {
       console.warn('Firebase SDK nem töltődött be (offline mód vagy blokkolt script).');
-      this.showError('A Firebase felhőszolgáltatás jelenleg nem érhető el (ellenőrizd a netkapcsolatot).');
+      this.showError('A Firebase felhőszolgáltatás jelenleg nem érhető el (helyi mentés + JSON/kód export aktív).');
       this.updateAuthUI();
+      if (this.game && typeof this.game.updateLeaderboardConnUI === 'function') {
+        this.game.updateLeaderboardConnUI(this.game.mqttConnected);
+      }
       return;
     }
 
@@ -79,6 +93,9 @@ class CloudAuthManager {
 
   openAuthModal(tab = 'login', prefillName = '') {
     const modal = document.getElementById('auth-modal');
+    if (this.game && typeof this.game.closeAllModals === 'function') {
+      this.game.closeAllModals('auth-modal');
+    }
     this.clearError();
     this.hideDeleteConfirm();
     this.updateAuthUI();
@@ -366,6 +383,7 @@ class CloudAuthManager {
       if (this.currentUser) {
         await this.saveToCloud(true);
       }
+      this.stopOwnCloudSaveListener();
       await this.auth.signOut();
       this.currentUser = null;
       this.initialCloudSyncDone = false;
@@ -454,6 +472,7 @@ class CloudAuthManager {
       }
 
       await user.delete();
+      this.stopOwnCloudSaveListener();
 
       if (typeof this.game.clearRetainedMqttPlayer === 'function') {
         this.game.clearRetainedMqttPlayer(uid);
@@ -539,6 +558,7 @@ class CloudAuthManager {
       if (this.suppressNextAuthLoad) {
         this.suppressNextAuthLoad = false;
         this.initialCloudSyncDone = true;
+        this.listenOwnCloudSave(user.uid);
         this.game.broadcastMyStatus();
         this.syncLeaderboardToCloud(true);
         return;
@@ -548,12 +568,65 @@ class CloudAuthManager {
       } finally {
         this.initialCloudSyncDone = true;
       }
+      this.listenOwnCloudSave(user.uid);
       this.game.broadcastMyStatus();
       this.syncLeaderboardToCloud(true);
     } else {
+      this.stopOwnCloudSaveListener();
       this.initialCloudSyncDone = false;
       this.game.renderLeaderboard();
     }
+  }
+
+  stopOwnCloudSaveListener() {
+    if (this._liveCloudSyncTimer) {
+      clearTimeout(this._liveCloudSyncTimer);
+      this._liveCloudSyncTimer = null;
+    }
+    if (typeof this.ownSaveUnsub === 'function') {
+      try { this.ownSaveUnsub(); } catch (e) {}
+    }
+    this.ownSaveUnsub = null;
+  }
+
+  listenOwnCloudSave(uid) {
+    this.stopOwnCloudSaveListener();
+    if (!this.db || !uid) return;
+    try {
+      this.ownSaveUnsub = this.db.collection('users').doc(uid).onSnapshot((snap) => {
+        if (!this.initialCloudSyncDone || !this.currentUser || this.currentUser.uid !== uid) return;
+        if (!snap.exists || (snap.metadata && snap.metadata.hasPendingWrites)) return;
+        const cloudDoc = snap.data();
+        const cloudSave = cloudDoc && cloudDoc.saveData ? cloudDoc.saveData : null;
+        if (!cloudSave) return;
+        if (cloudDoc.deviceSessionId && cloudDoc.deviceSessionId === this.deviceSessionId) return;
+
+        const incomingTs = Math.max(Number(cloudDoc.updatedAt) || 0, Number(cloudSave.lastSavedAt) || 0);
+        if (incomingTs <= (this.lastCloudSaveMs || 0) + 800) return;
+
+        const effectiveCloudSave = { ...cloudSave };
+        if ((!effectiveCloudSave.playerName || effectiveCloudSave.playerName === 'Játékos') && (cloudDoc.playerName || this.currentUser.displayName)) {
+          effectiveCloudSave.playerName = cloudDoc.playerName || this.currentUser.displayName;
+        }
+        this.game.applySaveData(effectiveCloudSave, { isLiveReload: true, ownerUid: uid });
+        this.lastCloudSaveMs = incomingTs;
+        this.updateAuthUI();
+        const now = Date.now();
+        if (now - (this._lastRemoteSyncToastAt || 0) > 10000) {
+          this._lastRemoteSyncToastAt = now;
+          this.game.showToast('☁️ Haladás szinkronizálva a másik eszközödről!', 3200);
+        }
+      }, () => {});
+    } catch (e) {}
+  }
+
+  scheduleLiveCloudSync(delayMs = 1200) {
+    if (!this.isReady || !this.db || !this.currentUser || !this.initialCloudSyncDone) return;
+    if (this._liveCloudSyncTimer) clearTimeout(this._liveCloudSyncTimer);
+    this._liveCloudSyncTimer = setTimeout(() => {
+      this._liveCloudSyncTimer = null;
+      this.saveToCloud(true, { silent: true });
+    }, delayMs);
   }
 
   async syncOnLogin(user, fromExplicitLogin) {
@@ -574,29 +647,48 @@ class CloudAuthManager {
             rebirthCount: this.game.rebirthCount || 0,
             level: this.game.level || 1,
             totalBricksDestroyed: this.game.totalBricksDestroyed || 0,
-            lastSavedAt: this.game.offlineProgressAppliedAt || Number(localRaw?.lastSavedAt) || 0
+            lastSavedAt: this.game.offlineProgressAppliedAt || Number(localRaw?.lastSavedAt) || 0,
+            lastAdminEditAt: this.game.lastAdminEditAt || Number(localRaw?.lastAdminEditAt) || 0,
+            appliedSeasonResetId: this.game.appliedSeasonResetId || localRaw?.appliedSeasonResetId || null
           };
-          const rawSnap = localRaw || { rebirthCount: 0, level: 1, totalBricksDestroyed: 0, lastSavedAt: 0 };
+          const rawSnap = localRaw || { rebirthCount: 0, level: 1, totalBricksDestroyed: 0, lastSavedAt: 0, lastAdminEditAt: 0, appliedSeasonResetId: null };
           const bestLocal = (!hasForeignOwner && this.compareSaveProgress(liveSnap, rawSnap) >= 0) ? liveSnap : rawSnap;
 
+          const localHasSeason = !hasForeignOwner && (
+            bestLocal.appliedSeasonResetId === 'fair_restart_s2_v9_4' ||
+            this.game.appliedSeasonResetId === 'fair_restart_s2_v9_4'
+          );
+          const cloudHasSeason = cloudSave.appliedSeasonResetId === 'fair_restart_s2_v9_4';
+
+          if (localHasSeason && !cloudHasSeason) {
+            if (typeof this.game.collectLegacyCosmeticsFromSave === 'function') {
+              this.game.collectLegacyCosmeticsFromSave(cloudSave);
+            }
+            this.game.saveOwnerUid = user.uid;
+            this.game.save();
+            await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
+            this.initialCloudSyncDone = true;
+            return;
+          }
+
           const progressCmp = hasForeignOwner ? -1 : this.compareSaveProgress(bestLocal, cloudSave);
+          const cloudHasNewerAdmin = (Number(cloudSave.lastAdminEditAt) || 0) > (Number(bestLocal.lastAdminEditAt) || 0);
           const localOfflineDidAdvance = !hasForeignOwner && !fromExplicitLogin && ((this.game.offlineProgressAppliedAt || 0) > 0);
           const localIsStrictlyNewerSameOwner = sameOwner && ((Number(bestLocal.lastSavedAt) || 0) > (Number(cloudSave.lastSavedAt) || 0)) && progressCmp >= 0;
 
-          const shouldKeepLocalAndUpload = !fromExplicitLogin && !hasForeignOwner && (
+          const shouldKeepLocalAndUpload = cloudHasSeason && !fromExplicitLogin && !hasForeignOwner && !cloudHasNewerAdmin && (
             progressCmp > 0 ||
             (localOfflineDidAdvance && progressCmp >= 0) ||
             localIsStrictlyNewerSameOwner
           );
 
           if (shouldKeepLocalAndUpload) {
-            // A helyi / offline haladás frissebb vagy előrébb tart (még akkor is, ha a régi verzió null UID-val mentette) ->
-            // NE írjuk felül a régi felhőmentéssel, hanem rögzítsük az UID-t és töltsük fel a felhőbe!
+            // A helyi / offline haladás frissebb vagy előrébb tart -> NE írjuk felül a régi felhőmentéssel!
             this.game.saveOwnerUid = user.uid;
             this.game.save();
             await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
           } else {
-            // Ha másik gépen / másik fiókban előrébb járt, vagy belépéskor felhőmentést töltünk:
+            // Ha másik gépen előrébb járt, vagy még Szezon 1 felhőmentése van:
             const isGuestProgress = !fromExplicitLogin ? false : (!sameOwner && (this.game.level > 1 || this.game.getTotalBalls() > 0 || this.game.rebirthCount > 0));
             let shouldLoadCloud = true;
             if (isGuestProgress && !localRaw?.saveOwnerUid) {
@@ -615,13 +707,16 @@ class CloudAuthManager {
               this.lastCloudSaveMs = cloudSave.lastSavedAt || Date.now();
               this.updateAuthUI();
 
-              // Ha a felhőmentés régebbi (pl. másik gépről belépés), számoljuk ki és mentsük el rá az offline haladást is!
-              const cloudOfflineSec = cloudSave.lastSavedAt ? ((Date.now() - Number(cloudSave.lastSavedAt)) / 1000) : 0;
-              if (cloudOfflineSec >= 5 && (this.game.getTotalBalls() > 0 || this.game.bbUpgrades.autoClicker >= 1)) {
-                this.game.applyOfflineProgress(cloudOfflineSec, true);
+              if (!cloudHasSeason) {
                 await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
               } else {
-                this.game.showToast(`☁️ <strong>Felhőmentés betöltve!</strong> Folytatás: Rebirth ${this.game.rebirthCount} | Szint ${this.game.level}`, 4500);
+                const cloudOfflineSec = cloudSave.lastSavedAt ? ((Date.now() - Number(cloudSave.lastSavedAt)) / 1000) : 0;
+                if (cloudOfflineSec >= 5 && (this.game.getTotalBalls() > 0 || this.game.bbUpgrades.autoClicker >= 1)) {
+                  this.game.applyOfflineProgress(cloudOfflineSec, true);
+                  await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
+                } else {
+                  this.game.showToast(`☁️ <strong>Felhőmentés betöltve!</strong> Folytatás: Rebirth ${this.game.rebirthCount} | Szint ${this.game.level}`, 4500);
+                }
               }
             } else {
               this.game.saveOwnerUid = user.uid;
@@ -693,7 +788,7 @@ class CloudAuthManager {
     }
 
     try {
-      await this.db.collection('leaderboard').doc(docId).set({
+      const lbPayload = {
         id: this.game.myPlayerId,
         uid: uid || null,
         isGuest: !uid,
@@ -707,7 +802,11 @@ class CloudAuthManager {
         bpStage,
         ts: now,
         serverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      };
+      if ((this.game.lastAdminEditAt || 0) > 0) {
+        lbPayload.adminUpdatedAt = this.game.lastAdminEditAt;
+      }
+      await this.db.collection('leaderboard').doc(docId).set(lbPayload, { merge: true });
       this.lastLbSyncMs = now;
       this.lastLbSyncSig = sig;
       this.lastSyncedBb = bb;
@@ -740,6 +839,7 @@ class CloudAuthManager {
           level: this.game.level || 1,
           bricks: this.game.totalBricksDestroyed || 0,
           updatedAt: now,
+          deviceSessionId: this.deviceSessionId,
           saveData
         }, { merge: true }),
         this.syncLeaderboardToCloud(true)
@@ -838,8 +938,9 @@ class CloudAuthManager {
             const dBt = optNum(d.bt) ?? (existing ? existing.bt ?? null : null);
             const dBpStage = optNum(d.bpStage) ?? (existing ? existing.bpStage ?? null : null);
             const dAdminTs = Number(d.adminUpdatedAt) || 0;
+            const exAdminTs = (existing && existing.adminUpdatedAt) || 0;
 
-            const isAdminOverride = dAdminTs > ((existing && existing.adminUpdatedAt) || 0);
+            const isAdminOverride = (dAdminTs > exAdminTs) || (dAdminTs > 0 && dAdminTs === exAdminTs && modifiedDocIds.has(doc.id));
             const existingStrictlyHigher = !!(existing && (
               (existing.rebirths || 0) > dReb ||
               ((existing.rebirths || 0) === dReb && (existing.level || 1) > dLvl)
@@ -899,7 +1000,7 @@ class CloudAuthManager {
                 bpStage: finalBpStage,
                 ts: safeTs,
                 lastSeenLocalMs: nextLocalSeen,
-                adminUpdatedAt: dAdminTs
+                adminUpdatedAt: Math.max(exAdminTs, dAdminTs)
               };
               dirtyRemote = true;
             }
@@ -1038,20 +1139,48 @@ class CloudAuthManager {
     }
   }
 
+  exportRawJsonSave() {
+    try {
+      const isGuest = !this.currentUser;
+      if (isGuest && typeof this.game.extendGuestDeadlineFromManualTransfer === 'function') {
+        this.game.extendGuestDeadlineFromManualTransfer();
+      }
+      const data = this.game.buildSaveData(this.currentUser ? this.currentUser.uid : null);
+      data.exportedAt = Date.now();
+      const json = JSON.stringify(data);
+      const input = document.getElementById('auth-backup-code-input');
+      if (input) {
+        input.value = json;
+        input.select();
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(json).catch(() => {});
+      }
+      this.game.showToast('📋 JSON mentés vágólapra másolva! Bármikor visszatölthető a Betöltés mezőbe.', 4000);
+    } catch (e) {
+      this.showError('Hiba a JSON mentés készítésekor.');
+    }
+  }
+
   importSaveCode() {
     this.clearError();
     const input = document.getElementById('auth-backup-code-input');
     const raw = (input ? input.value : '').trim();
-    if (!raw || !raw.startsWith('IB4:')) {
-      this.showError('Érvénytelen mentési kód! ("IB4:..." formátum szükséges)');
+    if (!raw || (!raw.startsWith('IB4:') && !raw.startsWith('{'))) {
+      this.showError('Érvénytelen mentési kód vagy JSON! ("IB4:..." vagy "{...}" formátum szükséges)');
       return;
     }
     try {
-      const b64 = raw.slice(4);
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const json = new TextDecoder().decode(bytes);
+      let json;
+      if (raw.startsWith('{')) {
+        json = raw;
+      } else {
+        const b64 = raw.slice(4);
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        json = new TextDecoder().decode(bytes);
+      }
       const data = JSON.parse(json);
       if (!data || typeof data !== 'object' || data.level == null) {
         throw new Error('Hibás adat');
@@ -1116,7 +1245,7 @@ class CloudAuthManager {
     try {
       await this.db.collection('leaderboard').doc(docId).set({
         ...patch,
-        adminUpdatedAt: Date.now(),
+        adminUpdatedAt: Math.max(Date.now(), Number(patch.adminUpdatedAt) || 0),
         serverUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       return { ok: true };

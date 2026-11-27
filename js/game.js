@@ -5,7 +5,50 @@
  * Background Tab & Offline Progression.
  */
 
-const APP_VERSION = '9.1';
+const APP_VERSION = '9.4';
+const SEASON_RESET_ID = 'fair_restart_s2_v9_4';
+const SEASON_RESET_MAIL = {
+  id: 'mail_season_reset_s2_v9_4',
+  title: '📢 Fontos közlemény – Tiszta újrakezdés & Kárpótlás',
+  body: 'Sziasztok! Sajnos a korábbi fejlesztési hibák miatt mindenkinek újra kell kezdenie a játékot, hogy egy teljesen tisztességes, egyenlő esélyű játékot tudjunk csinálni. A korábbi skineitek megmaradtak, elindult a vadonatúj 50 szintes Szezon 2 Breaker Pass (új, akár 3 labdára is tehető exkluzív skinekkel!), kárpótlásul pedig mindenki kapott +5 👑 BT-t és +1 ⭐ BB-t! Jó játékot kívánunk!',
+  targetMode: 'all',
+  targetIds: [],
+  targetName: 'Mindenki',
+  targetNameLower: '',
+  sentAt: 1795813000000
+};
+const LEGACY_S1_STAGE_COSMETICS = {
+  1: { kind: 'skins', id: 'skin_emerald' },
+  3: { kind: 'effects', id: 'fx_saturn' },
+  5: { kind: 'breakEffects', id: 'brk_explode' },
+  6: { kind: 'skins', id: 'skin_violet' },
+  10: { kind: 'skins', id: 'skin_gold' },
+  14: { kind: 'effects', id: 'fx_flame' },
+  18: { kind: 'skins', id: 'skin_cyber' },
+  22: { kind: 'effects', id: 'fx_frost' },
+  25: { kind: 'skins', id: 'skin_blood' },
+  28: { kind: 'effects', id: 'fx_starlight' },
+  30: { kind: 'effects', id: 'fx_cosmic_rare' }
+};
+const LEGACY_COSMETIC_META = {
+  skins: {
+    skin_emerald: 'Smaragd Skin [S1]',
+    skin_violet: 'Neon Ibolya Skin [S1]',
+    skin_gold: 'Arany Fényű Skin [S1]',
+    skin_cyber: 'Cyber Punk Skin [S1]',
+    skin_blood: 'Vérhold Vörös Skin [S1]'
+  },
+  effects: {
+    fx_saturn: '🪐 Szaturnusz Gyűrű [S1]',
+    fx_flame: 'Tűzcsóva Aura [S1]',
+    fx_frost: 'Jégkristály Csillogás [S1]',
+    fx_starlight: 'Csillagfény Szikrák [S1]',
+    fx_cosmic_rare: '🌌 Kozmikus Szingularitás [S1]'
+  },
+  breakEffects: {
+    brk_explode: '💥 Blokk Robbanás [S1]'
+  }
+};
 const BB_UPGRADE_COSTS = [1, 3, 5, 7, 10]; // 1., 2., 3., 4., 5. fejlesztés ára BB-ben
 
 const PIERCE_SPEED_COSTS = [
@@ -179,37 +222,117 @@ const BB_UPGRADE_CATALOG = [
   }
 ];
 
-// Nem fejleszthető Power-upok (elkülönítve megjelenítve a POWERUP UPGRADES menüben)
-const NON_UPGRADABLE_POWERUPS = [
+// Fix & Nem Fejleszthető Power-Upok Részletes Útmutatója (mit csinálnak pontosan)
+const FIXED_POWERUPS_GUIDE = [
   {
     key: 'gold_boss',
+    category: 'drop',
     icon: '👑',
     name: 'Gold Boss',
-    rarityBadge: '2.4 esély (~17%)',
+    rarityBadge: '1.50 súly (~10,7%) • Esésből',
     desc: 'A következő Boss blokkot Gold Boss-szá alakítja, amely dupla ($) pénzt ad sebzéskor és legyőzéskor is.',
     statusFn: (game) => game.nextBossIsGold ? '✨ BEÉLESÍTVE: A következő Boss GOLD BOSS lesz!' : 'Blokktöréskor véletlenszerűen eshet.'
   },
   {
     key: 'free_upgrade',
+    category: 'drop',
     icon: '🎁',
     name: 'Free Upgrade',
-    rarityBadge: '0.70 esély (~5%)',
+    rarityBadge: '0.35 súly (~2,5%; maxnál ~0,86% + 3p CD)',
     desc: 'Véletlenszerűen +1 szintet ad egy még nem kimaxolt Power-up fejlesztésre (ha mind maxos: +5 BB).',
     statusFn: () => 'Azonnali jutalom eséskor.'
   },
   {
     key: 'gold_level',
+    category: 'drop',
     icon: '🌟',
     name: 'GOLD LEVEL',
-    rarityBadge: '0.08 esély (~0.6%) • Rebirth 15+',
+    rarityBadge: '0.05 súly (~0,36%) • Rebirth 15+ • 15p CD',
     isGoldSpecial: true,
-    desc: 'Csak Rebirth 15 fölött van rá esély (~0,6% esély power-up dobásból)! A következő normál pálya minden egyes blokkja 500–2 000 HP-s aranyblokk lesz (20x pénz), az aranyblokkok ⭐ BB-t és 👑 BT-t dobhatnak, teljesítéskor pedig garantált +15 ⭐ BB és +25 👑 BT a jutalom!',
+    desc: 'Csak Rebirth 15 fölött eshet! A következő normál pálya minden blokkja aranyblokk lesz (20x pénz), BB-t és BT-t dobhat, teljesítéskor pedig garantált +15 ⭐ BB és +25 👑 BT jár!',
     statusFn: (game) => {
       if (game.isGoldLevelActive) return '🌟 JELENLEG AKTÍV A PÁLYÁN (20x pénz + BB & BT)!';
       if (game.nextLevelIsGold) return '🌟 BEÉLESÍTVE: A következő normál pálya GOLD LEVEL lesz!';
       if (game.rebirthCount <= 15) return `🔒 ZÁROLVA: Rebirth 15 fölött érhető el (jelenleg: ${game.rebirthCount}/16)`;
-      return '✅ Feloldva (Rebirth > 15): 0,08 esély (~0,6% a power-up esésekből)!';
+      return '✅ Feloldva (Rebirth > 15): ~0,36% esély power-up dobásból (15p cooldown)!';
     }
+  },
+  {
+    key: 'fix_auto_clicker',
+    category: 'perm',
+    icon: '🤖',
+    name: 'Auto Clicker (Fix)',
+    rarityBadge: 'BB Lvl 1+ • Örökre aktív',
+    desc: '1. szinttől ÖRÖKRE aktív marad (Rebirth után is!). Automatikusan üti a blokkokat, magasabb szinteken területi sebzéssel és azonnali blokktöréssel.',
+    statusFn: (game) => game.bbUpgrades.autoClicker >= 1
+      ? `✅ ÖRÖKRE AKTÍV (LVL ${game.bbUpgrades.autoClicker}/5)`
+      : '🔒 Még nincs feloldva (Auto Clicker LVL 1 kell).'
+  },
+  {
+    key: 'fix_pierce_perm',
+    category: 'perm',
+    icon: '⚡',
+    name: 'Fix Pierce Ball',
+    rarityBadge: 'BB Lvl 4–5 • Rebirthig aktív',
+    desc: '4. szinttől 1 áttörő labda folyamatosan a pályán marad a következő Rebirthig (normál blokkokat azonnal átüt, Boss-on 3% HP-t sebez). 5. szinten $-ból külön gyorsítható!',
+    statusFn: (game) => game.bbUpgrades.piercing >= 4
+      ? `✅ REBIRTHIG AKTÍV (${game.getPermanentPierceSpeedMult().toFixed(1)}x seb.)`
+      : `🔒 Pierce Ball LVL 4 szükséges (jelenleg: ${game.bbUpgrades.piercing}/5).`
+  },
+  {
+    key: 'fix_money2x',
+    category: 'perm',
+    icon: '💰',
+    name: 'Fix 2x Money',
+    rarityBadge: 'BB Lvl 5 • Rebirthig aktív',
+    desc: '5. szinten nem jár le: a következő Rebirthig minden egyes sebzésből és bónuszból dupla ($) pénzt ad!',
+    statusFn: (game) => game.bbUpgrades.money2x >= 5
+      ? '✅ REBIRTHIG AKTÍV (2x Pénz)'
+      : `🔒 2x Money LVL 5 szükséges (jelenleg: ${game.bbUpgrades.money2x}/5).`
+  },
+  {
+    key: 'fix_dmg2x',
+    category: 'perm',
+    icon: '💥',
+    name: 'Fix 2x Damage',
+    rarityBadge: 'BB Lvl 5 • Rebirthig aktív',
+    desc: '5. szinten folyamatosan dupla (2x) sebzést ad minden labdának és kattintásnak a következő Rebirthig!',
+    statusFn: (game) => game.bbUpgrades.dmg2x >= 5
+      ? '✅ REBIRTHIG AKTÍV (2x Sebzés)'
+      : `🔒 2x Damage LVL 5 szükséges (jelenleg: ${game.bbUpgrades.dmg2x}/5).`
+  },
+  {
+    key: 'fix_speed',
+    category: 'perm',
+    icon: '🚀',
+    name: 'Fix All Ball Speed',
+    rarityBadge: 'BB Lvl 5 • Rebirthig aktív',
+    desc: '5. szinten folyamatosan 2x sebességet ÉS 2x sebzést ad az összes labdának a következő Rebirthig!',
+    statusFn: (game) => game.bbUpgrades.speed >= 5
+      ? '✅ REBIRTHIG AKTÍV (2x Seb. + 2x Sebzés)'
+      : `🔒 All Ball Speed LVL 5 szükséges (jelenleg: ${game.bbUpgrades.speed}/5).`
+  },
+  {
+    key: 'fix_shockwave',
+    category: 'perm',
+    icon: '🌊',
+    name: 'Fix Shock Wave',
+    rarityBadge: 'BB Lvl 5 • Rebirthig aktív',
+    desc: '5. szinten 0.5 másodpercenként teljes pályás lökéshullámot küld (650 sebzés + 3% max HP) a következő Rebirthig!',
+    statusFn: (game) => game.bbUpgrades.shockwave >= 5
+      ? '✅ REBIRTHIG AKTÍV (Teljes pálya)'
+      : `🔒 Shock Wave LVL 5 szükséges (jelenleg: ${game.bbUpgrades.shockwave}/5).`
+  },
+  {
+    key: 'fix_pirate',
+    category: 'perm',
+    icon: '🏴‍☠️',
+    name: 'Pirate Shop (Discount 5)',
+    rarityBadge: 'BB Lvl 5 • ~0,43% esély • 10 perc CD',
+    desc: 'Discount 5. szinten amikor esik és aktiválódik, 5 másodpercig MINDEN labda- és kattintásfejlesztés teljesen $0 (INGYENES)!',
+    statusFn: (game) => game.isPirateShopActive()
+      ? '🏴‍☠️ MOST AKTÍV — MINDEN INGYENES!'
+      : (game.bbUpgrades.discount >= 5 ? '✅ Feloldva — eséskor 5 mp Ingyen Bolt!' : `🔒 Discount LVL 5 szükséges (${game.bbUpgrades.discount}/5).`)
   }
 ];
 
@@ -297,7 +420,14 @@ const BALL_SKIN_COLORS = {
   skin_cyber: '#ec4899',
   skin_p_dragon: '#15803d',
   skin_blood: '#ef4444',
-  skin_p_godlight: '#fef08a'
+  skin_p_godlight: '#fef08a',
+  skin_s2_prism: '#38bdf8',
+  skin_s2_magma: '#ea580c',
+  skin_s2_hologram: '#06b6d4',
+  skin_s2_amethyst: '#9333ea',
+  skin_s2_eclipse: '#1e1b4b',
+  skin_s2_chrono: '#eab308',
+  skin_s2_celestial: '#f43f5e'
 };
 
 const DEV_AUTH_SALT = 'IB_DEV_2026_SHX_SALT_v1::';
@@ -373,192 +503,53 @@ function sha256HexFallback(ascii) {
   return result;
 }
 
-// 30 Stages Seasonal Breaker Pass Catalog
-// Free Track: Every stage grants either an exclusive Cosmetic or a ⭐ BB + 👑 BT reward bundle!
-// Free Track: Skins, Effects, Breaking Effects + BB & BT bundles on every intermediate stage.
-// Paid Track: Exclusive Prémium reward on EVERY single stage (1-30) - cannot be activated or claimed.
-const BATTLE_PASS_STAGES = [
-  {
-    stage: 1,
-    bricks: 0,
-    free: { type: 'skin', id: 'skin_emerald', name: 'Smaragd Normal Skin', color: '#10b981', desc: 'Smaragdzöld élénk aura és fény' },
-    paid: { type: 'skin', id: 'skin_p_ruby', name: 'Királyi Rubin Skin', color: '#e11d48', desc: 'Ragyogó mélyvörös rubinfény' }
-  },
-  {
-    stage: 2,
-    bricks: 5000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 1, bt: 2, name: '+1 ⭐ BB & +2 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'skin', id: 'skin_p_obsidian', name: 'Obszidián Éj Skin', color: '#27272a', desc: 'Sötét vulkáni obszidián páncélzat' }
-  },
-  {
-    stage: 3,
-    bricks: 12000,
-    free: { type: 'effect', id: 'fx_saturn', name: '🪐 Szaturnusz Gyűrű Effekt', desc: 'Döntött arany-kozmikus bolygógyűrű és keringő hold a labda körül!' },
-    paid: { type: 'currency', currency: 'money', amount: 1000, name: '$1,000 Pénzbónusz', desc: 'Azonnali prémium tőkeinjekció' }
-  },
-  {
-    stage: 4,
-    bricks: 25000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 1, bt: 3, name: '+1 ⭐ BB & +3 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'skin', id: 'skin_p_matrix', name: 'Mátrix Kód Skin', color: '#22c55e', desc: 'Zöld digitális neon mátrixfény' }
-  },
-  {
-    stage: 5,
-    bricks: 45000,
-    free: { type: 'break_effect', id: 'brk_explode', name: '💥 Blokk Robbanás Breaking Effekt', desc: 'A kiválasztott labdád által tört blokkok látványos tűzgömbbel és lökéshullámmal felrobbannak!' },
-    paid: { type: 'skin', id: 'skin_p_solar', name: 'Napvihar Narancs Skin', color: '#f97316', desc: 'Tüzes napkitörés plazmaív' }
-  },
-  {
-    stage: 6,
-    bricks: 70000,
-    free: { type: 'skin', id: 'skin_violet', name: 'Neon Ibolya Skin', color: '#8b5cf6', desc: 'Elektromos ibolya villámkorona' },
-    paid: { type: 'currency', currency: 'bb', amount: 3, name: '+3 Black Brick (BB)', desc: 'Ritka prestige valuta csomag' }
-  },
-  {
-    stage: 7,
-    bricks: 105000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 3, name: '+2 ⭐ BB & +3 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'effect', id: 'fx_p_golddust', name: 'Aranypor Uszály Effekt', desc: 'Fényes keringő aranyporszemek' }
-  },
-  {
-    stage: 8,
-    bricks: 150000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 2, bt: 4, name: '+2 ⭐ BB & +4 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 18000, name: '$18,000 Pénzbónusz', desc: 'Haladó fejlesztési alap' }
-  },
-  {
-    stage: 9,
-    bricks: 210000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 3, bt: 5, name: '+3 ⭐ BB & +5 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'skin', id: 'skin_p_quantum', name: 'Kvantum Cián Skin', color: '#06b6d4', desc: 'Kibernetikus kvantumrezgés aura' }
-  },
-  {
-    stage: 10,
-    bricks: 290000,
-    free: { type: 'skin', id: 'skin_gold', name: 'Arany Fényű Skin', color: '#f59e0b', desc: '24 karátos aranyfény és csillogás' },
-    paid: { type: 'skin', id: 'skin_p_sapphire', name: 'Óceáni Zafír Skin', color: '#0284c7', desc: 'Kristálytiszta mélykék zafír ragyogás' }
-  },
-  {
-    stage: 11,
-    bricks: 390000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 3, bt: 5, name: '+3 ⭐ BB & +5 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 1, name: '+1 Boss Token (BT)', desc: 'Prémium szintlépő tokenek' }
-  },
-  {
-    stage: 12,
-    bricks: 510000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 6, name: '+4 ⭐ BB & +6 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'skin', id: 'skin_p_chrome', name: 'Króm Acél Skin', color: '#94a3b8', desc: 'Tükörfényes folyékony fémburkolat' }
-  },
-  {
-    stage: 13,
-    bricks: 650000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 4, bt: 7, name: '+4 ⭐ BB & +7 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 10, name: '+10 Black Brick (BB)', desc: 'Erőteljes BB erősítő csomag' }
-  },
-  {
-    stage: 14,
-    bricks: 820000,
-    free: { type: 'effect', id: 'fx_flame', name: 'Tűzcsóva Aura Effekt', desc: 'Lobogó lángoló tűzuszály a normál labdán' },
-    paid: { type: 'effect', id: 'fx_p_lightning', name: 'Plazma Villám Effekt', desc: 'Magasfeszültségű kék elektromos ív' }
-  },
-  {
-    stage: 15,
-    bricks: 1020000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 5, bt: 8, name: '+5 ⭐ BB & +8 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 175000, name: '$175,000 Pénzbónusz', desc: 'Nagy tétű aranytartalék' }
-  },
-  {
-    stage: 16,
-    bricks: 1250000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 5, bt: 9, name: '+5 ⭐ BB & +9 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'effect', id: 'fx_p_violetlightning', name: 'Ibolya Villám Effekt', desc: 'Pulzáló lila villámcsapás ív' }
-  },
-  {
-    stage: 17,
-    bricks: 1510000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 6, bt: 10, name: '+6 ⭐ BB & +10 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 3, name: '+3 Boss Token (BT)', desc: 'Különleges boss token jutalom' }
-  },
-  {
-    stage: 18,
-    bricks: 1800000,
-    free: { type: 'skin', id: 'skin_cyber', name: 'Cyber Punk Skin', color: '#ec4899', desc: 'Neon pink és ciánkék vibrálás és glitch' },
-    paid: { type: 'skin', id: 'skin_p_nebula', name: 'Bíbor Nebula Skin', color: '#a855f7', desc: 'Kozmikus lila csillagköd örvény' }
-  },
-  {
-    stage: 19,
-    bricks: 2130000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 7, bt: 11, name: '+7 ⭐ BB & +11 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 20, name: '+20 Black Brick (BB)', desc: 'Elit Black Brick támogatás' }
-  },
-  {
-    stage: 20,
-    bricks: 2490000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 12, name: '+8 ⭐ BB & +12 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'skin', id: 'skin_p_godlight', name: 'Mennyei Fény Skin', color: '#fef08a', desc: 'Ragyogó arany-fehér szakrális aura' }
-  },
-  {
-    stage: 21,
-    bricks: 2890000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 8, bt: 13, name: '+8 ⭐ BB & +13 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 1750000, name: '$1.75M Pénzbónusz', desc: 'Prémium milliomos csomag' }
-  },
-  {
-    stage: 22,
-    bricks: 3330000,
-    free: { type: 'effect', id: 'fx_frost', name: 'Jégkristály Csillogás Effekt', desc: 'Fagyos kristályaura és csillogó jégszilánkok' },
-    paid: { type: 'effect', id: 'fx_p_rings', name: 'Plazmagyűrűk Pulzálás Effekt', desc: 'Táguló zöld plazma energiahullámok' }
-  },
-  {
-    stage: 23,
-    bricks: 3810000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 9, bt: 14, name: '+9 ⭐ BB & +14 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 4, name: '+4 Boss Token (BT)', desc: 'Mesterfokú Boss Token láda' }
-  },
-  {
-    stage: 24,
-    bricks: 4330000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 10, bt: 16, name: '+10 ⭐ BB & +16 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 40, name: '+40 Black Brick (BB)', desc: 'Kiemelt prestige BB láda' }
-  },
-  {
-    stage: 25,
-    bricks: 4900000,
-    free: { type: 'skin', id: 'skin_blood', name: 'Vérhold Vörös Skin', color: '#ef4444', desc: 'Mélyvérvörös napfogyatkozás aura' },
-    paid: { type: 'skin', id: 'skin_p_dragon', name: 'Sárkánytűz Skin', color: '#15803d', desc: 'Izzó pikkelymintás magmaréteg' }
-  },
-  {
-    stage: 26,
-    bricks: 5520000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 11, bt: 17, name: '+11 ⭐ BB & +17 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'money', amount: 10000000, name: '$10M Pénzbónusz', desc: 'Titáni vagyon injekció' }
-  },
-  {
-    stage: 27,
-    bricks: 6190000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 12, bt: 19, name: '+12 ⭐ BB & +19 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bt', amount: 7, name: '+7 Boss Token (BT)', desc: 'Legendás Boss Token készlet' }
-  },
-  {
-    stage: 28,
-    bricks: 6910000,
-    free: { type: 'effect', id: 'fx_starlight', name: 'Csillagfény Szikrák Effekt', desc: 'Keringő fényes arany csillagpor uszály' },
-    paid: { type: 'effect', id: 'fx_p_darkflame', name: 'Sötét Láng Mágia Effekt', desc: 'Démoni lila-fekete lángnyom' }
-  },
-  {
-    stage: 29,
-    bricks: 7690000,
-    free: { type: 'currency', currency: 'bb_bt', bb: 14, bt: 20, name: '+14 ⭐ BB & +20 👑 BT', desc: 'Ingyenes BB + Boss Token jutalomcsomag' },
-    paid: { type: 'currency', currency: 'bb', amount: 80, name: '+80 Black Brick (BB)', desc: 'Végső hajrá prémium BB tartalék' }
-  },
-  {
-    stage: 30,
-    bricks: 8500000,
-    free: { type: 'effect', id: 'fx_cosmic_rare', name: '🌌 Kozmikus Szingularitás (RITKA)', isRare: true, desc: 'Fekete lyuk örvény, keringő csillagpor és téridő görbület!' },
-    paid: { type: 'effect', id: 'fx_p_godcrown', name: '👑 Istenkirály Halo & Korona', desc: 'Keringő aranymíves korona, szakrális glória és aranyfény!' }
+// 50 Stages Season 2 Breaker Pass Catalog (Multi-Ball 2x & 3x Exclusive Cosmetics!)
+const BATTLE_PASS_STAGES = (() => {
+  const specials = {
+    1:  { bricks: 0,        free: { type: 'skin', id: 'skin_s2_prism', maxEquip: 3, name: '🌈 Prizma Kristály Skin', color: '#38bdf8', desc: 'Szivárvány fényprizma aura • Egyszerre 3 labdatípusra is tehető!' }, paid: { type: 'skin', id: 'skin_p_ruby', name: 'Királyi Rubin Skin', desc: 'Ragyogó mélyvörös rubinfény' } },
+    4:  { free: { type: 'effect', id: 'fx_s2_aurora', maxEquip: 2, name: '🌌 Sarki Fény Aura', desc: 'Zöld-lila hullámzó aurora borealis gyűrű • 2 labdára tehető!' }, paid: { type: 'skin', id: 'skin_p_matrix', name: 'Mátrix Kód Skin', desc: 'Zöld digitális neon mátrixfény' } },
+    7:  { free: { type: 'break_effect', id: 'brk_s2_frost', maxEquip: 2, name: '❄️ Jégszilánk Törés', desc: 'Blokktöréskor jeges lökéshullám és kristályszilánkok • 2 labdára!' }, paid: { type: 'effect', id: 'fx_p_golddust', name: 'Aranypor Uszály', desc: 'Fényes keringő aranyporszemek' } },
+    10: { free: { type: 'skin', id: 'skin_s2_magma', maxEquip: 2, name: '🌋 Magma Mag Skin', color: '#ea580c', desc: 'Izzó vulkáni lávakitörés mag • Egyszerre 2 labdatípusra tehető!' }, paid: { type: 'skin', id: 'skin_p_sapphire', name: 'Óceáni Zafír Skin', desc: 'Kristálytiszta mélykék ragyogás' } },
+    14: { free: { type: 'skin', id: 'skin_s2_hologram', maxEquip: 3, name: '💠 Hologram Mátrix Skin', color: '#06b6d4', desc: 'Pásztázó kiber-hologram rács • Egyszerre 3 labdára tehető!' }, paid: { type: 'effect', id: 'fx_p_lightning', name: 'Plazma Villám', desc: 'Magasfeszültségű kék elektromos ív' } },
+    18: { free: { type: 'effect', id: 'fx_s2_orbitals', maxEquip: 3, name: '⚛️ Atom Elektron Gyűrű', desc: '3 keringő atompályás elektron a labda körül • 3 labdára!' }, paid: { type: 'skin', id: 'skin_p_nebula', name: 'Bíbor Nebula Skin', desc: 'Kozmikus lila csillagköd örvény' } },
+    22: { free: { type: 'skin', id: 'skin_s2_amethyst', maxEquip: 2, name: '🔮 Ametiszt Geóda Skin', color: '#9333ea', desc: 'Mágikus lila kristályszikrák • 2 labdára tehető!' }, paid: { type: 'effect', id: 'fx_p_rings', name: 'Plazmagyűrűk', desc: 'Táguló zöld plazma hullámok' } },
+    26: { free: { type: 'break_effect', id: 'brk_s2_nova', maxEquip: 3, name: '🌟 Szupernóva Törés', desc: 'Arany-ibolyás csillagrobbanás blokktöréskor • 3 labdára!' }, paid: { type: 'skin', id: 'skin_p_chrome', name: 'Króm Acél Skin', desc: 'Tükörfényes folyékony fém' } },
+    30: { free: { type: 'skin', id: 'skin_s2_eclipse', maxEquip: 3, isRare: true, name: '🌘 Napfogyatkozás Skin (EXKLUZÍV)', color: '#1e1b4b', desc: 'Fekete napkorong izzó arany korona-aurával • 3 labdára!' }, paid: { type: 'skin', id: 'skin_p_godlight', name: 'Mennyei Fény Skin', desc: 'Szakrális arany-fehér aura' } },
+    35: { free: { type: 'effect', id: 'fx_s2_phoenix', maxEquip: 2, name: '🔥 Főnix Szárny Aura', desc: 'Lángoló főnix szárnytollak minden suhanásnál • 2 labdára!' }, paid: { type: 'skin', id: 'skin_p_dragon', name: 'Sárkánytűz Skin', desc: 'Izzó pikkelymintás magmaréteg' } },
+    40: { free: { type: 'skin', id: 'skin_s2_chrono', maxEquip: 3, isRare: true, name: '⏳ Kronosz Időóra Skin (EXKLUZÍV)', color: '#eab308', desc: 'Forgó arany óramutató és időhullám • 3 labdára!' }, paid: { type: 'effect', id: 'fx_p_darkflame', name: 'Sötét Láng Mágia', desc: 'Démoni lila-fekete lángnyom' } },
+    45: { free: { type: 'effect', id: 'fx_s2_vortex', maxEquip: 3, name: '🌀 Kvantum Örvény Effekt', desc: 'Forgó cián-magenta téridő örvény • 3 labdára tehető!' }, paid: { type: 'skin', id: 'skin_p_quantum', name: 'Kvantum Cián Skin', desc: 'Kvantumrezgés aura' } },
+    48: { free: { type: 'break_effect', id: 'brk_s2_glitch', maxEquip: 3, name: '⚡ Kibernetikus Glitch Törés', desc: 'Digitális neon szikrarobbanás töréskor • 3 labdára!' }, paid: { type: 'effect', id: 'fx_p_violetlightning', name: 'Ibolya Villám', desc: 'Pulzáló lila villámcsapás ív' } },
+    50: { free: { type: 'skin', id: 'skin_s2_celestial', maxEquip: 3, isRare: true, name: '👑 Égi Galaxis Császár (MITIKUS)', color: '#f43f5e', desc: 'Keringő csillagkorona + pulzáló prizma mag • Egyszerre 3 labdára!' }, paid: { type: 'effect', id: 'fx_p_godcrown', name: '👑 Istenkirály Halo', desc: 'Keringő aranymíves korona' } }
+  };
+
+  const stages = [];
+  for (let s = 1; s <= 50; s++) {
+    const sp = specials[s] || null;
+    const bricks = s === 1 ? 0 : Math.round((Math.pow(s - 1, 2.28) * 4750) / 500) * 500;
+    const freeBb = Math.max(1, Math.round(1 + (s - 1) * 0.22));
+    const freeBt = Math.max(1, Math.round(1 + (s - 1) * 0.28));
+    const paidAlt = s % 3 === 0
+      ? { type: 'currency', currency: 'bb', amount: Math.max(2, s * 2), name: `+${Math.max(2, s * 2)} Black Brick (BB)`, desc: 'Prémium BB csomag' }
+      : (s % 3 === 1
+          ? { type: 'currency', currency: 'bt', amount: Math.max(2, Math.ceil(s / 3)), name: `+${Math.max(2, Math.ceil(s / 3))} Boss Token (BT)`, desc: 'Prémium Boss Token csomag' }
+          : { type: 'currency', currency: 'money', amount: Math.round(Math.pow(s, 2.6) * 250), name: 'Prémium Pénzbónusz', desc: 'Exkluzív szezonális tőkeinjekció' });
+
+    stages.push({
+      stage: s,
+      bricks,
+      free: (sp && sp.free) ? sp.free : {
+        type: 'currency',
+        currency: 'bb_bt',
+        bb: freeBb,
+        bt: freeBt,
+        name: `+${freeBb} ⭐ BB & +${freeBt} 👑 BT`,
+        desc: `Szezon 2 • ${s}. szintű BB + BT jutalom`
+      },
+      paid: (sp && sp.paid) ? sp.paid : paidAlt
+    });
   }
-];
+  return stages;
+})();
 
 class IdleBreakoutGame {
   constructor() {
@@ -583,6 +574,7 @@ class IdleBreakoutGame {
     this.MAX_COIN_BALLS = 20;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
+    this.lastAdminEditAt = 0;
     this.clickPower = 1;
     this.clickUpgradeLevel = 1;
 
@@ -642,6 +634,27 @@ class IdleBreakoutGame {
     } catch (e) {}
     this._toastedMailIds = new Set();
     this._sessionStartedAt = Date.now();
+    this.prefs = {
+      floatingNumbers: true,
+      particles: true,
+      screenShake: true,
+      autoClickMilestone: true,
+      autoUpgrade: false,
+      autoBuyBalls: false
+    };
+    try {
+      const savedPrefs = localStorage.getItem('idle_breakout_prefs');
+      if (savedPrefs) {
+        const parsedPrefs = JSON.parse(savedPrefs);
+        if (parsedPrefs && typeof parsedPrefs === 'object') {
+          this.prefs = { ...this.prefs, ...parsedPrefs };
+        }
+      }
+    } catch (e) {}
+    this._autoClickMsTimer = 0;
+    this._autoUpgradeTimer = 0;
+    this._autoBuyBallsTimer = 0;
+    this._lastOfflineSummary = null;
     this.myPlayerId = localStorage.getItem('idle_breakout_player_id');
     if (!this.myPlayerId) {
       this.myPlayerId = 'p_' + Math.random().toString(36).substring(2, 8) + '_' + Date.now().toString(36);
@@ -670,13 +683,18 @@ class IdleBreakoutGame {
     this.devEditTarget = null;
     this.activeDevTab = 'players';
 
-    // Battle Pass System (30 Stages, Free Track + Paid Track 4999 Ft - Prémium sáv szigorúan zárolva!)
+    // Battle Pass System (50 Stages Season 2 + Preserved Legacy Cosmetics)
+    this.appliedSeasonResetId = null;
+    this.preservedCosmetics = { skins: [], effects: [], breakEffects: [] };
     this.totalBricksDestroyed = 0;
     this.battlePassClaimedFree = {};
     this.battlePassClaimedPaid = {};
     this.normalBallEquips = {}; // legacy save migration
-    this.ballTypeEquips = {};   // ballTypeKey -> { skinId, effectId }
+    this.ballTypeEquips = {};   // ballTypeKey -> { skinId, effectId, breakEffectId }
     this.activeBPTab = 'stages'; // 'stages' | 'armory'
+    this.activeBBTab = 'upgrades'; // 'upgrades' | 'fixed'
+    this.activeBBCardIndex = 0;
+    this.activeFixedCardIndex = 0;
     this.lastRenderedBPStage = null;
 
     // Base Speed Reference (1x = 3.7 - kicsit lassabb normál labda a kért 5-6 órás játékmenethez)
@@ -907,6 +925,9 @@ class IdleBreakoutGame {
     this.autoClickerStrikeCount = 0;
     this.lastAutoClickSoundAt = 0;
     this.pirateShopCooldown = 0;
+    this.pirateShopCooldownUntil = 0;
+    this.goldLevelCooldownUntil = 0;
+    this.freeUpgradeMaxCooldownUntil = 0;
 
     // Quick Time Money (Coin Orb) Event
     this.bonusOrb = null;
@@ -985,6 +1006,7 @@ class IdleBreakoutGame {
     this.bindEvents();
     this.initLeaderboard();
     this.initDevPanel();
+    this.updateMaintenanceOverlay(false);
     this.initMailSystem();
     this.initBattlePass();
     if (typeof CloudAuthManager !== 'undefined') {
@@ -1046,6 +1068,10 @@ class IdleBreakoutGame {
     const upgModal = document.getElementById('upgrades-modal');
     if (upgModal && upgModal.classList.contains('open')) {
       this.renderUpgradesMenu();
+    }
+    const bbModal = document.getElementById('powerup-upgrades-modal');
+    if (bbModal && bbModal.classList.contains('open')) {
+      this.renderPowerUpUpgradesModal();
     }
   }
 
@@ -1237,7 +1263,25 @@ class IdleBreakoutGame {
     for (let r = 0; r < activeRows; r++) {
       for (let c = 0; c < cols; c++) {
         const goldBase = 500 + Math.floor(Math.random() * 1501);
-        const brickHp = isGoldLevel ? Math.round(goldBase * Math.sqrt(lateHpMult)) : blockHp;
+        let specialType = null;
+        let hpMult = 1;
+        let moneyMult = 1;
+        if (!isGoldLevel && lvl >= 3) {
+          const spRoll = Math.random();
+          if (lvl >= 5 && spRoll < 0.09) {
+            specialType = 'armored';
+            hpMult = 1.6;
+            moneyMult = 2.5;
+          } else if (lvl >= 8 && spRoll < 0.16) {
+            specialType = 'regen';
+            hpMult = 1.2;
+            moneyMult = 2.2;
+          } else if (spRoll < 0.22) {
+            specialType = 'explosive';
+            moneyMult = 2.0;
+          }
+        }
+        const brickHp = isGoldLevel ? Math.round(goldBase * Math.sqrt(lateHpMult)) : Math.max(1, Math.round(blockHp * hpMult));
         this.bricks.push({
           id: `b_${lvl}_${idCounter++}`,
           x: perimeterPadding + c * brickW,
@@ -1250,6 +1294,9 @@ class IdleBreakoutGame {
           isGoldBoss: false,
           isGoldBrick: isGoldLevel,
           goldMoneyMult: isGoldLevel ? 20 : 1,
+          specialType,
+          moneyMult,
+          regenDelay: 0,
           flash: 0,
           shake: 0,
           poison: null,      // Normál blokkon egyszerre csak 1 méreg lehet!
@@ -1335,7 +1382,7 @@ class IdleBreakoutGame {
 
   // --- Block Break Debris Particles (A labda skinjének színével megegyező robbanási animáció) ---
   spawnBrickDestructionDebris(cx, cy, color, isBoss = false) {
-    if (this.suppressAudioAndVisuals || document.hidden) return;
+    if (this.suppressAudioAndVisuals || document.hidden || (this.prefs && !this.prefs.particles)) return;
     const count = isBoss ? 22 : 10;
     for (let i = 0; i < count; i++) {
       if (this.debrisParticles.length >= 140) this.debrisParticles.shift();
@@ -1359,19 +1406,88 @@ class IdleBreakoutGame {
     }
   }
 
+  getCosmeticMaxEquip(type, id) {
+    if (!id || id === 'default' || id === 'none') return 1;
+    const matchType = type === 'break_effect' ? 'break_effect' : type;
+    for (const stg of BATTLE_PASS_STAGES) {
+      if (stg.free && stg.free.type === matchType && stg.free.id === id) {
+        return Math.max(1, Number(stg.free.maxEquip) || 1);
+      }
+      if (stg.paid && stg.paid.type === matchType && stg.paid.id === id) {
+        return Math.max(1, Number(stg.paid.maxEquip) || 1);
+      }
+    }
+    return 1;
+  }
+
+  getMaxVisualCosmeticSlotsForEquip(eq) {
+    if (!eq) return 1;
+    return Math.max(
+      this.getCosmeticMaxEquip('skin', eq.skinId),
+      this.getCosmeticMaxEquip('effect', eq.effectId),
+      this.getCosmeticMaxEquip('break_effect', eq.breakEffectId)
+    );
+  }
+
   isPrimaryCosmeticBall(ball) {
+    return this.isCosmeticBallActive(ball, 'break_effect');
+  }
+
+  isCosmeticBallActive(ball, kind = 'skin') {
     if (!ball || ball.isPiercing || ball.isSplitChild) return false;
+    const eq = this.ballTypeEquips && this.ballTypeEquips[ball.type];
+    const id = kind === 'break_effect' ? eq?.breakEffectId : (kind === 'effect' ? eq?.effectId : eq?.skinId);
+    const cap = this.getCosmeticMaxEquip(kind, id);
+    let rank = 0;
     for (const candidate of this.balls) {
       if (!candidate.isPiercing && !candidate.isSplitChild && candidate.type === ball.type) {
-        return candidate === ball;
+        rank++;
+        if (candidate === ball) return rank <= cap;
+        if (rank >= cap) break;
       }
     }
     return false;
   }
 
+  // --- Breaking Effects (Explosion, Frost Shatter, Supernova, Glitch Burst) ---
+  spawnCustomBreakingEffect(breakFxId, cx, cy, color, isBoss = false) {
+    if (!breakFxId || breakFxId === 'none') return;
+    if (this.suppressAudioAndVisuals || document.hidden || (this.prefs && !this.prefs.particles)) return;
+    if (breakFxId === 'brk_explode') {
+      this.spawnBreakingExplosion(cx, cy, color, isBoss);
+      return;
+    }
+    const palette = breakFxId === 'brk_s2_frost'
+      ? ['186, 230, 253', '56, 189, 248', '#e0f2fe']
+      : (breakFxId === 'brk_s2_nova'
+          ? ['250, 204, 21', '168, 85, 247', '#fde047']
+          : ['6, 182, 212', '236, 72, 153', '#22d3ee']);
+    this.visualRings.push(
+      { x: cx, y: cy, radius: 5, maxRadius: isBoss ? 68 : 44, alpha: 0.92, color: palette[0], speed: 240 },
+      { x: cx, y: cy, radius: 8, maxRadius: isBoss ? 92 : 62, alpha: 0.78, color: palette[1], speed: 300 }
+    );
+    const chunkCount = isBoss ? 12 : 8;
+    for (let i = 0; i < chunkCount; i++) {
+      if (this.debrisParticles.length >= 220) this.debrisParticles.shift();
+      const angle = (Math.PI * 2 * (i / chunkCount)) + (Math.random() - 0.5) * 0.4;
+      const speed = 115 + Math.random() * 130;
+      const life = 0.34 + Math.random() * 0.22;
+      this.debrisParticles.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 25,
+        size: 4 + Math.random() * 2.5,
+        color: palette[2],
+        life,
+        maxLife: life
+      });
+    }
+  }
+
   // --- Breaking Effect: Blokk Robbanás Animáció (Stage 5) ---
   spawnBreakingExplosion(cx, cy, color, isBoss = false) {
-    if (this.suppressAudioAndVisuals || document.hidden) return;
+    if (this.suppressAudioAndVisuals || document.hidden || (this.prefs && !this.prefs.particles)) return;
     this.visualRings.push(
       { x: cx, y: cy, radius: 4, maxRadius: isBoss ? 56 : 36, alpha: 0.98, color: '254, 240, 138', speed: 230 },
       { x: cx, y: cy, radius: 8, maxRadius: isBoss ? 84 : 58, alpha: 0.92, color: '249, 115, 22', speed: 270 },
@@ -1453,10 +1569,18 @@ class IdleBreakoutGame {
       actualDmg *= this.getDamageMultiplier();
     }
 
+    // Armored brick takes 30% less direct ball/click damage (DoT/Pierce/Explosion bypass armor)
+    if (brick.specialType === 'armored' && source !== 'piercing_special' && source !== 'dot' && source !== 'brick_explosion' && !options.instantKill) {
+      actualDmg = Math.max(0.01, actualDmg * 0.7);
+    }
+
     actualDmg = Math.min(brick.hp, Math.max(0.01, actualDmg));
     brick.hp -= actualDmg;
     if (brick.hp < 0.001) brick.hp = 0;
     brick.flash = 0.09;
+    if (brick.specialType === 'regen') {
+      brick.regenDelay = 2.5;
+    }
     if (brick.isBoss) {
       brick.shake = Math.min(6, (brick.shake || 0) + 2.2);
     }
@@ -1470,6 +1594,8 @@ class IdleBreakoutGame {
       }
     } else if (brick.isGoldBrick) {
       baseRewardPerDmg *= (brick.goldMoneyMult || 20);
+    } else if (brick.moneyMult && brick.moneyMult > 1) {
+      baseRewardPerDmg *= brick.moneyMult;
     }
 
     let reward = actualDmg * baseRewardPerDmg * this.rebirthMultiplier;
@@ -1491,7 +1617,7 @@ class IdleBreakoutGame {
           : `+$${this.formatNumber(Math.max(1, Math.round(reward)))}`;
         this.addFloatingText(moneyLabel, brick.x + brick.w / 2, brick.y + brick.h / 2, source === 'coin' ? '#facc15' : undefined);
       }
-      if (brick.isBoss && this.bossSparks.length < 30) {
+      if (brick.isBoss && this.bossSparks.length < 30 && (!this.prefs || this.prefs.particles)) {
         this.bossSparks.push({
           x: brick.x + Math.random() * brick.w,
           y: brick.y + Math.random() * brick.h,
@@ -1507,15 +1633,13 @@ class IdleBreakoutGame {
       this.totalBricksDestroyed++;
       this.updateBattlePassHUD();
 
-      const hasExplodeBreakFx = !!(
-        options.ball &&
-        this.isPrimaryCosmeticBall(options.ball) &&
-        this.ballTypeEquips?.[options.ball.type]?.breakEffectId === 'brk_explode'
-      );
+      const breakFxId = (options.ball && this.isCosmeticBallActive(options.ball, 'break_effect'))
+        ? (this.ballTypeEquips?.[options.ball.type]?.breakEffectId || 'none')
+        : 'none';
 
-      if (hasExplodeBreakFx) {
+      if (breakFxId && breakFxId !== 'none') {
         if (!silent && window.soundEngine) window.soundEngine.playExplosion();
-        this.spawnBreakingExplosion(brick.x + brick.w / 2, brick.y + brick.h / 2, preHitColor, brick.isBoss);
+        this.spawnCustomBreakingEffect(breakFxId, brick.x + brick.w / 2, brick.y + brick.h / 2, preHitColor, brick.isBoss);
       } else {
         if (!silent && window.soundEngine) window.soundEngine.playBrickDestroy(brick.isBoss ? 5 : 1);
         // A blokk azonnali / közvetlen ütés előtti HP-színének megfelelő robbanási részecskék
@@ -1556,7 +1680,20 @@ class IdleBreakoutGame {
             this.syncWalletChangeNow(false);
           }
         }
-        if (source !== 'piercing_special' && source !== 'shockwave' && source !== 'dot') {
+        if (brick.specialType === 'explosive' && source !== 'brick_explosion') {
+          const ex = brick.x + brick.w / 2;
+          const ey = brick.y + brick.h / 2;
+          const blastRadius = 95;
+          if (!silent && (!this.prefs || this.prefs.particles)) {
+            this.visualRings.push({ x: ex, y: ey, radius: 10, maxRadius: blastRadius, alpha: 0.9, color: '249, 115, 22', speed: 280 });
+          }
+          const blastDmg = Math.max(1, Math.round(brick.maxHp * 1.8));
+          const nearby = this.bricks.filter(b => b !== brick && b.hp > 0 && Math.hypot((b.x + b.w / 2) - ex, (b.y + b.h / 2) - ey) <= blastRadius);
+          for (const nb of nearby) {
+            this.damageBrick(nb, blastDmg, 'brick_explosion');
+          }
+        }
+        if (source !== 'piercing_special' && source !== 'shockwave' && source !== 'dot' && source !== 'brick_explosion') {
           this.rollPowerUpDrop(brick.x + brick.w / 2, brick.y + brick.h / 2);
         }
       }
@@ -1760,27 +1897,28 @@ class IdleBreakoutGame {
       return;
     }
 
-    // Kiegyensúlyozott power-up esély-eloszlás:
-    // - Erős bónuszok (2x Money, 2x Damage, Gold Boss, Shock Wave): mérsékelt 2.2 - 2.6 esély
-    // - Hasznos ritkább bónuszok (Speed, Discount, Pierce, Auto Clicker, Free Upg): 0.70 - 0.95 esély
-    // - Maxolt Pirate Shop (Discount Lv 5): nagyon ritka (0.12 súly + 5 perc cooldown)
-    // - Gold Level (csak Rebirth 15 fölött!): 0.08 esély (~0.6% power-up dobásból)
-    const discountWeight = (this.bbUpgrades.discount >= 5) ? 0.12 : 0.85;
+    // Kiegyensúlyozott power-up esély-eloszlás fix 14.0 nevezővel (maxolt fix BB fejlesztések NEM növelik a ritka dobások esélyét!):
+    const FULL_POOL_WEIGHT = 14.0;
+    const nowMs = Date.now();
+    const allBBMaxed = Object.keys(this.bbUpgrades).every(k => (this.bbUpgrades[k] || 0) >= 5);
+    const discountWeight = (this.bbUpgrades.discount >= 5) ? 0.06 : 0.85;
+    const freeUpgWeight = allBBMaxed ? 0.12 : 0.35;
     const candidates = [
+      { id: 'shockwave',    weight: 2.6  },
       { id: '2x_money',     weight: 2.2  },
       { id: '2x_dmg',       weight: 2.2  },
-      { id: 'gold_boss',    weight: 2.4  },
-      { id: 'shockwave',    weight: 2.6  },
-      { id: 'discount',     weight: discountWeight },
+      { id: 'gold_boss',    weight: 1.5  },
       { id: 'piercing',     weight: 0.95 },
       { id: 'speed_boost',  weight: 0.90 },
       { id: 'auto_clicker', weight: 0.85 },
-      { id: 'free_upgrade', weight: 0.70 },
-      { id: 'gold_level',   weight: 0.08 }
+      { id: 'discount',     weight: discountWeight },
+      { id: 'free_upgrade', weight: freeUpgWeight },
+      { id: 'gold_level',   weight: 0.05 }
     ].filter(c => {
       if (c.id === 'gold_boss' && this.nextBossIsGold) return false;
-      if (c.id === 'gold_level' && (this.rebirthCount <= 15 || this.nextLevelIsGold || this.isGoldLevelActive)) return false;
-      if (c.id === 'discount' && this.bbUpgrades.discount >= 5 && (this.pirateShopCooldown || 0) > 0) return false;
+      if (c.id === 'gold_level' && (this.rebirthCount <= 15 || this.nextLevelIsGold || this.isGoldLevelActive || nowMs < (this.goldLevelCooldownUntil || 0))) return false;
+      if (c.id === 'discount' && this.bbUpgrades.discount >= 5 && ((this.pirateShopCooldown || 0) > 0 || nowMs < (this.pirateShopCooldownUntil || 0))) return false;
+      if (c.id === 'free_upgrade' && allBBMaxed && nowMs < (this.freeUpgradeMaxCooldownUntil || 0)) return false;
       if (c.id === 'auto_clicker' && this.bbUpgrades.autoClicker >= 1) return false;
       const active = this.activePowerUps[c.id];
       if (active && (active.mode === 'until_rebirth' || active.mode === 'forever') && c.id !== 'piercing') return false;
@@ -1790,7 +1928,9 @@ class IdleBreakoutGame {
     if (candidates.length === 0) return;
 
     const totalWeight = candidates.reduce((acc, c) => acc + c.weight, 0);
-    let pick = Math.random() * totalWeight;
+    const rollDenom = Math.max(FULL_POOL_WEIGHT, totalWeight);
+    let pick = Math.random() * rollDenom;
+    if (pick > totalWeight) return;
     let chosenId = candidates[0].id;
     for (const c of candidates) {
       pick -= c.weight;
@@ -1897,6 +2037,7 @@ class IdleBreakoutGame {
       }
 
       case 'gold_level': {
+        this.goldLevelCooldownUntil = Date.now() + 900 * 1000;
         this.nextLevelIsGold = true;
         this.activatePowerUp('gold_level', '🌟', 'Gold Level', 'A következő normál pálya minden blokkja 500–2000 HP, 20x pénz + ⭐ BB és 👑 BT jutalom lesz!', { mode: 'until_rebirth' });
         this.showToast('🌟 <strong>GOLD LEVEL BEÉLESÍTVE!</strong> A következő normál pálya 20x pénzt, plusz ⭐ BB és 👑 BT jutalmat ad!', 4500);
@@ -1920,7 +2061,8 @@ class IdleBreakoutGame {
       case 'discount': {
         const lvl = this.bbUpgrades.discount;
         if (lvl >= 5) {
-          this.pirateShopCooldown = 300;
+          this.pirateShopCooldown = 600;
+          this.pirateShopCooldownUntil = Date.now() + 600 * 1000;
           this.activatePowerUp('discount', '🏴‍☠️', 'PIRATE SHOP', 'MINDEN labda és kurzor fejlesztés INGYENES 5 mp-ig!', { mode: 'timed', duration: 5, extra: { discountPct: 100 } });
           this.showToast('🏴‍☠️ <strong>PIRATE SHOP AKTÍV (5 mp)!</strong> Minden labda és kurzor upgrade INGYENES!');
         } else {
@@ -1948,6 +2090,7 @@ class IdleBreakoutGame {
   grantRandomFreeUpgrade() {
     const upgradable = BB_UPGRADE_CATALOG.filter(item => (this.bbUpgrades[item.key] || 0) < 5);
     if (upgradable.length === 0) {
+      this.freeUpgradeMaxCooldownUntil = Date.now() + 180 * 1000;
       this.bb += 5;
       this.showToast('🎁 <strong>INGYENES FEJLESZTÉS:</strong> Minden maxon van ➔ <span style="color:#fde047;">+5 BB!</span>');
       this.updateHUD();
@@ -2705,6 +2848,8 @@ class IdleBreakoutGame {
       this.updateHUD();
       this.renderUpgradesMenu();
       this.renderBattlePass();
+      this.save();
+      if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
     }
   }
 
@@ -2838,6 +2983,8 @@ class IdleBreakoutGame {
       this.updateHUD();
       this.renderUpgradesMenu();
       this.renderBattlePass();
+      this.save();
+      if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
     }
   }
 
@@ -2900,6 +3047,8 @@ class IdleBreakoutGame {
       this.updateHUD();
       this.renderUpgradesMenu();
       this.renderBattlePass();
+      this.save();
+      if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
     }
   }
 
@@ -2929,6 +3078,8 @@ class IdleBreakoutGame {
       this.updateHUD();
       this.renderUpgradesMenu();
       this.renderBattlePass();
+      this.save();
+      if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
     }
   }
 
@@ -2943,6 +3094,8 @@ class IdleBreakoutGame {
       if (window.soundEngine) window.soundEngine.playCoin();
       this.updateHUD();
       this.renderUpgradesMenu();
+      this.save();
+      if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
     }
   }
 
@@ -2970,6 +3123,7 @@ class IdleBreakoutGame {
       this.updateHUD();
       this.renderUpgradesMenu();
       this.save();
+      if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
     }
   }
 
@@ -3154,11 +3308,12 @@ class IdleBreakoutGame {
 
   // --- Impact Arena Micro-Shake & Floating Combat Texts ---
   triggerScreenShake(intensity = 2.5, cap = 6.5) {
-    if (this.suppressAudioAndVisuals || document.hidden) return;
+    if (this.suppressAudioAndVisuals || document.hidden || (this.prefs && !this.prefs.screenShake)) return;
     this.screenShake = Math.min(cap, Math.max(this.screenShake || 0, intensity));
   }
 
   addFloatingText(txt, x, y, color = '#2cd64e') {
+    if (this.prefs && !this.prefs.floatingNumbers) return;
     if (this.floatingTexts.length > 32) this.floatingTexts.shift();
     this.floatingTexts.push({
       text: txt,
@@ -3294,8 +3449,74 @@ class IdleBreakoutGame {
     window.addEventListener('pagehide', () => this.save());
   }
 
+  // --- Rebirth Milestones Automation (Auto-Click / Auto-Upgrade / Auto-Buy Balls) ---
+  tickRebirthAutomation(dt) {
+    const prefs = this.prefs || {};
+    if (this.rebirthCount >= 3 && prefs.autoClickMs) {
+      this._autoClickMsTimer = (this._autoClickMsTimer || 0) + dt;
+      if (this._autoClickMsTimer >= 1.0) {
+        this._autoClickMsTimer = 0;
+        const alive = this.bricks.filter(b => b.hp > 0);
+        if (alive.length > 0) {
+          const target = alive[Math.floor(Math.random() * alive.length)];
+          this.performClickAt(target.x + target.w / 2, target.y + target.h / 2, false);
+        }
+      }
+    }
+
+    if (this.rebirthCount >= 5 && prefs.autoUpgrade) {
+      this._autoUpgradeTimer = (this._autoUpgradeTimer || 0) + dt;
+      if (this._autoUpgradeTimer >= 0.9) {
+        this._autoUpgradeTimer = 0;
+        let best = null;
+        for (const key in this.ballTypes) {
+          const b = this.ballTypes[key];
+          if (b.count <= 0) continue;
+          if (b.speedLevel < b.maxSpeedLevel) {
+            const c = this.getSpeedUpgradeCost(key);
+            if (this.money >= c && (!best || c < best.cost)) best = { kind: 'spd', key, cost: c };
+          }
+          if (b.powerLevel < b.maxPowerLevel) {
+            const c = this.getPowerUpgradeCost(key);
+            if (this.money >= c && (!best || c < best.cost)) best = { kind: 'pwr', key, cost: c };
+          }
+        }
+        if (this.clickUpgradeLevel < this.MAX_CLICK_LEVEL) {
+          const c = this.getClickUpgradeCost();
+          if (this.money >= c && (!best || c < best.cost)) best = { kind: 'click', key: null, cost: c };
+        }
+        if (best) {
+          if (best.kind === 'spd') this.upgradeBallSpeed(best.key);
+          else if (best.kind === 'pwr') this.upgradeBallPower(best.key);
+          else if (best.kind === 'click') this.upgradeClick();
+        }
+      }
+    }
+
+    if (this.rebirthCount >= 10 && prefs.autoBuyBalls) {
+      this._autoBuyBallsTimer = (this._autoBuyBallsTimer || 0) + dt;
+      if (this._autoBuyBallsTimer >= 1.1) {
+        this._autoBuyBallsTimer = 0;
+        if (this.getTotalBalls() < this.getMaxBalls()) {
+          const keys = Object.keys(this.ballTypes).reverse();
+          for (const key of keys) {
+            const b = this.ballTypes[key];
+            const limit = this.getMaxBallTypeLimit(key);
+            if (limit !== null && b.count >= limit) continue;
+            const cost = this.getBallCost(key);
+            if (this.money >= cost) {
+              this.buyBall(key);
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
   // --- Core Simulation Step ---
   stepSimulation(dt, isBackground = false) {
+    if (this.isMaintenanceBlocked()) return;
     this.animTime += dt;
 
     // 1. Update Power-ups (Shockwave, Auto Clicker, Timers)
@@ -3330,6 +3551,17 @@ class IdleBreakoutGame {
       for (const b of this.bricks) {
         if (b.flash > 0) b.flash -= dt;
         if (b.shake > 0) b.shake = Math.max(0, b.shake - dt * 18);
+        if (b.hp > 0 && b.specialType === 'regen' && b.hp < b.maxHp) {
+          if ((b.regenDelay || 0) > 0) {
+            b.regenDelay = Math.max(0, b.regenDelay - dt);
+          } else {
+            b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.04 * dt);
+          }
+        }
+      }
+
+      if (!isBackground) {
+        this.tickRebirthAutomation(dt);
       }
 
       for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
@@ -3431,6 +3663,9 @@ class IdleBreakoutGame {
 
     const startMoney = this.money;
     const startLevel = this.level;
+    const startBB = this.bb;
+    const startBT = this.bossTokens;
+    const startBricks = this.totalBricksDestroyed;
 
     if (cappedSec <= 120) {
       const fixedDt = 1 / 30;
@@ -3534,12 +3769,33 @@ class IdleBreakoutGame {
       this.cloud.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
     }
 
-    if (showToast) {
-      const gainedMoney = Math.floor(this.money - startMoney);
-      const gainedLevels = this.level - startLevel;
-      if (gainedMoney > 0 || gainedLevels > 0) {
-        const lvlText = gainedLevels > 0 ? ` | +${gainedLevels} szint` : '';
-        this.showToast(`⏱️ <strong>OFFLINE HALADÁS (${this.formatDuration(cappedSec)}):</strong> <span style="color:#2cd64e;">+$${gainedMoney.toLocaleString()}</span>${lvlText}`, 6500);
+    const gainedMoney = Math.max(0, Math.floor(this.money - startMoney));
+    const gainedLevels = Math.max(0, this.level - startLevel);
+    const gainedBricks = Math.max(0, this.totalBricksDestroyed - startBricks);
+    const gainedBB = Math.max(0, this.bb - startBB);
+    const gainedBT = Math.max(0, this.bossTokens - startBT);
+
+    if (gainedMoney > 0 || gainedLevels > 0 || gainedBricks > 0 || gainedBB > 0 || gainedBT > 0) {
+      const summary = {
+        seconds: cappedSec,
+        money: gainedMoney,
+        levels: gainedLevels,
+        bricks: gainedBricks,
+        bb: gainedBB,
+        bt: gainedBT
+      };
+      this._lastOfflineSummary = summary;
+      if (showToast) {
+        setTimeout(() => {
+          const welcomeEl = document.getElementById('welcome-menu-modal');
+          const welcomeOpen = !!(welcomeEl && welcomeEl.classList.contains('open'));
+          if (!welcomeOpen && typeof this.showOfflineSummaryModal === 'function') {
+            this.showOfflineSummaryModal(summary);
+          } else {
+            const lvlText = gainedLevels > 0 ? ` | +${gainedLevels} szint` : '';
+            this.showToast(`⏱️ <strong>OFFLINE HALADÁS (${this.formatDuration(cappedSec)}):</strong> <span style="color:#2cd64e;">+$${this.formatNumber(gainedMoney)}</span>${lvlText}`, 6500);
+          }
+        }, 180);
       }
     }
   }
@@ -4204,11 +4460,18 @@ class IdleBreakoutGame {
         }
 
         this.ctx.lineWidth = 2;
-        this.ctx.strokeStyle = b.isGoldBrick ? '#78350f' : '#000000';
+        this.ctx.strokeStyle = b.isGoldBrick
+          ? '#78350f'
+          : (b.specialType === 'armored' ? '#334155' : (b.specialType === 'regen' ? '#15803d' : (b.specialType === 'explosive' ? '#ea580c' : '#000000')));
         this.ctx.strokeRect(b.x, b.y, b.w, b.h);
+        if (b.specialType === 'armored') {
+          this.ctx.strokeStyle = 'rgba(226, 232, 240, 0.72)';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.strokeRect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
+        }
 
         const hpNum = Math.ceil(b.hp);
-        const hpStr = hpNum.toString();
+        const hpStr = hpNum >= 1000 ? this.formatNumber(hpNum) : hpNum.toString();
         if (b.poison) {
           // Ha mérgezett a blokk: HP feljebb, alatta jól olvasható "x dmg/s" jelzés!
           this.ctx.font = `bold ${hpStr.length >= 4 ? 13 : 15}px "VT323", "Courier New", Courier, monospace`;
@@ -4223,6 +4486,12 @@ class IdleBreakoutGame {
           this.ctx.font = `bold ${hpStr.length >= 4 ? 14 : 16}px "VT323", "Courier New", Courier, monospace`;
           this.ctx.fillStyle = b.isGoldBrick ? '#451a03' : '#000000';
           this.ctx.fillText(hpStr, b.x + b.w / 2, b.y + b.h / 2);
+        }
+        if (b.specialType) {
+          const spBadge = b.specialType === 'armored' ? '🛡️' : (b.specialType === 'regen' ? '✚' : '💣');
+          this.ctx.font = 'bold 10px sans-serif';
+          this.ctx.fillStyle = b.specialType === 'regen' ? '#065f46' : '#111827';
+          this.ctx.fillText(spBadge, b.x + b.w - 8, b.y + 8);
         }
       }
     }
@@ -4325,8 +4594,8 @@ class IdleBreakoutGame {
     // 3.5 Draw Animated Ball Trails & Visual Accents
     this.drawBallTrails();
 
-    // 4. Draw Balls (All 9 types visually distinct + Pierce Ball + Universal Cosmetics)
-    const cosmeticAppliedForType = {};
+    // 4. Draw Balls (All 10 types visually distinct + Pierce Ball + Universal Multi-Ball Cosmetics)
+    const cosmeticCountForType = {};
     for (const ball of this.balls) {
       this.ctx.save();
       if (ball.isPiercing) {
@@ -4348,22 +4617,33 @@ class IdleBreakoutGame {
       }
 
       let activeEquip = null;
-      if (!ball.isSplitChild && !cosmeticAppliedForType[ball.type]) {
-        cosmeticAppliedForType[ball.type] = true;
+      if (!ball.isSplitChild) {
+        cosmeticCountForType[ball.type] = (cosmeticCountForType[ball.type] || 0) + 1;
+        const rank = cosmeticCountForType[ball.type];
         const eq = this.ballTypeEquips && this.ballTypeEquips[ball.type];
-        if (eq && ((eq.skinId && eq.skinId !== 'default') || (eq.effectId && eq.effectId !== 'none') || (eq.breakEffectId && eq.breakEffectId !== 'none'))) {
-          activeEquip = eq;
+        if (eq) {
+          const skinId = (eq.skinId && eq.skinId !== 'default' && rank <= this.getCosmeticMaxEquip('skin', eq.skinId)) ? eq.skinId : 'default';
+          const effectId = (eq.effectId && eq.effectId !== 'none' && rank <= this.getCosmeticMaxEquip('effect', eq.effectId)) ? eq.effectId : 'none';
+          const breakEffectId = (eq.breakEffectId && eq.breakEffectId !== 'none' && rank <= this.getCosmeticMaxEquip('break_effect', eq.breakEffectId)) ? eq.breakEffectId : 'none';
+          if (skinId !== 'default' || effectId !== 'none' || breakEffectId !== 'none') {
+            activeEquip = { skinId, effectId, breakEffectId };
+          }
         }
       }
 
       if (activeEquip && activeEquip.effectId && activeEquip.effectId !== 'none') {
         this.drawCosmeticEffectLayer(this.ctx, ball, activeEquip.effectId);
       }
-      if (activeEquip && activeEquip.breakEffectId === 'brk_explode') {
+      if (activeEquip && activeEquip.breakEffectId && activeEquip.breakEffectId !== 'none') {
+        const ringClr = activeEquip.breakEffectId === 'brk_s2_frost'
+          ? 'rgba(56, 189, 248, 0.78)'
+          : (activeEquip.breakEffectId === 'brk_s2_nova'
+              ? 'rgba(250, 204, 21, 0.78)'
+              : (activeEquip.breakEffectId === 'brk_s2_glitch' ? 'rgba(6, 182, 212, 0.8)' : 'rgba(249, 115, 22, 0.72)'));
         this.ctx.save();
         this.ctx.beginPath();
         this.ctx.arc(ball.x, ball.y, ball.radius + 3.5 + Math.sin(this.animTime * 11) * 1.2, 0, Math.PI * 2);
-        this.ctx.strokeStyle = 'rgba(249, 115, 22, 0.72)';
+        this.ctx.strokeStyle = ringClr;
         this.ctx.lineWidth = 1.8;
         this.ctx.stroke();
         this.ctx.restore();
@@ -4649,10 +4929,10 @@ class IdleBreakoutGame {
       }
     }
 
-    document.title = `LVL ${this.level} | $${this.formatNumber(Math.floor(this.money))} - Idle Breakout`;
+    document.title = `LVL ${this.level} | $${this.formatNumber(Math.floor(this.money))} - Idle Block Breaker 2.0`;
   }
 
-  // --- Boss Token Exchange (10 Boss Token ➔ +1 BB) ---
+  // --- Boss Token Exchange (5 Boss Token ➔ +1 BB) ---
   updateBossTokenExchangeUI() {
     const canExchange = this.bossTokens >= this.BOSS_TOKEN_COST;
 
@@ -4682,14 +4962,25 @@ class IdleBreakoutGame {
     this.refreshOpenModals();
     this.save();
     this.syncWalletChangeNow(true);
+    if (this.cloud && this.cloud.currentUser) this.cloud.scheduleLiveCloudSync(1200);
   }
 
   formatNumber(num) {
-    if (num === 0) return '0';
-    if (num < 1000) return Math.round(num).toString();
-    if (num < 1_000_000) return (num / 1000).toFixed(1) + 'K';
-    if (num < 1_000_000_000) return (num / 1_000_000).toFixed(1) + 'M';
-    return (num / 1_000_000_000).toFixed(1) + 'B';
+    const n = Number(num) || 0;
+    if (n === 0) return '0';
+    if (Math.abs(n) < 1000) return Math.round(n).toString();
+    const units = [
+      { v: 1e18, s: 'Qi' },
+      { v: 1e15, s: 'Qa' },
+      { v: 1e12, s: 'T' },
+      { v: 1e9, s: 'B' },
+      { v: 1e6, s: 'M' },
+      { v: 1e3, s: 'K' }
+    ];
+    for (const u of units) {
+      if (Math.abs(n) >= u.v) return (n / u.v).toFixed(1) + u.s;
+    }
+    return Math.round(n).toString();
   }
 
   formatApproxMoney(num) {
@@ -4699,19 +4990,21 @@ class IdleBreakoutGame {
       const rounded = v < 100 ? Math.round(v / 10) * 10 : Math.round(v / 50) * 50;
       return `~$${Math.max(10, rounded)}`;
     }
-    if (v < 1_000_000) {
-      const k = v / 1000;
-      return `~$${v >= 100_000 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, '')}K`;
+    const units = [
+      { val: 1e18, s: 'Qi' },
+      { val: 1e15, s: 'Qa' },
+      { val: 1e12, s: 'T' },
+      { val: 1e9, s: 'B' },
+      { val: 1e6, s: 'M' },
+      { val: 1e3, s: 'K' }
+    ];
+    for (const u of units) {
+      if (v >= u.val) {
+        const q = v / u.val;
+        return `~$${v >= u.val * 100 ? Math.round(q) : q.toFixed(1).replace(/\.0$/, '')}${u.s}`;
+      }
     }
-    if (v < 1_000_000_000) {
-      const m = v / 1_000_000;
-      return `~$${v >= 100_000_000 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, '')}M`;
-    }
-    if (v < 1_000_000_000_000) {
-      const b = v / 1_000_000_000;
-      return `~$${v >= 100_000_000_000 ? Math.round(b) : b.toFixed(1).replace(/\.0$/, '')}B`;
-    }
-    return `~$${(v / 1_000_000_000_000).toFixed(1).replace(/\.0$/, '')}T`;
+    return `~$${Math.round(v)}`;
   }
 
   estimateApproxMoney(level, rebirths) {
@@ -4847,51 +5140,55 @@ class IdleBreakoutGame {
         : '';
 
       col.innerHTML = `
-        <div class="ball-card-head">
-          <div class="ball-title-label">
-            <span class="ball-count-badge">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
-            <span class="ball-card-name">${b.name}</span>
-            <span class="ball-card-desc">${b.shortDesc}${coinDescExtra}</span>
-          </div>
-          <div class="ball-dot ball-icon-${key}"></div>
-        </div>
-
-        <div class="ball-stat-chart" aria-label="${b.name} statisztikák">
-          <div class="stat-col-item">
-            <div class="stat-col-val">${displaySpdPct}%</div>
-            <div class="stat-col-track">
-              ${!spdMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${spdNextPct}%;"></div>` : ''}
-              <div class="stat-col-fill speed-fill" style="height: ${spdPct}%;"></div>
+        <div class="ball-card-info-col">
+          <div class="ball-card-head">
+            <div class="ball-title-label">
+              <span class="ball-count-badge">(x${b.count}${typeLimit !== null ? '/' + typeLimit : ''})</span>
+              <span class="ball-card-name">${b.name}</span>
+              <span class="ball-card-desc">${b.shortDesc}${coinDescExtra}</span>
             </div>
-            <div class="stat-col-label">⚡ SEB.</div>
-            <div class="stat-col-gain">${spdMaxed ? 'MAX' : `+${displaySpdStep}%`}</div>
+            <div class="ball-dot ball-icon-${key}"></div>
           </div>
-          <div class="stat-col-item">
-            <div class="stat-col-val">${isCoinBall ? '$' + fmtStat(curPwr) : displayPwrPct + '%'}</div>
-            <div class="stat-col-track">
-              ${!pwrMaxed ? `<div class="stat-col-preview ${isCoinBall ? 'coin-preview' : 'power-preview'}" style="height: ${pwrNextPct}%;"></div>` : ''}
-              <div class="stat-col-fill ${isCoinBall ? 'coin-fill' : 'power-fill'}" style="height: ${pwrPct}%;"></div>
+
+          <div class="ball-stat-chart" aria-label="${b.name} statisztikák">
+            <div class="stat-col-item">
+              <div class="stat-col-val">${displaySpdPct}%</div>
+              <div class="stat-col-track">
+                ${!spdMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${spdNextPct}%;"></div>` : ''}
+                <div class="stat-col-fill speed-fill" style="height: ${spdPct}%;"></div>
+              </div>
+              <div class="stat-col-label">⚡ SEB.</div>
+              <div class="stat-col-gain">${spdMaxed ? 'MAX' : `+${displaySpdStep}%`}</div>
             </div>
-            <div class="stat-col-label">${isCoinBall ? '🪙 PÉNZ/ÜT' : '💥 SEBZÉS'}</div>
-            <div class="stat-col-gain">${pwrMaxed ? 'MAX' : (isCoinBall ? '+$1' : '+' + displayPwrStepPct + '%')}</div>
+            <div class="stat-col-item">
+              <div class="stat-col-val">${isCoinBall ? '$' + fmtStat(curPwr) : displayPwrPct + '%'}</div>
+              <div class="stat-col-track">
+                ${!pwrMaxed ? `<div class="stat-col-preview ${isCoinBall ? 'coin-preview' : 'power-preview'}" style="height: ${pwrNextPct}%;"></div>` : ''}
+                <div class="stat-col-fill ${isCoinBall ? 'coin-fill' : 'power-fill'}" style="height: ${pwrPct}%;"></div>
+              </div>
+              <div class="stat-col-label">${isCoinBall ? '🪙 PÉNZ/ÜT' : '💥 SEBZÉS'}</div>
+              <div class="stat-col-gain">${pwrMaxed ? 'MAX' : (isCoinBall ? '+$1' : '+' + displayPwrStepPct + '%')}</div>
+            </div>
           </div>
         </div>
 
-        <div class="ball-upg-btn-grid">
-          <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
-            <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+${displaySpdStep}%)`}</div>
-            <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
-          </button>
+        <div class="ball-card-actions-col">
+          <div class="ball-upg-btn-grid">
+            <button class="ball-upgrade-btn ${spdClass}" id="btn-upg-spd-${key}" ${spdMaxed ? 'disabled' : ''}>
+              <div class="btn-top-info">${spdMaxed ? `Speed MAX (${b.maxSpeedLevel})` : `Speed ${b.speedLevel}/${b.maxSpeedLevel} (+${displaySpdStep}%)`}</div>
+              <div class="btn-cost-bottom">${spdMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(spdCost))}</div>
+            </button>
 
-          <button class="ball-upgrade-btn ${pwrClass}" id="btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
-            <div class="btn-top-info">${pwrMaxed ? (isCoinBall ? `Coin MAX ($${b.maxPowerLevel}/üt)` : `Power MAX (${b.maxPowerLevel})`) : (isCoinBall ? `Coin ${b.powerLevel}/${b.maxPowerLevel} (+$1/üt)` : `Power ${b.powerLevel}/${b.maxPowerLevel} (+${displayPwrStepPct}%)`)}</div>
-            <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
-          </button>
+            <button class="ball-upgrade-btn ${pwrClass}" id="btn-upg-pwr-${key}" ${pwrMaxed ? 'disabled' : ''}>
+              <div class="btn-top-info">${pwrMaxed ? (isCoinBall ? `Coin MAX ($${b.maxPowerLevel}/üt)` : `Power MAX (${b.maxPowerLevel})`) : (isCoinBall ? `Coin ${b.powerLevel}/${b.maxPowerLevel} (+$1/üt)` : `Power ${b.powerLevel}/${b.maxPowerLevel} (+${displayPwrStepPct}%)`)}</div>
+              <div class="btn-cost-bottom">${pwrMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pwrCost))}</div>
+            </button>
+          </div>
+
+          ${btBtnHtml}
+
+          <button class="delete-ball-btn" id="btn-del-ball-${key}">DELETE x1</button>
         </div>
-
-        ${btBtnHtml}
-
-        <button class="delete-ball-btn" id="btn-del-ball-${key}">DELETE x1</button>
       `;
 
       builtCards.push({ label: b.name, el: col });
@@ -4938,31 +5235,35 @@ class IdleBreakoutGame {
       const pierceCol = document.createElement('div');
       pierceCol.className = 'ball-upgrade-section';
       pierceCol.innerHTML = `
-        <div class="ball-card-head">
-          <div class="ball-title-label">
-            <span class="ball-count-badge" style="color: #b45309;">PIERCE LVL 5 BONUS</span>
-            <span class="ball-card-name">⚡ PIERCE SPEED</span>
-            <span class="ball-card-desc">Külön áttörő sebesség</span>
-          </div>
-          <div style="font-size: 20px;">⚡</div>
-        </div>
-
-        <div class="ball-stat-chart single-col">
-          <div class="stat-col-item">
-            <div class="stat-col-val">${curMult}x</div>
-            <div class="stat-col-track">
-              ${!pierceMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${pNextPct}%;"></div>` : ''}
-              <div class="stat-col-fill speed-fill" style="height: ${pPct}%;"></div>
+        <div class="ball-card-info-col">
+          <div class="ball-card-head">
+            <div class="ball-title-label">
+              <span class="ball-count-badge" style="color: #b45309;">PIERCE LVL 5 BONUS</span>
+              <span class="ball-card-name">⚡ PIERCE SPEED</span>
+              <span class="ball-card-desc">Külön áttörő sebesség</span>
             </div>
-            <div class="stat-col-label">⚡ ÁTTÖRŐ</div>
-            <div class="stat-col-gain">${pierceMaxed ? 'MAX' : '+0.5x'}</div>
+            <div style="font-size: 20px;">⚡</div>
+          </div>
+
+          <div class="ball-stat-chart single-col">
+            <div class="stat-col-item">
+              <div class="stat-col-val">${curMult}x</div>
+              <div class="stat-col-track">
+                ${!pierceMaxed ? `<div class="stat-col-preview speed-preview" style="height: ${pNextPct}%;"></div>` : ''}
+                <div class="stat-col-fill speed-fill" style="height: ${pPct}%;"></div>
+              </div>
+              <div class="stat-col-label">⚡ ÁTTÖRŐ</div>
+              <div class="stat-col-gain">${pierceMaxed ? 'MAX' : '+0.5x'}</div>
+            </div>
           </div>
         </div>
 
-        <button class="ball-upgrade-btn ${pClass}" id="btn-upg-pierce-spd" ${pierceMaxed ? 'disabled' : ''}>
-          <div class="btn-top-info">${pierceMaxed ? `${curMult}x (LVL ${this.MAX_PIERCE_SPEED_LEVEL})` : `${curMult}x >> ${nextMult}x`}</div>
-          <div class="btn-cost-bottom">${pierceMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pCost))}</div>
-        </button>
+        <div class="ball-card-actions-col">
+          <button class="ball-upgrade-btn ${pClass}" id="btn-upg-pierce-spd" ${pierceMaxed ? 'disabled' : ''}>
+            <div class="btn-top-info">${pierceMaxed ? `${curMult}x (LVL ${this.MAX_PIERCE_SPEED_LEVEL})` : `${curMult}x >> ${nextMult}x`}</div>
+            <div class="btn-cost-bottom">${pierceMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(pCost))}</div>
+          </button>
+        </div>
       `;
       builtCards.push({ label: '⚡ PIERCE SPEED', el: pierceCol });
       if (!pierceMaxed) pierceCol.querySelector('#btn-upg-pierce-spd').addEventListener('click', () => this.upgradePierceSpeed());
@@ -4982,31 +5283,35 @@ class IdleBreakoutGame {
     const clickCol = document.createElement('div');
     clickCol.className = 'ball-upgrade-section';
     clickCol.innerHTML = `
-      <div class="ball-card-head">
-        <div class="ball-title-label">
-          <span class="ball-count-badge">MANUAL</span>
-          <span class="ball-card-name">CLICK POWER</span>
-          <span class="ball-card-desc">Kattintás sebzése</span>
-        </div>
-        <div style="font-size: 20px;">👆</div>
-      </div>
-
-      <div class="ball-stat-chart single-col">
-        <div class="stat-col-item">
-          <div class="stat-col-val">${displayClickPct}%</div>
-          <div class="stat-col-track">
-            ${!clickMaxed ? `<div class="stat-col-preview power-preview" style="height: ${clickNextPct}%;"></div>` : ''}
-            <div class="stat-col-fill power-fill" style="height: ${clickPct}%;"></div>
+      <div class="ball-card-info-col">
+        <div class="ball-card-head">
+          <div class="ball-title-label">
+            <span class="ball-count-badge">MANUAL</span>
+            <span class="ball-card-name">CLICK POWER</span>
+            <span class="ball-card-desc">Kattintás sebzése</span>
           </div>
-          <div class="stat-col-label">👆 SEBZÉS</div>
-          <div class="stat-col-gain">${clickMaxed ? 'MAX' : '+100%'}</div>
+          <div style="font-size: 20px;">👆</div>
+        </div>
+
+        <div class="ball-stat-chart single-col">
+          <div class="stat-col-item">
+            <div class="stat-col-val">${displayClickPct}%</div>
+            <div class="stat-col-track">
+              ${!clickMaxed ? `<div class="stat-col-preview power-preview" style="height: ${clickNextPct}%;"></div>` : ''}
+              <div class="stat-col-fill power-fill" style="height: ${clickPct}%;"></div>
+            </div>
+            <div class="stat-col-label">👆 SEBZÉS</div>
+            <div class="stat-col-gain">${clickMaxed ? 'MAX' : '+100%'}</div>
+          </div>
         </div>
       </div>
 
-      <button class="ball-upgrade-btn ${clickClass}" id="btn-upg-click" ${clickMaxed ? 'disabled' : ''}>
-        <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} (+100%)`}</div>
-        <div class="btn-cost-bottom">${clickMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost))}</div>
-      </button>
+      <div class="ball-card-actions-col">
+        <button class="ball-upgrade-btn ${clickClass}" id="btn-upg-click" ${clickMaxed ? 'disabled' : ''}>
+          <div class="btn-top-info">${clickMaxed ? `Click ${this.MAX_CLICK_LEVEL}/${this.MAX_CLICK_LEVEL}` : `Click ${this.clickUpgradeLevel}/${this.MAX_CLICK_LEVEL} (+100%)`}</div>
+          <div class="btn-cost-bottom">${clickMaxed ? 'MAX' : (pirateActive ? 'FREE!' : '$' + this.formatNumber(clickCost))}</div>
+        </button>
+      </div>
     `;
 
     builtCards.push({ label: 'CLICK POWER', el: clickCol });
@@ -5235,6 +5540,30 @@ class IdleBreakoutGame {
     if (tooltip) tooltip.classList.remove('visible');
   }
 
+  switchBBModalTab(tab) {
+    this.activeBBTab = (tab === 'fixed') ? 'fixed' : 'upgrades';
+    const upgBtn = document.getElementById('btn-bb-tab-upgrades');
+    const fixBtn = document.getElementById('btn-bb-tab-fixed');
+    if (upgBtn) upgBtn.classList.toggle('active', this.activeBBTab === 'upgrades');
+    if (fixBtn) fixBtn.classList.toggle('active', this.activeBBTab === 'fixed');
+    this.hideBBPhaseTooltip();
+    this.renderPowerUpUpgradesModal();
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
+  stepMobileBBCard(delta) {
+    const isFixed = this.activeBBTab === 'fixed';
+    const total = isFixed ? FIXED_POWERUPS_GUIDE.length : BB_UPGRADE_CATALOG.length;
+    if (total <= 1) return;
+    if (isFixed) {
+      this.activeFixedCardIndex = ((this.activeFixedCardIndex || 0) + delta + total) % total;
+    } else {
+      this.activeBBCardIndex = ((this.activeBBCardIndex || 0) + delta + total) % total;
+    }
+    this.renderPowerUpUpgradesModal();
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
   // --- POWERUP UPGRADES (BB) Modal Rendering ---
   renderPowerUpUpgradesModal() {
     const balanceEl = document.getElementById('bb-modal-balance');
@@ -5243,101 +5572,168 @@ class IdleBreakoutGame {
     if (bbMoney) bbMoney.textContent = Math.floor(this.money).toLocaleString();
     this.updateBossTokenExchangeUI();
 
+    const isFixedTab = this.activeBBTab === 'fixed';
+    const upgBtn = document.getElementById('btn-bb-tab-upgrades');
+    const fixBtn = document.getElementById('btn-bb-tab-fixed');
+    if (upgBtn) upgBtn.classList.toggle('active', !isFixedTab);
+    if (fixBtn) fixBtn.classList.toggle('active', isFixedTab);
+
+    const upgPane = document.getElementById('bb-tab-upgrades-pane');
+    const fixPane = document.getElementById('bb-tab-fixed-pane');
+    if (upgPane) upgPane.style.display = isFixedTab ? 'none' : 'block';
+    if (fixPane) fixPane.style.display = isFixedTab ? 'block' : 'none';
+
+    const useCarousel = this.isMobileUpgradesCarouselMode();
+    const modalWin = document.querySelector('#powerup-upgrades-modal .bb-modal-window');
+    if (modalWin) modalWin.classList.toggle('has-bb-carousel', useCarousel);
+
+    const mobileNav = document.getElementById('bb-upgrades-mobile-nav');
+    const prevBtn = document.getElementById('btn-bb-prev');
+    const nextBtn = document.getElementById('btn-bb-next');
+    const indEl = document.getElementById('bb-mobile-indicator');
+
     const grid = document.getElementById('bb-upgrades-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
+    if (grid) {
+      grid.innerHTML = '';
+      grid.classList.toggle('mobile-carousel-mode', useCarousel);
 
-    for (const item of BB_UPGRADE_CATALOG) {
-      const curLvl = this.bbUpgrades[item.key] || 0;
-      const isMax = curLvl >= 5;
-      const cost = isMax ? null : BB_UPGRADE_COSTS[curLvl];
-      const canAfford = !isMax && this.bb >= cost;
+      if (!isFixedTab) {
+        if (this.activeBBCardIndex >= BB_UPGRADE_CATALOG.length) this.activeBBCardIndex = 0;
+        const itemsToRender = useCarousel
+          ? [BB_UPGRADE_CATALOG[this.activeBBCardIndex]]
+          : BB_UPGRADE_CATALOG;
 
-      const card = document.createElement('div');
-      card.className = 'bb-upgrade-card';
+        for (const item of itemsToRender) {
+          if (!item) continue;
+          const curLvl = this.bbUpgrades[item.key] || 0;
+          const isMax = curLvl >= 5;
+          const cost = isMax ? null : BB_UPGRADE_COSTS[curLvl];
+          const canAfford = !isMax && this.bb >= cost;
 
-      let pipsHtml = '';
-      for (let i = 1; i <= 5; i++) {
-        const filled = i <= curLvl ? 'filled' : '';
-        const maxed = isMax ? 'maxed' : '';
-        pipsHtml += `<div class="bb-pip ${filled} ${maxed}"></div>`;
-      }
+          const card = document.createElement('div');
+          card.className = 'bb-upgrade-card';
 
-      const currentDesc = curLvl === 0
-        ? item.baseDesc
-        : `<strong>Aktuális (Phase ${curLvl}):</strong> ${item.levels[curLvl - 1]}`;
+          let pipsHtml = '';
+          for (let i = 1; i <= 5; i++) {
+            const filled = i <= curLvl ? 'filled' : '';
+            const maxed = isMax ? 'maxed' : '';
+            pipsHtml += `<div class="bb-pip ${filled} ${maxed}"></div>`;
+          }
 
-      const nextHtml = isMax
-        ? `<div class="bb-card-next" style="border-left-color:#2cd64e;">✅ Maximális szint elérve!</div>`
-        : `<div class="bb-card-next"><strong>Következő (Phase ${curLvl + 1}):</strong> ${item.levels[curLvl]}</div>`;
+          const currentDesc = curLvl === 0
+            ? item.baseDesc
+            : `<strong>Aktuális (Phase ${curLvl}):</strong> ${item.levels[curLvl - 1]}`;
 
-      const btnClass = isMax
-        ? 'bb-buy-btn maxed-btn'
-        : (canAfford ? 'bb-buy-btn affordable' : 'bb-buy-btn');
-      const btnText = isMax ? 'MAX SZINT' : `FEJLESZTÉS (${cost} BB)`;
+          const nextHtml = isMax
+            ? `<div class="bb-card-next" style="border-left-color:#2cd64e;">✅ Maximális szint elérve!</div>`
+            : `<div class="bb-card-next"><strong>Következő (Phase ${curLvl + 1}):</strong> ${item.levels[curLvl]}</div>`;
 
-      card.innerHTML = `
-        <div>
-          <div class="bb-card-header">
-            <div class="bb-card-title"><span>${item.icon}</span><span>${item.name}</span></div>
-            <div class="bb-card-lvl-tag">LVL ${curLvl}/5</div>
-          </div>
-          <div class="bb-pips-row" style="margin: 6px 0;">${pipsHtml}</div>
-          <div class="bb-card-desc">${currentDesc}</div>
-          <div style="margin-top: 6px;">${nextHtml}</div>
-        </div>
-        <button class="${btnClass}" id="btn-bb-upg-${item.key}" ${(!canAfford || isMax) ? 'disabled' : ''}>${btnText}</button>
-      `;
+          const phasesMiniHtml = item.levels.map((txt, idx) => {
+            const unlocked = curLvl >= (idx + 1);
+            return `<div>${unlocked ? '✅' : '•'} <strong>P${idx + 1}:</strong> ${txt}</div>`;
+          }).join('');
 
-      // Hover események az összes fázis megjelenítéséhez (Phase 1..5)
-      card.addEventListener('mouseenter', (e) => this.showBBPhaseTooltip(item, curLvl, e));
-      card.addEventListener('mousemove', (e) => {
-        if (window.innerWidth > 980 && window.innerHeight > 540) {
-          this.positionBBPhaseTooltip(e);
-        }
-      });
-      card.addEventListener('mouseleave', () => {
-        if (window.innerWidth > 980 && window.innerHeight > 540) {
-          this.hideBBPhaseTooltip();
-        }
-      });
+          const btnClass = isMax
+            ? 'bb-buy-btn maxed-btn'
+            : (canAfford ? 'bb-buy-btn affordable' : 'bb-buy-btn');
+          const btnText = isMax ? 'MAX SZINT' : `FEJLESZTÉS (${cost} BB)`;
 
-      grid.appendChild(card);
+          card.innerHTML = `
+            <div class="bb-card-main-col">
+              <div class="bb-card-header">
+                <div class="bb-card-title"><span>${item.icon}</span><span>${item.name}</span></div>
+                <div class="bb-card-lvl-tag">LVL ${curLvl}/5</div>
+              </div>
+              <div class="bb-pips-row" style="margin: 4px 0;">${pipsHtml}</div>
+              <div class="bb-card-desc">${currentDesc}</div>
+              <div style="margin-top: 4px;">${nextHtml}</div>
+            </div>
+            <div class="bb-card-action-col">
+              <div class="bb-card-phases-mini">${phasesMiniHtml}</div>
+              <button class="${btnClass}" id="btn-bb-upg-${item.key}" ${(!canAfford || isMax) ? 'disabled' : ''}>${btnText}</button>
+            </div>
+          `;
 
-      if (!isMax) {
-        const btn = card.querySelector(`#btn-bb-upg-${item.key}`);
-        if (btn) {
-          btn.addEventListener('click', () => {
-            this.hideBBPhaseTooltip();
-            this.buyBBUpgrade(item.key);
+          card.addEventListener('mouseenter', (e) => {
+            if (!this.isMobileUpgradesCarouselMode()) this.showBBPhaseTooltip(item, curLvl, e);
           });
+          card.addEventListener('mousemove', (e) => {
+            if (!this.isMobileUpgradesCarouselMode() && window.innerWidth > 980 && window.innerHeight > 540) {
+              this.positionBBPhaseTooltip(e);
+            }
+          });
+          card.addEventListener('mouseleave', () => {
+            if (!this.isMobileUpgradesCarouselMode() && window.innerWidth > 980 && window.innerHeight > 540) {
+              this.hideBBPhaseTooltip();
+            }
+          });
+
+          grid.appendChild(card);
+
+          if (!isMax) {
+            const btn = card.querySelector(`#btn-bb-upg-${item.key}`);
+            if (btn) {
+              btn.addEventListener('click', () => {
+                this.hideBBPhaseTooltip();
+                this.buyBBUpgrade(item.key);
+              });
+            }
+          }
         }
       }
     }
 
-    // Elkülönített rész: nem fejleszthető Power-upok (Gold Boss, Free Upgrade, GOLD LEVEL)
+    // Elkülönített rész: Fix & Nem Fejleszthető Power-upok útmutatója
     const nonUpgGrid = document.getElementById('bb-nonupgradable-grid');
     if (nonUpgGrid) {
       nonUpgGrid.innerHTML = '';
-      for (const item of NON_UPGRADABLE_POWERUPS) {
-        const card = document.createElement('div');
-        card.className = `bb-upgrade-card non-upgradable-card ${item.isGoldSpecial ? 'gold-level-card' : ''}`;
-        const statusText = item.statusFn ? item.statusFn(this) : '';
-        const isLockedGold = item.key === 'gold_level' && this.rebirthCount <= 15;
+      nonUpgGrid.classList.toggle('mobile-carousel-mode', useCarousel);
 
-        card.innerHTML = `
-          <div>
-            <div class="bb-card-header">
-              <div class="bb-card-title"><span>${item.icon}</span><span>${item.name}</span></div>
-              <div class="bb-nonupg-tag">NEM FEJLESZTHETŐ</div>
+      if (isFixedTab) {
+        if (this.activeFixedCardIndex >= FIXED_POWERUPS_GUIDE.length) this.activeFixedCardIndex = 0;
+        const fixedItems = useCarousel
+          ? [FIXED_POWERUPS_GUIDE[this.activeFixedCardIndex]]
+          : FIXED_POWERUPS_GUIDE;
+
+        for (const item of fixedItems) {
+          if (!item) continue;
+          const card = document.createElement('div');
+          card.className = `bb-upgrade-card non-upgradable-card ${item.isGoldSpecial ? 'gold-level-card' : ''}`;
+          const statusText = item.statusFn ? item.statusFn(this) : '';
+          const isLockedGold = item.key === 'gold_level' && this.rebirthCount <= 15;
+          const isPerm = item.category === 'perm';
+          const catBadge = isPerm
+            ? '<div class="bb-fixed-cat-tag is-perm">🔒 FIX POWER-UP</div>'
+            : '<div class="bb-fixed-cat-tag is-drop">🎲 ESÉSSEL</div>';
+
+          card.innerHTML = `
+            <div class="bb-card-main-col">
+              <div class="bb-card-header">
+                <div class="bb-card-title"><span>${item.icon}</span><span>${item.name}</span></div>
+                ${catBadge}
+              </div>
+              <div class="bb-nonupg-rarity">${item.rarityBadge}</div>
+              <div class="bb-card-desc">${item.desc}</div>
             </div>
-            <div class="bb-nonupg-rarity">🎲 ${item.rarityBadge}</div>
-            <div class="bb-card-desc">${item.desc}</div>
-          </div>
-          <div class="bb-nonupg-status ${isLockedGold ? 'locked-status' : ''}">${statusText}</div>
-        `;
-        nonUpgGrid.appendChild(card);
+            <div class="bb-card-action-col">
+              <div class="bb-nonupg-status ${isLockedGold ? 'locked-status' : ''}">${statusText}</div>
+            </div>
+          `;
+          nonUpgGrid.appendChild(card);
+        }
       }
+    }
+
+    if (useCarousel) {
+      const total = isFixedTab ? FIXED_POWERUPS_GUIDE.length : BB_UPGRADE_CATALOG.length;
+      const idx = isFixedTab ? this.activeFixedCardIndex : this.activeBBCardIndex;
+      const curItem = isFixedTab ? FIXED_POWERUPS_GUIDE[idx] : BB_UPGRADE_CATALOG[idx];
+      if (mobileNav) mobileNav.style.display = 'flex';
+      if (indEl && curItem) indEl.textContent = `${idx + 1} / ${total} • ${curItem.icon} ${curItem.name}`;
+      if (prevBtn) prevBtn.disabled = total <= 1;
+      if (nextBtn) nextBtn.disabled = total <= 1;
+    } else if (mobileNav) {
+      mobileNav.style.display = 'none';
     }
   }
 
@@ -5412,15 +5808,14 @@ class IdleBreakoutGame {
     if (upgradesBtn && upgradesModal) {
       upgradesBtn.addEventListener('click', () => {
         this.renderUpgradesMenu();
-        upgradesModal.classList.add('open');
+        this.openModal('upgrades-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
 
     if (closeUpgradesBtn && upgradesModal) {
       closeUpgradesBtn.addEventListener('click', () => {
-        this.hideBBPhaseTooltip();
-        upgradesModal.classList.remove('open');
+        this.closeModal('upgrades-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
@@ -5462,17 +5857,49 @@ class IdleBreakoutGame {
     if (bbUpgradesBtn && bbUpgradesModal) {
       bbUpgradesBtn.addEventListener('click', () => {
         this.renderPowerUpUpgradesModal();
-        bbUpgradesModal.classList.add('open');
+        this.openModal('powerup-upgrades-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
 
     if (closeBBUpgradesBtn && bbUpgradesModal) {
       closeBBUpgradesBtn.addEventListener('click', () => {
-        this.hideBBPhaseTooltip();
-        bbUpgradesModal.classList.remove('open');
+        this.closeModal('powerup-upgrades-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
+    }
+
+    const bbTabUpg = document.getElementById('btn-bb-tab-upgrades');
+    const bbTabFix = document.getElementById('btn-bb-tab-fixed');
+    const bbPrevBtn = document.getElementById('btn-bb-prev');
+    const bbNextBtn = document.getElementById('btn-bb-next');
+    const bbScrollEl = document.getElementById('bb-modal-scroll');
+    if (bbTabUpg) bbTabUpg.addEventListener('click', () => this.switchBBModalTab('upgrades'));
+    if (bbTabFix) bbTabFix.addEventListener('click', () => this.switchBBModalTab('fixed'));
+    if (bbPrevBtn) bbPrevBtn.addEventListener('click', () => this.stepMobileBBCard(-1));
+    if (bbNextBtn) bbNextBtn.addEventListener('click', () => this.stepMobileBBCard(1));
+    if (bbScrollEl) {
+      let bbSwipeX = 0;
+      let bbSwipeY = 0;
+      let bbSwiping = false;
+      bbScrollEl.addEventListener('touchstart', (e) => {
+        if (!this.isMobileUpgradesCarouselMode() || !e.touches || e.touches.length !== 1) return;
+        bbSwipeX = e.touches[0].clientX;
+        bbSwipeY = e.touches[0].clientY;
+        bbSwiping = true;
+      }, { passive: true });
+      bbScrollEl.addEventListener('touchend', (e) => {
+        if (!bbSwiping || !this.isMobileUpgradesCarouselMode() || !e.changedTouches || !e.changedTouches[0]) {
+          bbSwiping = false;
+          return;
+        }
+        bbSwiping = false;
+        const dx = e.changedTouches[0].clientX - bbSwipeX;
+        const dy = e.changedTouches[0].clientY - bbSwipeY;
+        if (Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+          this.stepMobileBBCard(dx < 0 ? 1 : -1);
+        }
+      }, { passive: true });
     }
 
     // Boss Token Exchange Buttons (10 Boss Token ➔ +1 BB)
@@ -5543,6 +5970,20 @@ class IdleBreakoutGame {
           }
         }
 
+        const milestonesEl = document.getElementById('rebirth-milestones-box');
+        if (milestonesEl) {
+          const milestones = [
+            { req: 3, icon: '⚡', label: 'Reb 3 — Auto-Click (1/mp)' },
+            { req: 5, icon: '⬆️', label: 'Reb 5 — Auto-Upgrade ($)' },
+            { req: 10, icon: '🎱', label: 'Reb 10 — Auto-Buy Labdák' }
+          ];
+          milestonesEl.innerHTML = `<div class="rebirth-milestones-title">🤖 Rebirth Mérföldkövek (Beállításokban kapcsolható)</div>` +
+            milestones.map(m => {
+              const unlocked = this.rebirthCount >= m.req;
+              return `<div class="rebirth-milestone-row ${unlocked ? 'unlocked' : 'locked'}"><span>${m.icon} ${m.label}</span><span>${unlocked ? '✅ FELOLDVA' : `🔒 Reb ${m.req}`}</span></div>`;
+            }).join('');
+        }
+
         if (confirmRebirthBtn) {
           confirmRebirthBtn.disabled = !canDo;
           confirmRebirthBtn.textContent = canDo
@@ -5553,21 +5994,21 @@ class IdleBreakoutGame {
           cancelRebirthBtn.textContent = canDo ? 'MÉGSE' : 'BEZÁRÁS';
         }
 
-        rebirthModal.classList.add('open');
+        this.openModal('rebirth-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
 
     if (confirmRebirthBtn && rebirthModal) {
       confirmRebirthBtn.addEventListener('click', () => {
-        rebirthModal.classList.remove('open');
+        this.closeModal('rebirth-modal');
         this.executeRebirth();
       });
     }
 
     if (cancelRebirthBtn && rebirthModal) {
       cancelRebirthBtn.addEventListener('click', () => {
-        rebirthModal.classList.remove('open');
+        this.closeModal('rebirth-modal');
       });
     }
 
@@ -5581,17 +6022,85 @@ class IdleBreakoutGame {
       });
     }
 
-    // Factory Reset
+    // Settings & Performance Modal (replaces direct Factory Reset confirm)
     const settingsBtn = document.getElementById('btn-settings');
     if (settingsBtn) {
-      settingsBtn.addEventListener('click', () => {
-        if (confirm('Biztosan újraindítod a játékot elölről (Factory Reset)?')) {
+      settingsBtn.addEventListener('click', () => this.openSettingsModal());
+    }
+    for (const closeSetId of ['btn-close-settings', 'btn-close-settings-footer']) {
+      const btn = document.getElementById(closeSetId);
+      if (btn) btn.addEventListener('click', () => {
+        this.closeModal('settings-modal');
+        if (window.soundEngine) window.soundEngine.playClickHit();
+      });
+    }
+    const bindPrefCheckbox = (id, prefKey, minReb = 0) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        if (minReb > 0 && this.rebirthCount < minReb) {
+          el.checked = false;
+          return;
+        }
+        if (!this.prefs) this.prefs = {};
+        this.prefs[prefKey] = !!el.checked;
+        this.savePrefs();
+      });
+    };
+    bindPrefCheckbox('pref-floating-numbers', 'floatingNumbers');
+    bindPrefCheckbox('pref-particles', 'particles');
+    bindPrefCheckbox('pref-screen-shake', 'screenShake');
+    bindPrefCheckbox('pref-auto-click-ms', 'autoClickMs', 3);
+    bindPrefCheckbox('pref-auto-upgrade', 'autoUpgrade', 5);
+    bindPrefCheckbox('pref-auto-buy-balls', 'autoBuyBalls', 10);
+
+    const exportJsonBtn = document.getElementById('btn-settings-export-json');
+    if (exportJsonBtn) {
+      exportJsonBtn.addEventListener('click', () => {
+        if (this.cloud && typeof this.cloud.exportRawJsonSave === 'function') {
+          this.cloud.exportRawJsonSave();
+        } else {
+          const jsonStr = JSON.stringify(this.buildSaveData());
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(jsonStr).catch(() => {});
+          }
+          this.showToast('📋 JSON mentés másolva!', 3200);
+        }
+      });
+    }
+    const openImportBtn = document.getElementById('btn-settings-open-import');
+    if (openImportBtn) {
+      openImportBtn.addEventListener('click', () => {
+        if (this.cloud && typeof this.cloud.openAuthModal === 'function') {
+          this.cloud.openAuthModal('login');
+        } else {
+          this.openModal('auth-modal');
+        }
+        setTimeout(() => {
+          const inp = document.getElementById('auth-backup-code-input');
+          if (inp) inp.focus();
+        }, 80);
+      });
+    }
+    const factoryResetBtn = document.getElementById('btn-settings-factory-reset');
+    if (factoryResetBtn) {
+      factoryResetBtn.addEventListener('click', () => {
+        if (confirm('Biztosan újraindítod a játékot elölről (Factory Reset)? Minden helyi előrehaladás törlődik!')) {
           this.isResetting = true;
           if (this.bgWorker) this.bgWorker.terminate();
           if (this.bgInterval) clearInterval(this.bgInterval);
           localStorage.removeItem(this.SAVE_KEY);
           window.location.reload();
         }
+      });
+    }
+
+    // Offline Summary Modal close buttons
+    for (const offCloseId of ['btn-close-offline-summary', 'btn-close-offline-summary-x']) {
+      const btn = document.getElementById(offCloseId);
+      if (btn) btn.addEventListener('click', () => {
+        this.closeModal('offline-summary-modal');
+        if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
 
@@ -5604,14 +6113,11 @@ class IdleBreakoutGame {
     if (openLbBtn && lbModal) {
       openLbBtn.addEventListener('click', () => {
         this.renderLeaderboard();
-        lbModal.classList.add('open');
+        this.openModal('leaderboard-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
-    const closeLb = () => {
-      this.hideBBPhaseTooltip();
-      if (lbModal) lbModal.classList.remove('open');
-    };
+    const closeLb = () => this.closeModal('leaderboard-modal');
     if (closeLbBtn) closeLbBtn.addEventListener('click', closeLb);
     if (closeLbFooter) closeLbFooter.addEventListener('click', closeLb);
 
@@ -5623,14 +6129,11 @@ class IdleBreakoutGame {
     if (openBpBtn && bpModal) {
       openBpBtn.addEventListener('click', () => {
         this.renderBattlePass();
-        bpModal.classList.add('open');
+        this.openModal('battlepass-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
-    const closeBp = () => {
-      this.hideBBPhaseTooltip();
-      if (bpModal) bpModal.classList.remove('open');
-    };
+    const closeBp = () => this.closeModal('battlepass-modal');
     if (closeBpBtn) closeBpBtn.addEventListener('click', closeBp);
     if (closeBpFooter) closeBpFooter.addEventListener('click', closeBp);
 
@@ -5639,19 +6142,15 @@ class IdleBreakoutGame {
     const switchBpToLb = document.getElementById('btn-switch-bp-to-lb');
     if (switchLbToBp && lbModal && bpModal) {
       switchLbToBp.addEventListener('click', () => {
-        this.hideBBPhaseTooltip();
-        lbModal.classList.remove('open');
         this.renderBattlePass();
-        bpModal.classList.add('open');
+        this.openModal('battlepass-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
     if (switchBpToLb && lbModal && bpModal) {
       switchBpToLb.addEventListener('click', () => {
-        this.hideBBPhaseTooltip();
-        bpModal.classList.remove('open');
         this.renderLeaderboard();
-        lbModal.classList.add('open');
+        this.openModal('leaderboard-modal');
         if (window.soundEngine) window.soundEngine.playClickHit();
       });
     }
@@ -5669,17 +6168,11 @@ class IdleBreakoutGame {
 
     // Guest 3-Day Retention Banner Quick Actions
     const openGuestAuth = (preferRegister = true) => {
-      const modal = document.getElementById('auth-modal');
       if (this.cloud) {
-        this.cloud.clearError();
-        this.cloud.hideDeleteConfirm();
-        if (!this.cloud.currentUser && preferRegister) {
-          this.cloud.switchAuthTab('register');
-        }
-        this.cloud.updateAuthUI();
+        this.cloud.openAuthModal(preferRegister && !this.cloud.currentUser ? 'register' : 'login');
+      } else {
+        this.openModal('auth-modal');
       }
-      if (modal) modal.classList.add('open');
-      if (window.soundEngine) window.soundEngine.playClickHit();
     };
     const guestFloatBtn = document.getElementById('btn-guest-float-auth');
     const guestFloatClose = document.getElementById('btn-guest-float-close');
@@ -5695,6 +6188,140 @@ class IdleBreakoutGame {
         if (el) el.style.display = 'none';
       });
     }
+
+    // Unified Modal Management: ESC key & backdrop click-to-close (never closes mandatory welcome menu)
+    for (const modalId of this.getManagedModalIds()) {
+      const mEl = document.getElementById(modalId);
+      if (mEl) {
+        mEl.addEventListener('click', (e) => {
+          if (e.target === mEl) {
+            this.closeModal(modalId);
+          }
+        });
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const activeEl = document.activeElement;
+      if (activeEl && activeEl.classList && activeEl.classList.contains('dev-inline-input')) return;
+      if (this._devInlineEditActive) return;
+
+      for (const modalId of this.getManagedModalIds()) {
+        const el = document.getElementById(modalId);
+        if (el && el.classList.contains('open')) {
+          this.closeModal(modalId);
+          e.preventDefault();
+          break;
+        }
+      }
+    });
+  }
+
+  // --- Unified Modal Manager & Preferences ---
+  getManagedModalIds() {
+    return [
+      'offline-summary-modal',
+      'settings-modal',
+      'dev-leaderboard-modal',
+      'mail-modal',
+      'auth-modal',
+      'upgrades-modal',
+      'powerup-upgrades-modal',
+      'rebirth-modal',
+      'leaderboard-modal',
+      'battlepass-modal'
+    ];
+  }
+
+  closeAllModals(exceptId = null) {
+    for (const id of this.getManagedModalIds()) {
+      if (exceptId && id === exceptId) continue;
+      const el = document.getElementById(id);
+      if (el && el.classList.contains('open')) {
+        this.closeModal(id);
+      }
+    }
+  }
+
+  openModal(id) {
+    if (!id) return;
+    this.closeAllModals(id);
+    const el = document.getElementById(id);
+    if (el) el.classList.add('open');
+  }
+
+  closeModal(id) {
+    if (!id) return;
+    this.hideBBPhaseTooltip();
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+    if (id === 'dev-leaderboard-modal') {
+      this.devEditTarget = null;
+      this._devInlineEditActive = false;
+      this._cancelActiveInlineEdit = null;
+      const editBox = document.getElementById('dev-edit-box');
+      if (editBox) editBox.style.display = 'none';
+    } else if (id === 'auth-modal' && this.cloud) {
+      this.cloud.hideDeleteConfirm();
+    }
+  }
+
+  savePrefs() {
+    try {
+      localStorage.setItem('idle_breakout_prefs', JSON.stringify(this.prefs || {}));
+    } catch (e) {}
+  }
+
+  openSettingsModal() {
+    const p = this.prefs || {};
+    const map = [
+      ['pref-floating-numbers', p.floatingNumbers !== false, 0],
+      ['pref-particles', p.particles !== false, 0],
+      ['pref-screen-shake', p.screenShake !== false, 0],
+      ['pref-auto-click-ms', !!p.autoClickMs, 3],
+      ['pref-auto-upgrade', !!p.autoUpgrade, 5],
+      ['pref-auto-buy-balls', !!p.autoBuyBalls, 10]
+    ];
+    for (const [id, val, minReb] of map) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const unlocked = minReb <= 0 || this.rebirthCount >= minReb;
+      el.disabled = !unlocked;
+      el.checked = unlocked ? val : false;
+      const row = el.closest('.settings-toggle-row');
+      if (row) row.classList.toggle('is-locked', !unlocked);
+    }
+    this.openModal('settings-modal');
+    if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
+  showOfflineSummaryModal(summary) {
+    if (!summary) return;
+    const tEl = document.getElementById('offline-sum-time');
+    const mEl = document.getElementById('offline-sum-money');
+    const lEl = document.getElementById('offline-sum-levels');
+    const bEl = document.getElementById('offline-sum-bricks');
+    const tokWrap = document.getElementById('offline-sum-tokens-wrap');
+    const tokEl = document.getElementById('offline-sum-tokens');
+
+    if (tEl) tEl.textContent = this.formatDuration(summary.seconds || 0);
+    if (mEl) mEl.textContent = `+$${this.formatNumber(summary.money || 0)}`;
+    if (lEl) lEl.textContent = `+${summary.levels || 0} szint`;
+    if (bEl) bEl.textContent = `+${this.formatNumber(summary.bricks || 0)}`;
+    if (tokWrap && tokEl) {
+      const parts = [];
+      if (summary.bt > 0) parts.push(`+${summary.bt} 👑 BT`);
+      if (summary.bb > 0) parts.push(`+${summary.bb} ⭐ BB`);
+      if (parts.length > 0) {
+        tokWrap.style.display = 'flex';
+        tokEl.textContent = parts.join(' • ');
+      } else {
+        tokWrap.style.display = 'none';
+      }
+    }
+    this.openModal('offline-summary-modal');
+    if (window.soundEngine) window.soundEngine.playLevelUp();
   }
 
   // --- Save & Load (Local + Cloud Sync Reusable Helpers) ---
@@ -5739,6 +6366,7 @@ class IdleBreakoutGame {
       hasPermanentPierce: this.balls.some(b => b.isPiercing && b.isPermanentPierce),
       persistedPowerUps,
       lastSavedAt: Date.now(),
+      lastAdminEditAt: this.lastAdminEditAt || 0,
       guestCreatedAt: this.guestCreatedAt || Date.now(),
       guestDeadlineAt: this.guestDeadlineAt || (Date.now() + this.GUEST_RETENTION_MS),
       guestLastActiveAt: Date.now(),
@@ -5749,6 +6377,11 @@ class IdleBreakoutGame {
       battlePassClaimedPaid: {},
       normalBallEquips: this.normalBallEquips,
       ballTypeEquips: this.ballTypeEquips,
+      appliedSeasonResetId: this.appliedSeasonResetId || null,
+      preservedCosmetics: this.preservedCosmetics || { skins: [], effects: [], breakEffects: [] },
+      pirateShopCooldownUntil: this.pirateShopCooldownUntil || 0,
+      goldLevelCooldownUntil: this.goldLevelCooldownUntil || 0,
+      freeUpgradeMaxCooldownUntil: this.freeUpgradeMaxCooldownUntil || 0,
       playerName: this.playerName,
       appliedAdminCmdIds: (this.appliedAdminCmdIds || []).slice(-100),
       balls: {}
@@ -5785,7 +6418,16 @@ class IdleBreakoutGame {
 
   load() {
     const data = this.readRawLocalSave();
-    if (!data) return;
+    if (!data) {
+      let alreadyReset = false;
+      try { alreadyReset = localStorage.getItem('idle_breakout_season_reset_id') === SEASON_RESET_ID; } catch (e) {}
+      if (!alreadyReset) {
+        this.applySeasonResetMigration(null, false);
+      } else {
+        this.appliedSeasonResetId = SEASON_RESET_ID;
+      }
+      return;
+    }
     const now = Date.now();
     if (!data.saveOwnerUid) {
       const refBase = Number(data.guestCreatedAt) || Number(data.lastSavedAt) || now;
@@ -5798,10 +6440,106 @@ class IdleBreakoutGame {
         this.guestLastActiveAt = now;
         this.guestExtendedByManual = false;
         this.guestExpiredNotice = true;
+        this.applySeasonResetMigration(null, false);
         return;
       }
     }
     this.applySaveData(data, { isLiveReload: false, ownerUid: data.saveOwnerUid || null });
+  }
+
+  collectLegacyCosmeticsFromSave(srcData = null) {
+    if (!this.preservedCosmetics || typeof this.preservedCosmetics !== 'object') {
+      this.preservedCosmetics = { skins: [], effects: [], breakEffects: [] };
+    }
+    const skins = new Set(Array.isArray(this.preservedCosmetics.skins) ? this.preservedCosmetics.skins : []);
+    const effects = new Set(Array.isArray(this.preservedCosmetics.effects) ? this.preservedCosmetics.effects : []);
+    const breakEffects = new Set(Array.isArray(this.preservedCosmetics.breakEffects) ? this.preservedCosmetics.breakEffects : []);
+
+    const prevPres = srcData && srcData.preservedCosmetics;
+    if (prevPres) {
+      (prevPres.skins || []).forEach(id => skins.add(id));
+      (prevPres.effects || []).forEach(id => effects.add(id));
+      (prevPres.breakEffects || []).forEach(id => breakEffects.add(id));
+    }
+
+    const freeMap = (srcData && srcData.battlePassClaimedFree) ? srcData.battlePassClaimedFree : (this.battlePassClaimedFree || {});
+    for (const stgStr of Object.keys(freeMap)) {
+      if (!freeMap[stgStr]) continue;
+      const leg = LEGACY_S1_STAGE_COSMETICS[Number(stgStr)];
+      if (leg) {
+        if (leg.kind === 'skins') skins.add(leg.id);
+        else if (leg.kind === 'effects') effects.add(leg.id);
+        else if (leg.kind === 'breakEffects') breakEffects.add(leg.id);
+      }
+    }
+
+    const eqMap = (srcData && srcData.ballTypeEquips) ? srcData.ballTypeEquips : (this.ballTypeEquips || {});
+    for (const k of Object.keys(eqMap)) {
+      const eq = eqMap[k] || {};
+      if (eq.skinId && eq.skinId !== 'default') skins.add(eq.skinId);
+      if (eq.effectId && eq.effectId !== 'none') effects.add(eq.effectId);
+      if (eq.breakEffectId && eq.breakEffectId !== 'none') breakEffects.add(eq.breakEffectId);
+    }
+
+    this.preservedCosmetics = {
+      skins: [...skins],
+      effects: [...effects],
+      breakEffects: [...breakEffects]
+    };
+  }
+
+  applySeasonResetMigration(sourceData = null, notify = true) {
+    this.collectLegacyCosmeticsFromSave(sourceData);
+    this.money = 0;
+    this.level = 1;
+    this.rebirthCount = 0;
+    this.rebirthMultiplier = 1.0;
+    this.bb = 1;
+    this.bossTokens = 5;
+    this.totalBricksDestroyed = 0;
+    this.clickUpgradeLevel = 1;
+    this.clickPower = 1;
+    this.pierceSpeedUpgradeLevel = 0;
+    this.coinBtHitCounter = 0;
+    this.coinBbHitCounter = 0;
+    this.nextBossIsGold = false;
+    this.nextLevelIsGold = false;
+    this.isGoldLevelActive = false;
+    this.pirateShopCooldown = 0;
+    this.autoClickerStrikeCount = 0;
+    this.pendingOfflineSeconds = 0;
+    this.offlineProgressAppliedAt = 0;
+    this.activePowerUps = {};
+    this.balls = [];
+    for (const k in this.ballTypes) {
+      this.ballTypes[k].count = 0;
+      this.ballTypes[k].speedLevel = 1;
+      this.ballTypes[k].powerLevel = 1;
+    }
+    for (const k in this.bbUpgrades) this.bbUpgrades[k] = 0;
+    for (const k in this.btUpgrades) this.btUpgrades[k] = 0;
+    this.battlePassClaimedFree = {};
+    this.battlePassClaimedPaid = {};
+    this.appliedSeasonResetId = SEASON_RESET_ID;
+    this.lastAdminEditAt = Date.now();
+    try { localStorage.setItem('idle_breakout_season_reset_id', SEASON_RESET_ID); } catch (e) {}
+
+    if (this.width && this.height) {
+      this.generateLevel(1);
+    }
+    this.save();
+    this.updateHUD();
+    this.renderBattlePass();
+    this.updateMailUnreadBadge(false);
+    this.broadcastMyStatus();
+    if (this.cloud && this.cloud.currentUser && this.cloud.initialCloudSyncDone) {
+      this.cloud.saveToCloud(true, { silent: true });
+    }
+    if (notify && typeof this.showToast === 'function') {
+      setTimeout(() => {
+        this.showToast('📢 Szezon 2 tiszta újrakezdés! Kárpótlás: +5 👑 BT és +1 ⭐ BB jóváírva — nézd meg a ✉️ levelet!', 6500);
+      }, 350);
+    }
   }
 
   extendGuestDeadlineFromManualTransfer() {
@@ -5943,6 +6681,7 @@ class IdleBreakoutGame {
       this.bossTokens = data.bossTokens ?? 0;
       this.rebirthCount = data.rebirthCount ?? 0;
       this.rebirthMultiplier = this.getRebirthMultiplier();
+      this.lastAdminEditAt = Math.max(0, Number(data.lastAdminEditAt) || 0);
       this.clickUpgradeLevel = Math.min(this.MAX_CLICK_LEVEL, data.clickUpgradeLevel ?? 1);
       this.clickPower = this.clickUpgradeLevel;
       this.pierceSpeedUpgradeLevel = Math.min(this.MAX_PIERCE_SPEED_LEVEL, data.pierceSpeedUpgradeLevel ?? 0);
@@ -5953,23 +6692,33 @@ class IdleBreakoutGame {
       this.isGoldLevelActive = !!data.isGoldLevelActive;
 
       this.totalBricksDestroyed = data.totalBricksDestroyed ?? 0;
+      this.appliedSeasonResetId = data.appliedSeasonResetId || null;
+      if (data.preservedCosmetics && typeof data.preservedCosmetics === 'object') {
+        this.collectLegacyCosmeticsFromSave(data);
+      }
       // A Prémium Battle Pass nem aktiválható mentésből sem: mindig zárolva marad!
       this.battlePassClaimedPaid = {};
       if (data.battlePassClaimedFree) this.battlePassClaimedFree = { ...data.battlePassClaimedFree };
+      if (this.appliedSeasonResetId !== SEASON_RESET_ID) {
+        this.collectLegacyCosmeticsFromSave(data);
+      }
       if (data.ballTypeEquips && typeof data.ballTypeEquips === 'object') {
         const unlocked = this.getUnlockedCosmetics();
-        const usedSkins = new Set();
-        const usedEffects = new Set();
-        const usedBreakEffects = new Set();
+        const skinCounts = {};
+        const effectCounts = {};
+        const breakCounts = {};
         for (const tKey of Object.keys(data.ballTypeEquips)) {
           if (!this.ballTypes[tKey]) continue;
           const eq = data.ballTypeEquips[tKey] || {};
-          let sId = (eq.skinId && unlocked.skins.has(eq.skinId) && !usedSkins.has(eq.skinId)) ? eq.skinId : 'default';
-          let eId = (eq.effectId && unlocked.effects.has(eq.effectId) && !usedEffects.has(eq.effectId)) ? eq.effectId : 'none';
-          let bId = (eq.breakEffectId && unlocked.breakEffects.has(eq.breakEffectId) && !usedBreakEffects.has(eq.breakEffectId)) ? eq.breakEffectId : 'none';
-          if (sId !== 'default') usedSkins.add(sId);
-          if (eId !== 'none') usedEffects.add(eId);
-          if (bId !== 'none') usedBreakEffects.add(bId);
+          const sMax = this.getCosmeticMaxEquip('skin', eq.skinId);
+          const eMax = this.getCosmeticMaxEquip('effect', eq.effectId);
+          const bMax = this.getCosmeticMaxEquip('break_effect', eq.breakEffectId);
+          let sId = (eq.skinId && unlocked.skins.has(eq.skinId) && (skinCounts[eq.skinId] || 0) < sMax) ? eq.skinId : 'default';
+          let eId = (eq.effectId && unlocked.effects.has(eq.effectId) && (effectCounts[eq.effectId] || 0) < eMax) ? eq.effectId : 'none';
+          let bId = (eq.breakEffectId && unlocked.breakEffects.has(eq.breakEffectId) && (breakCounts[eq.breakEffectId] || 0) < bMax) ? eq.breakEffectId : 'none';
+          if (sId !== 'default') skinCounts[sId] = (skinCounts[sId] || 0) + 1;
+          if (eId !== 'none') effectCounts[eId] = (effectCounts[eId] || 0) + 1;
+          if (bId !== 'none') breakCounts[bId] = (breakCounts[bId] || 0) + 1;
           this.ballTypeEquips[tKey] = { skinId: sId, effectId: eId, breakEffectId: bId };
         }
       } else if (data.normalBallEquips) {
@@ -6020,6 +6769,11 @@ class IdleBreakoutGame {
       }
       this.syncPermanentPowerUps();
 
+      if (data.appliedSeasonResetId === SEASON_RESET_ID) {
+        this.pirateShopCooldownUntil = Math.max(0, Number(data.pirateShopCooldownUntil) || 0);
+        this.goldLevelCooldownUntil = Math.max(0, Number(data.goldLevelCooldownUntil) || 0);
+        this.freeUpgradeMaxCooldownUntil = Math.max(0, Number(data.freeUpgradeMaxCooldownUntil) || 0);
+      }
       if (!isLiveReload && data.lastSavedAt) {
         const elapsedSec = (Date.now() - data.lastSavedAt) / 1000;
         if (elapsedSec >= 5) {
@@ -6101,6 +6855,10 @@ class IdleBreakoutGame {
           localStorage.setItem(this.SAVE_KEY, JSON.stringify(this.buildSaveData(ownerUid)));
         } catch (e) {}
       }
+
+      if (this.appliedSeasonResetId !== SEASON_RESET_ID) {
+        this.applySeasonResetMigration(data, true);
+      }
     } catch (e) {
       console.error('Load failed:', e);
     }
@@ -6131,6 +6889,7 @@ class IdleBreakoutGame {
     this.bossTokens = 0;
     this.rebirthCount = 0;
     this.rebirthMultiplier = 1.0;
+    this.lastAdminEditAt = 0;
     this.clickUpgradeLevel = 1;
     this.clickPower = 1;
     this.pierceSpeedUpgradeLevel = 0;
@@ -6369,6 +7128,66 @@ class IdleBreakoutGame {
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.restore();
+    } else if (effectId === 'fx_s2_aurora') {
+      ctx.save();
+      const rot = this.animTime * 2.2;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r + 6, r + 2.5, rot, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(x, y, r + 4, r + 7, -rot, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.75)';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.restore();
+    } else if (effectId === 'fx_s2_orbitals') {
+      ctx.save();
+      for (let i = 0; i < 3; i++) {
+        const tilt = i * (Math.PI / 3);
+        const a = this.animTime * 5 + i * 2.1;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(tilt);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r + 6, r * 0.45 + 2, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * (r + 6), Math.sin(a) * (r * 0.45 + 2), 2.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+    } else if (effectId === 'fx_s2_phoenix') {
+      ctx.save();
+      const pulse = Math.sin(this.animTime * 10) * 2.5;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 5 + pulse * 0.4, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.strokeStyle = '#f97316';
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y, r + 5 + pulse * 0.4, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.restore();
+    } else if (effectId === 'fx_s2_vortex') {
+      ctx.save();
+      const baseA = this.animTime * 6;
+      for (let i = 0; i < 4; i++) {
+        const a = baseA + i * (Math.PI / 2);
+        ctx.beginPath();
+        ctx.arc(x, y, r + 6, a, a + 0.9);
+        ctx.strokeStyle = i % 2 === 0 ? '#06b6d4' : '#ec4899';
+        ctx.lineWidth = 2.1;
+        ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 
@@ -6578,6 +7397,65 @@ class IdleBreakoutGame {
         ctx.stroke();
       }
       ctx.restore();
+    } else if (skinId === 'skin_s2_prism') {
+      const hue = (this.animTime * 160) % 360;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsl(${hue}, 92%, 62%)`;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    } else if (skinId === 'skin_s2_magma') {
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.52, 0, Math.PI * 2);
+      ctx.fillStyle = '#fde047';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2.2 + Math.sin(this.animTime * 9) * 1.1, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(249, 115, 22, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (skinId === 'skin_s2_hologram') {
+      const scanY = y + Math.sin(this.animTime * 8) * (r * 0.7);
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.75, scanY);
+      ctx.lineTo(x + r * 0.75, scanY);
+      ctx.strokeStyle = '#a5f3fc';
+      ctx.lineWidth = 1.7;
+      ctx.stroke();
+    } else if (skinId === 'skin_s2_amethyst') {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2.2, 0, Math.PI * 2);
+      ctx.strokeStyle = '#d8b4fe';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.fillStyle = '#faf5ff';
+      ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+    } else if (skinId === 'skin_s2_eclipse') {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2.6, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+    } else if (skinId === 'skin_s2_chrono') {
+      const a = this.animTime * 4;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(a) * (r * 0.75), y + Math.sin(a) * (r * 0.75));
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    } else if (skinId === 'skin_s2_celestial') {
+      const hue = (this.animTime * 110) % 360;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = `hsl(${hue}, 95%, 68%)`;
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.fillStyle = '#fef08a';
+      for (let i = 0; i < 3; i++) {
+        const ang = this.animTime * 4.5 + i * (Math.PI * 2 / 3);
+        ctx.fillRect(x + Math.cos(ang) * (r + 4.5) - 1.5, y + Math.sin(ang) * (r + 4.5) - 1.5, 3, 3);
+      }
     }
   }
 
@@ -6875,6 +7753,7 @@ class IdleBreakoutGame {
                   return;
                 }
 
+                const dAdminTs = Number(data.adminUpdatedAt) || 0;
                 let keepReb = dReb;
                 let keepLvl = dLvl;
                 let keepBrk = dBrk;
@@ -6888,11 +7767,12 @@ class IdleBreakoutGame {
                   const exBrk = Math.max(0, Number(existing.bricks) || 0);
                   const exTs = Number(existing.ts) || 0;
                   const exAdminTs = Number(existing.adminUpdatedAt) || 0;
-                  const existingStrictlyHigher = (exReb > dReb) || (exReb === dReb && exLvl > dLvl);
-                  const existingNewerAdmin = exAdminTs > 0 && dTs < exAdminTs + 15000;
+                  const incomingNewerAdmin = dAdminTs > exAdminTs;
+                  const existingStrictlyHigher = !incomingNewerAdmin && ((exReb > dReb) || (exReb === dReb && exLvl > dLvl));
+                  const existingNewerAdmin = exAdminTs > dAdminTs && dTs <= exAdminTs + 5000;
 
                   // Egy normál játékos sosem esik vissza alacsonyabb Rebirth-re vagy ugyanazon Rebirth-en alacsonyabb szintre
-                  // (kivéve admin szerkesztés, ami Firestore-on jön adminUpdatedAt-tal). Ezzel a 2 nyitott fül miatti ugrálás megszűnik!
+                  // (kivéve újabb admin szerkesztés, ami adminUpdatedAt-tal érkezik). Ezzel a 2 nyitott fül miatti ugrálás megszűnik!
                   if (existingNewerAdmin || existingStrictlyHigher) {
                     keepReb = exReb;
                     keepLvl = exLvl;
@@ -6938,7 +7818,7 @@ class IdleBreakoutGame {
                   bpStage: keepBpStage,
                   ts: Math.min(nowMs, Math.max(dTs, (existing && existing.ts) || 0)),
                   lastSeenLocalMs: nextLocalSeen,
-                  adminUpdatedAt: (existing && existing.adminUpdatedAt) || 0
+                  adminUpdatedAt: Math.max((existing && existing.adminUpdatedAt) || 0, dAdminTs)
                 };
 
                 // Ha külön kliens-ID alatt is bent volt ugyanez az UID, töröljük a duplikált kulcsot
@@ -7000,15 +7880,23 @@ class IdleBreakoutGame {
   }
 
   updateLeaderboardConnUI(isConnected) {
+    const fbReady = !!(this.cloud && this.cloud.isReady && this.cloud.isConfigured);
+    const mqttOk = typeof isConnected === 'boolean' ? isConnected : !!this.mqttConnected;
     for (const suffix of ['-pc', '-mobile']) {
       const el = document.getElementById(`lb-conn-status${suffix}`);
       if (el) {
-        if (isConnected) {
+        if (mqttOk && fbReady) {
           el.classList.add('connected');
           el.innerHTML = '<span class="conn-dot"></span> ÉLŐ MULTIPLAYER';
-        } else {
+        } else if (mqttOk) {
+          el.classList.add('connected');
+          el.innerHTML = '<span class="conn-dot"></span> MQTT ÉLŐ (FELHŐ NÉLKÜL)';
+        } else if (fbReady) {
           el.classList.remove('connected');
           el.innerHTML = '<span class="conn-dot"></span> CSATLAKOZÁS...';
+        } else {
+          el.classList.remove('connected');
+          el.innerHTML = '<span class="conn-dot"></span> 💾 HELYI MÓD (OFFLINE)';
         }
       }
     }
@@ -7076,6 +7964,7 @@ class IdleBreakoutGame {
         bb: Math.max(0, Math.floor(Number(this.bb) || 0)),
         bt: Math.max(0, Math.floor(Number(this.bossTokens) || 0)),
         bpStage: this.getCurrentBattlePassStage(),
+        adminUpdatedAt: this.lastAdminEditAt || 0,
         ts: Date.now()
       });
       this.mqttClient.publish(`shirelix/idle_breakout_v4/players/${publishKey}`, payload, { retain: true, qos: 0 });
@@ -7203,6 +8092,9 @@ class IdleBreakoutGame {
       updatedAt: 0,
       minClientVersion: '',
       forceReloadToken: 0,
+      maintenanceMode: false,
+      maintenanceMessage: 'Technikai karbantartás zajlik. Kérjük, várj egy pillanatot — amint elkészültünk, a játék automatikusan visszatölt!',
+      maintenanceUpdatedAt: 0,
       hideDefaultName: false,
       hideGuests: false,
       hideOffline: false,
@@ -7263,13 +8155,17 @@ class IdleBreakoutGame {
       }
     }
 
+    const optInt = (v, min, max) => (v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v)))
+      ? Math.max(min, Math.min(max, Math.floor(Number(v))))
+      : null;
+
     const playerCommands = {};
     if (raw.playerCommands && typeof raw.playerCommands === 'object') {
       const entries = [];
       for (const k of Object.keys(raw.playerCommands)) {
         const c = raw.playerCommands[k];
         if (c && typeof c === 'object' && c.cmdId) {
-          const isNullGift = (c.rebirths === null || c.rebirths === undefined) && (c.level === null || c.level === undefined);
+          const isNullGift = (c.rebirths === null || c.rebirths === undefined) && (c.level === null || c.level === undefined) && !c.name;
           const cAddBB = Math.trunc(Number(c.addBB) || 0);
           const cAddBT = Math.trunc(Number(c.addBT) || 0);
           const cAddMoney = Math.trunc(Number(c.addMoney) || 0);
@@ -7292,8 +8188,8 @@ class IdleBreakoutGame {
             targetIds: normList(c.targetIds),
             targetNameLower: String(c.targetNameLower || '').trim().toLowerCase(),
             name: c.name ? String(c.name).trim().slice(0, 12) : '',
-            rebirths: Math.max(0, Math.min(999999, Math.floor(Number(c.rebirths) || 0))),
-            level: Math.max(1, Math.min(999999, Math.floor(Number(c.level) || 1))),
+            rebirths: optInt(c.rebirths, 0, 999999),
+            level: optInt(c.level, 1, 999999),
             addBB: cAddBB,
             addBT: cAddBT,
             addMoney: cAddMoney,
@@ -7334,6 +8230,9 @@ class IdleBreakoutGame {
       updatedAt: Number(raw.updatedAt) || 0,
       minClientVersion: String(raw.minClientVersion || '').trim().slice(0, 16),
       forceReloadToken: Math.max(0, Number(raw.forceReloadToken) || 0),
+      maintenanceMode: !!raw.maintenanceMode,
+      maintenanceMessage: String(raw.maintenanceMessage || def.maintenanceMessage || '').trim().slice(0, 300) || def.maintenanceMessage,
+      maintenanceUpdatedAt: Math.max(0, Number(raw.maintenanceUpdatedAt) || 0),
       hideDefaultName: !!raw.hideDefaultName,
       hideGuests: !!raw.hideGuests,
       hideOffline: !!raw.hideOffline,
@@ -7470,6 +8369,7 @@ class IdleBreakoutGame {
     }
 
     if (changed) {
+      this.lastAdminEditAt = Math.max(this.lastAdminEditAt || 0, Date.now());
       this.updateHUD();
       this.refreshOpenModals();
       this.renderLeaderboard();
@@ -7518,6 +8418,7 @@ class IdleBreakoutGame {
       this.triggerSafeAutoUpdate(incoming.minClientVersion || APP_VERSION, 'tok:' + incoming.forceReloadToken);
     }
 
+    this.updateMaintenanceOverlay(true);
     this.updateMailUnreadBadge(true);
     const mailModal = document.getElementById('mail-modal');
     if (mailModal && mailModal.classList.contains('open')) {
@@ -7620,14 +8521,16 @@ class IdleBreakoutGame {
       const exAdminTs = Number(existing.adminUpdatedAt) || 0;
 
       const adminWins = rAdminTs > exAdminTs;
-      const higherProgressWins = !exAdminTs && (
+      const existingHasNewerAdmin = exAdminTs > rAdminTs;
+      const higherProgressWins = !existingHasNewerAdmin && (
         rReb > existing.rebirths ||
         (rReb === existing.rebirths && rLvl > existing.level)
       );
-      const sameProgressPreferFirestoreOrNewer =
+      const sameProgressPreferFirestoreOrNewer = !existingHasNewerAdmin && (
         rReb === existing.rebirths &&
         rLvl === existing.level &&
-        ((rp.fromFirestore && !existing.fromFirestore) || rTs >= existing.ts);
+        ((rp.fromFirestore && !existing.fromFirestore) || rTs >= existing.ts)
+      );
 
       existing.lastSeenLocalMs = Math.max(existing.lastSeenLocalMs || 0, rLocalSeen);
       existing.ts = Math.max(existing.ts || 0, rTs);
@@ -7702,7 +8605,56 @@ class IdleBreakoutGame {
       byKey.delete(`name:${myLower}`);
     }
 
-    return [...byKey.values()];
+    const result = [...byKey.values()];
+
+    // Alkalmazzuk a még le nem futott (távoli/offline) admin parancsokat a ranglista-nézetre is,
+    // hogy az újratöltés után se essen vissza a retained MQTT / korábbi felhő állapotra:
+    const pendingCmds = Object.values((this.lbAdminRules && this.lbAdminRules.playerCommands) || {})
+      .filter(c => c && typeof c === 'object' && (c.issuedAt || 0) > 0)
+      .sort((a, b) => (a.issuedAt || 0) - (b.issuedAt || 0));
+    const pendingGifts = Object.values((this.lbAdminRules && this.lbAdminRules.currencyGifts) || {})
+      .filter(g => g && typeof g === 'object' && (g.issuedAt || 0) > 0 && (g.setBB !== null && g.setBB !== undefined || g.setBT !== null && g.setBT !== undefined || g.setMoney !== null && g.setMoney !== undefined))
+      .sort((a, b) => (a.issuedAt || 0) - (b.issuedAt || 0));
+
+    if (pendingCmds.length > 0 || pendingGifts.length > 0) {
+      for (const e of result) {
+        const entryIds = [e.uid, e.id, e.docId, e.clientId, ...(e.rawKeys || [])].filter(Boolean).map(String);
+        const entryNameLower = (e.name || '').trim().toLowerCase();
+        const matchesRule = (rule) => {
+          const idHit = Array.isArray(rule.targetIds) && rule.targetIds.some(id => entryIds.includes(String(id)));
+          const nameHit = !!rule.targetNameLower && rule.targetNameLower !== 'játékos' && entryNameLower === rule.targetNameLower;
+          return idHit || nameHit;
+        };
+
+        for (const cmd of pendingCmds) {
+          const effBaseline = Math.max(Number(e.ts) || 0, Number(e.adminUpdatedAt) || 0);
+          if ((cmd.issuedAt || 0) <= effBaseline) continue;
+          if (!matchesRule(cmd)) continue;
+          if (cmd.rebirths !== null && cmd.rebirths !== undefined) {
+            e.rebirths = Math.max(0, Math.min(999999, Math.floor(Number(cmd.rebirths) || 0)));
+          }
+          if (cmd.level !== null && cmd.level !== undefined) {
+            e.level = Math.max(1, Math.min(999999, Math.floor(Number(cmd.level) || 1)));
+          }
+          if (cmd.name) {
+            e.name = String(cmd.name).trim().slice(0, 12);
+          }
+          e.adminUpdatedAt = Math.max(Number(e.adminUpdatedAt) || 0, Number(cmd.issuedAt) || 0);
+        }
+
+        for (const g of pendingGifts) {
+          const effBaseline = Math.max(Number(e.ts) || 0, Number(e.adminUpdatedAt) || 0);
+          if ((g.issuedAt || 0) <= effBaseline) continue;
+          if (!matchesRule(g)) continue;
+          if (g.setBB !== null && g.setBB !== undefined) e.bb = Math.max(0, Math.floor(Number(g.setBB) || 0));
+          if (g.setBT !== null && g.setBT !== undefined) e.bt = Math.max(0, Math.floor(Number(g.setBT) || 0));
+          if (g.setMoney !== null && g.setMoney !== undefined) e.money = Math.max(0, Math.floor(Number(g.setMoney) || 0));
+          e.adminUpdatedAt = Math.max(Number(e.adminUpdatedAt) || 0, Number(g.issuedAt) || 0);
+        }
+      }
+    }
+
+    return result;
   }
 
   getEntryMatchIds(entry) {
@@ -7997,11 +8949,69 @@ class IdleBreakoutGame {
     if (pinErr) { pinErr.textContent = ''; pinErr.style.display = 'none'; }
     if (pinIn) pinIn.value = '';
     this.updateDevLockView();
-    modal.classList.add('open');
+    this.openModal('dev-leaderboard-modal');
     if (!this.isDevUnlocked() && pinIn) {
       setTimeout(() => pinIn.focus(), 60);
     }
     if (window.soundEngine) window.soundEngine.playClickHit();
+  }
+
+  isMaintenanceBlocked() {
+    return Boolean(this.lbAdminRules && this.lbAdminRules.maintenanceMode && !this.isDevUnlocked());
+  }
+
+  updateMaintenanceOverlay(announceResume = false) {
+    const active = Boolean(this.lbAdminRules && this.lbAdminRules.maintenanceMode);
+    const blocked = active && !this.isDevUnlocked();
+    const overlay = document.getElementById('maintenance-overlay');
+    const msgEl = document.getElementById('maintenance-message-text');
+    const defaultMsg = 'Technikai karbantartás zajlik. Kérjük, várj egy pillanatot — amint elkészültünk, a játék automatikusan visszatölt!';
+
+    if (msgEl) {
+      msgEl.textContent = (this.lbAdminRules && this.lbAdminRules.maintenanceMessage) || defaultMsg;
+    }
+    if (overlay) {
+      overlay.classList.toggle('active', blocked);
+    }
+
+    if (this._wasMaintenanceBlocked && !blocked) {
+      this.lastTime = performance.now();
+      this.lastTickMs = Date.now();
+      if (announceResume) {
+        this.showToast('✅ A technikai karbantartás véget ért! Jó játékot!', 4500);
+      }
+    }
+    this._wasMaintenanceBlocked = blocked;
+
+    const btn = document.getElementById('btn-dev-maintenance-toggle');
+    if (btn) {
+      btn.classList.toggle('is-active', active);
+      btn.textContent = active ? '✅ KARBANTARTÁS VÉGE' : '🛠️ KARBANTARTÁS';
+      btn.title = active
+        ? 'Kattints a pipára: minden játékos azonnal visszakerül a játékba!'
+        : 'Azonnali technikai karbantartás bekapcsolása minden más játékosnál';
+    }
+  }
+
+  async devToggleMaintenanceMode() {
+    if (!this.lbAdminRules) this.lbAdminRules = this.getDefaultAdminRules();
+    const currentlyActive = !!this.lbAdminRules.maintenanceMode;
+    if (!currentlyActive) {
+      if (!confirm('Biztosan bekapcsolod a TECHNIKAI KARBANTARTÁS módot?\n\nMinden más játékosnál AZONNAL eltűnik a játék, és csak a karbantartás üzenet látszik. Ha kész vagy, nyomj a zöld ✅ pipára!')) {
+        return;
+      }
+      this.lbAdminRules.maintenanceMode = true;
+      this.lbAdminRules.maintenanceUpdatedAt = Date.now();
+      this.updateMaintenanceOverlay(false);
+      await this.syncAdminRulesGlobally(false);
+      this.showToast('🛠️ Technikai karbantartás AKTIVÁLVA minden más játékosnál! Ha végeztél, kattints a zöld ✅ pipára!', 4500);
+    } else {
+      this.lbAdminRules.maintenanceMode = false;
+      this.lbAdminRules.maintenanceUpdatedAt = Date.now();
+      this.updateMaintenanceOverlay(false);
+      await this.syncAdminRulesGlobally(false);
+      this.showToast('✅ Karbantartás leállítva — minden játékos azonnal visszakerült a játékba!', 4000);
+    }
   }
 
   updateDevLockView() {
@@ -8012,6 +9022,7 @@ class IdleBreakoutGame {
     if (gate) gate.style.display = unlocked ? 'none' : 'flex';
     if (body) body.style.display = unlocked ? 'flex' : 'none';
     if (lockBtn) lockBtn.style.display = unlocked ? 'inline-flex' : 'none';
+    this.updateMaintenanceOverlay(false);
     if (unlocked) {
       this.requestLivePeersSync();
       this.renderDevLeaderboardPanel();
@@ -8036,14 +9047,7 @@ class IdleBreakoutGame {
       }
     });
 
-    const closeModal = () => {
-      if (modal) modal.classList.remove('open');
-      this.devEditTarget = null;
-      this._devInlineEditActive = false;
-      this._cancelActiveInlineEdit = null;
-      const editBox = document.getElementById('dev-edit-box');
-      if (editBox) editBox.style.display = 'none';
-    };
+    const closeModal = () => this.closeModal('dev-leaderboard-modal');
     if (closeBtn) closeBtn.addEventListener('click', closeModal);
     if (closeFooter) closeFooter.addEventListener('click', closeModal);
 
@@ -8129,6 +9133,29 @@ class IdleBreakoutGame {
         this.lbAdminRules.forceReloadToken = Date.now();
         await this.syncAdminRulesGlobally(false);
         this.showToast(`🔄 <strong>Frissítési parancs kiküldve (v${APP_VERSION})!</strong> Minden online játékos pár másodpercen belül automatikusan újratölt.`, 4500);
+      });
+    }
+    const seasonWipeBtn = document.getElementById('btn-dev-season-wipe');
+    if (seasonWipeBtn) {
+      seasonWipeBtn.addEventListener('click', () => this.devExecuteGlobalSeasonWipe());
+    }
+    const maintToggleBtn = document.getElementById('btn-dev-maintenance-toggle');
+    if (maintToggleBtn) {
+      maintToggleBtn.addEventListener('click', () => this.devToggleMaintenanceMode());
+    }
+    const maintIconTrigger = document.getElementById('maintenance-icon-trigger');
+    if (maintIconTrigger) {
+      let tapCount = 0;
+      let tapTimer = null;
+      maintIconTrigger.addEventListener('click', () => {
+        tapCount++;
+        clearTimeout(tapTimer);
+        if (tapCount >= 5) {
+          tapCount = 0;
+          this.openDevPanel();
+        } else {
+          tapTimer = setTimeout(() => { tapCount = 0; }, 1200);
+        }
       });
     }
 
@@ -8325,6 +9352,9 @@ class IdleBreakoutGame {
     }
 
     if (entry.isPlayer) {
+      if (rebChanged || lvlChanged || nameChanged || hasCurrencyGift) {
+        this.lastAdminEditAt = Date.now();
+      }
       if (rebChanged) {
         this.rebirthCount = newReb;
         this.rebirthMultiplier = this.getRebirthMultiplier();
@@ -8374,14 +9404,14 @@ class IdleBreakoutGame {
         if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
           this.lbAdminRules.playerCommands = {};
         }
-        const cmdKey = entry.uid || entry.docId || entry.id || `name:${origLower}`;
-        this.lbAdminRules.playerCommands[cmdKey] = {
-          cmdId: 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+        const cmdId = 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+        this.lbAdminRules.playerCommands[cmdId] = {
+          cmdId,
           targetIds: matchIds,
           targetNameLower: origLower,
-          name: newName,
-          rebirths: newReb,
-          level: newLvl,
+          name: nameChanged ? newName : '',
+          rebirths: rebChanged ? newReb : null,
+          level: lvlChanged ? newLvl : null,
           issuedAt: now
         };
 
@@ -8397,10 +9427,9 @@ class IdleBreakoutGame {
           for (const pid of Object.keys(this.remotePlayers)) {
             const rp = this.remotePlayers[pid];
             if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
-              rp.name = newName;
-              rp.rebirths = newReb;
-              rp.level = newLvl;
-              rp.ts = now;
+              if (nameChanged) rp.name = newName;
+              if (rebChanged) rp.rebirths = newReb;
+              if (lvlChanged) rp.level = newLvl;
               rp.adminUpdatedAt = now;
             }
           }
@@ -8408,12 +9437,11 @@ class IdleBreakoutGame {
         }
 
         if (this.cloud && (entry.docId || entry.uid)) {
-          await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
-            name: newName,
-            rebirths: newReb,
-            level: newLvl,
-            ts: now
-          });
+          const docPatch = { adminUpdatedAt: now };
+          if (nameChanged) docPatch.name = newName;
+          if (rebChanged) docPatch.rebirths = newReb;
+          if (lvlChanged) docPatch.level = newLvl;
+          await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, docPatch);
         }
       }
 
@@ -8509,19 +9537,19 @@ class IdleBreakoutGame {
       maxLenAttr = 'maxlength="12"';
     } else if (field === 'bb') {
       initVal = (entry.bb !== null && entry.bb !== undefined) ? String(Math.max(0, Math.floor(Number(entry.bb) || 0))) : '';
-      placeholder = 'pl. 50 / +10';
+      placeholder = 'pl. 50 / -10 / +10';
     } else if (field === 'bt') {
       initVal = (entry.bt !== null && entry.bt !== undefined) ? String(Math.max(0, Math.floor(Number(entry.bt) || 0))) : '';
-      placeholder = 'pl. 25 / +5';
+      placeholder = 'pl. 25 / -5 / +5';
     } else if (field === 'money') {
       initVal = (entry.money !== null && entry.money !== undefined) ? String(Math.max(0, Math.floor(Number(entry.money) || 0))) : '';
-      placeholder = 'pl. 500k / +1m';
+      placeholder = 'pl. 500k / -100k';
     } else if (field === 'rebirths') {
       initVal = String(Math.max(0, Math.floor(Number(entry.rebirths) || 0)));
-      placeholder = 'pl. 5 / +1';
+      placeholder = 'pontos szám (pl. 4)';
     } else if (field === 'level') {
       initVal = String(Math.max(1, Math.floor(Number(entry.level) || 1)));
-      placeholder = 'pl. 100 / +10';
+      placeholder = 'pontos szám (pl. 50)';
     }
 
     let finished = false;
@@ -8567,6 +9595,7 @@ class IdleBreakoutGame {
       if (finished) return;
       finished = true;
       const val = inp.value;
+      restoreOnly();
       this._devInlineEditActive = false;
       this._cancelActiveInlineEdit = null;
       this.devCommitInlineField(entry, field, val);
@@ -8727,6 +9756,7 @@ class IdleBreakoutGame {
         toastMsg = `💵 Saját Pénz = <strong>$${this.formatNumber(this.money)}</strong>`;
       }
 
+      this.lastAdminEditAt = Date.now();
       this.updateHUD();
       this.refreshOpenModals();
       this.save();
@@ -8739,7 +9769,7 @@ class IdleBreakoutGame {
       }
       if (window.soundEngine) window.soundEngine.playCoin();
       if (toastMsg) this.showToast(toastMsg, 3200);
-      this.renderDevLeaderboardPanel();
+      this.renderDevLeaderboardPanel(true);
       return;
     }
 
@@ -8763,14 +9793,14 @@ class IdleBreakoutGame {
       if (!this.lbAdminRules.playerCommands || typeof this.lbAdminRules.playerCommands !== 'object') {
         this.lbAdminRules.playerCommands = {};
       }
-      const cmdKey = entry.uid || entry.docId || entry.id || `name:${origLower}`;
-      this.lbAdminRules.playerCommands[cmdKey] = {
-        cmdId: 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+      const cmdId = 'cmd_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      this.lbAdminRules.playerCommands[cmdId] = {
+        cmdId,
         targetIds: matchIds,
         targetNameLower: origLower,
-        name: newName,
-        rebirths: newReb,
-        level: newLvl,
+        name: field === 'name' ? newName : '',
+        rebirths: field === 'rebirths' ? newReb : null,
+        level: field === 'level' ? newLvl : null,
         issuedAt: now
       };
 
@@ -8782,14 +9812,12 @@ class IdleBreakoutGame {
           .forEach(k => delete this.lbAdminRules.playerCommands[k]);
       }
 
+      const editedVal = field === 'name' ? newName : (field === 'rebirths' ? newReb : newLvl);
       if (this.remotePlayers) {
         for (const pid of Object.keys(this.remotePlayers)) {
           const rp = this.remotePlayers[pid];
           if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
-            rp.name = newName;
-            rp.rebirths = newReb;
-            rp.level = newLvl;
-            rp.ts = now;
+            rp[field] = editedVal;
             rp.adminUpdatedAt = now;
           }
         }
@@ -8798,15 +9826,14 @@ class IdleBreakoutGame {
 
       if (this.cloud && (entry.docId || entry.uid)) {
         await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
-          name: newName,
-          rebirths: newReb,
-          level: newLvl,
-          ts: now
+          [field]: editedVal,
+          adminUpdatedAt: now
         });
       }
 
       this.showToast(`✅ ${this.escapeHtml(entry.name)} frissítve!`, 2800);
       await this.syncAdminRulesGlobally(false);
+      this.renderDevLeaderboardPanel(true);
       return;
     }
 
@@ -8882,7 +9909,6 @@ class IdleBreakoutGame {
         const rp = this.remotePlayers[pid];
         if (rp && (matchIds.includes(pid) || matchIds.includes(rp.id) || (rp.uid && matchIds.includes(rp.uid)))) {
           rp[field] = resolvedVal;
-          rp.ts = now;
           rp.adminUpdatedAt = now;
         }
       }
@@ -8892,12 +9918,13 @@ class IdleBreakoutGame {
     if (resolvedVal !== null && this.cloud && (entry.docId || entry.uid)) {
       await this.cloud.adminUpdateLeaderboardDoc(entry.docId || entry.uid, {
         [field]: resolvedVal,
-        ts: now
+        adminUpdatedAt: now
       });
     }
 
     if (toastMsg) this.showToast(toastMsg, 3500);
     await this.syncAdminRulesGlobally(false);
+    this.renderDevLeaderboardPanel(true);
   }
 
   async devBanOrUnbanEntry(entry) {
@@ -9025,16 +10052,11 @@ class IdleBreakoutGame {
     const closeFooter = document.getElementById('btn-close-mail-footer');
     if (openBtn) openBtn.addEventListener('click', () => this.openMailModal());
     const closeMail = () => {
-      if (modal) modal.classList.remove('open');
+      this.closeModal('mail-modal');
       if (window.soundEngine) window.soundEngine.playClickHit();
     };
     if (closeBtn) closeBtn.addEventListener('click', closeMail);
     if (closeFooter) closeFooter.addEventListener('click', closeMail);
-    if (modal) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeMail();
-      });
-    }
     this.updateMailUnreadBadge(false);
   }
 
@@ -9045,21 +10067,73 @@ class IdleBreakoutGame {
   }
 
   getPlayerInboxMails() {
-    const allMails = (this.lbAdminRules && Array.isArray(this.lbAdminRules.adminMails))
-      ? this.lbAdminRules.adminMails
+    const rawMails = (this.lbAdminRules && Array.isArray(this.lbAdminRules.adminMails))
+      ? [...this.lbAdminRules.adminMails]
       : [];
-    if (allMails.length === 0) return [];
+    if (!rawMails.some(m => m && m.id === SEASON_RESET_MAIL.id)) {
+      rawMails.push({ ...SEASON_RESET_MAIL });
+    }
     const myUid = (this.cloud && this.cloud.currentUser) ? this.cloud.currentUser.uid : null;
     const myIds = [myUid, this.myPlayerId].filter(Boolean).map(String);
     const myNameLower = (this.playerName || '').trim().toLowerCase();
 
-    return allMails.filter(m => {
+    return rawMails.filter(m => {
       if (!m) return false;
       if (m.targetMode !== 'player') return true;
       const idMatch = Array.isArray(m.targetIds) && m.targetIds.some(id => myIds.includes(String(id)));
       const nameMatch = !!m.targetNameLower && m.targetNameLower !== 'játékos' && myNameLower === m.targetNameLower;
       return idMatch || nameMatch;
     }).sort((a, b) => (b.sentAt || 0) - (a.sentAt || 0));
+  }
+
+  async devExecuteGlobalSeasonWipe() {
+    if (!confirm('Biztosan nullázod MINDENKI statját (Szint 1, Rebirth 0, +5 BT és +1 BB kárpótlás), és kiküldöd a globális Szezon 2 levelet? (A skinek megmaradnak!)')) {
+      return;
+    }
+    const now = Date.now();
+    this.appliedSeasonResetId = null;
+    this.applySeasonResetMigration(null, false);
+
+    if (!this.lbAdminRules.adminMails || !Array.isArray(this.lbAdminRules.adminMails)) {
+      this.lbAdminRules.adminMails = [];
+    }
+    if (!this.lbAdminRules.adminMails.some(m => m && m.id === SEASON_RESET_MAIL.id)) {
+      this.lbAdminRules.adminMails.push({ ...SEASON_RESET_MAIL, sentAt: now });
+    }
+    this.lbAdminRules.minClientVersion = APP_VERSION;
+    this.lbAdminRules.forceReloadToken = now;
+
+    if (this.remotePlayers) {
+      for (const pid of Object.keys(this.remotePlayers)) {
+        const rp = this.remotePlayers[pid];
+        if (!rp) continue;
+        rp.rebirths = 0;
+        rp.level = 1;
+        rp.bricks = 0;
+        rp.money = 0;
+        rp.bb = 1;
+        rp.bt = 5;
+        rp.bpStage = 1;
+        rp.adminUpdatedAt = now;
+        if (this.cloud && (rp.docId || rp.uid || pid)) {
+          await this.cloud.adminUpdateLeaderboardDoc(rp.docId || rp.uid || pid, {
+            rebirths: 0,
+            level: 1,
+            bricks: 0,
+            money: 0,
+            bb: 1,
+            bt: 5,
+            bpStage: 1,
+            adminUpdatedAt: now
+          });
+        }
+      }
+      try { localStorage.setItem('idle_breakout_remote_players', JSON.stringify(this.remotePlayers)); } catch (e) {}
+    }
+
+    await this.syncAdminRulesGlobally(false);
+    this.renderDevLeaderboardPanel(true);
+    this.showToast('🧹 Szezon 2 Globális Reset + 5 BT & 1 BB kárpótlás + Levél kiküldve!', 5000);
   }
 
   updateMailUnreadBadge(notifyNew = false) {
@@ -9103,7 +10177,7 @@ class IdleBreakoutGame {
     }
     this.updateMailUnreadBadge(false);
     this.renderMailInboxModal(newlyReadSet);
-    modal.classList.add('open');
+    this.openModal('mail-modal');
     if (window.soundEngine) window.soundEngine.playClickHit();
   }
 
@@ -9259,8 +10333,9 @@ class IdleBreakoutGame {
     this.showToast('🗑️ Levél törölve!', 2500);
   }
 
-  renderDevLeaderboardPanel() {
+  renderDevLeaderboardPanel(forceRender = false) {
     if (!this.isDevUnlocked()) return;
+    this.updateMaintenanceOverlay(false);
     const roster = this.getRawLeaderboardRoster();
     roster.sort((a, b) => {
       if (b.rebirths !== a.rebirths) return b.rebirths - a.rebirths;
@@ -9273,7 +10348,7 @@ class IdleBreakoutGame {
 
     // Players list (ne írjuk felül a DOM-ot, amíg egy kártyán belüli mezőt épp ír a fejlesztő)
     const listEl = document.getElementById('dev-players-list');
-    const isInlineEditing = !!(listEl && (this._devInlineEditActive || listEl.querySelector('.dev-inline-input')));
+    const isInlineEditing = !forceRender && !!(listEl && (this._devInlineEditActive || listEl.querySelector('.dev-inline-input')));
     if (listEl && !isInlineEditing) {
       listEl.innerHTML = roster.map((entry, idx) => {
         const srcBadge = entry.isPlayer
@@ -9337,11 +10412,11 @@ class IdleBreakoutGame {
                 <span class="dev-stat-lbl">👑 BT</span>
                 <span class="dev-stat-val">${btTxt}</span>
               </div>
-              <div class="dev-stat-chip chip-reb is-editable" data-edit-field="rebirths" title="Kattints a Rebirth átírásához (pl. 10 vagy +1)">
+              <div class="dev-stat-chip chip-reb is-editable" data-edit-field="rebirths" title="Kattints a pontos Rebirth beállításához (pl. 4 vagy 1, csökkentéshez is)">
                 <span class="dev-stat-lbl">🔄 REB (${rebMultTxt}x)</span>
                 <span class="dev-stat-val">${this.formatLeaderboardStat(entry.rebirths)}</span>
               </div>
-              <div class="dev-stat-chip chip-lvl is-editable" data-edit-field="level" title="Kattints a Szint átírásához (pl. 100 vagy +10)">
+              <div class="dev-stat-chip chip-lvl is-editable" data-edit-field="level" title="Kattints a pontos Szint beállításához (pl. 100 vagy 1)">
                 <span class="dev-stat-lbl">🚩 SZINT</span>
                 <span class="dev-stat-val">${this.formatLeaderboardStat(entry.level)}</span>
               </div>
@@ -9565,7 +10640,7 @@ class IdleBreakoutGame {
       const fillEl = document.getElementById(`bp-progress-fill${suffix}`);
       const textEl = document.getElementById(`bp-progress-text${suffix}`);
 
-      if (stageEl) stageEl.textContent = `Stage ${curStage.stage}/30`;
+      if (stageEl) stageEl.textContent = `Stage ${curStage.stage}/${BATTLE_PASS_STAGES.length}`;
       if (bricksEl) bricksEl.textContent = this.formatNumber(this.totalBricksDestroyed);
       if (fillEl) fillEl.style.width = `${progressPercent.toFixed(1)}%`;
       if (textEl) textEl.textContent = progressLabel;
@@ -9589,6 +10664,12 @@ class IdleBreakoutGame {
       effects: new Set(['none']),
       breakEffects: new Set(['none'])
     };
+
+    if (this.preservedCosmetics) {
+      (this.preservedCosmetics.skins || []).forEach(id => unlocked.skins.add(id));
+      (this.preservedCosmetics.effects || []).forEach(id => unlocked.effects.add(id));
+      (this.preservedCosmetics.breakEffects || []).forEach(id => unlocked.breakEffects.add(id));
+    }
 
     for (const stage of BATTLE_PASS_STAGES) {
       if (this.battlePassClaimedFree[stage.stage] && stage.free && stage.free.type !== 'currency') {
@@ -9630,7 +10711,10 @@ class IdleBreakoutGame {
         } else {
           freeActionHtml = `<button class="btn-claim-reward" disabled>${this.formatNumber(stage.bricks)} BLOKK</button>`;
         }
-        const freeLabel = stage.free.name + (stage.free.isRare ? ' ⭐' : '');
+        const multiTag = (stage.free.maxEquip && stage.free.maxEquip > 1)
+          ? ` <span class="armory-multi-badge">🔗 ${stage.free.maxEquip}×</span>`
+          : '';
+        const freeLabel = stage.free.name + (stage.free.isRare ? ' ⭐' : '') + multiTag;
         freeTrackHtml = `
           <div class="bp-track-row">
             <span class="track-pill pill-free">FREE</span>
@@ -9693,25 +10777,54 @@ class IdleBreakoutGame {
     const allSkins = [{ id: 'default', name: 'Alapértelmezett' }];
     const allEffects = [{ id: 'none', name: 'Nincs effekt' }];
     const allBreakEffects = [{ id: 'none', name: 'Nincs törés effekt' }];
+    const addedSkins = new Set(['default']);
+    const addedEffects = new Set(['none']);
+    const addedBreakEffects = new Set(['none']);
 
     for (const stage of BATTLE_PASS_STAGES) {
-      if (stage.free && stage.free.type === 'skin' && unlocked.skins.has(stage.free.id)) {
-        allSkins.push({ id: stage.free.id, name: stage.free.name });
+      if (stage.free && stage.free.type === 'skin' && unlocked.skins.has(stage.free.id) && !addedSkins.has(stage.free.id)) {
+        addedSkins.add(stage.free.id);
+        allSkins.push({ id: stage.free.id, name: stage.free.name, maxEquip: stage.free.maxEquip || 1 });
       }
-      if (stage.free && stage.free.type === 'effect' && unlocked.effects.has(stage.free.id)) {
-        allEffects.push({ id: stage.free.id, name: stage.free.name });
+      if (stage.free && stage.free.type === 'effect' && unlocked.effects.has(stage.free.id) && !addedEffects.has(stage.free.id)) {
+        addedEffects.add(stage.free.id);
+        allEffects.push({ id: stage.free.id, name: stage.free.name, maxEquip: stage.free.maxEquip || 1 });
       }
-      if (stage.free && stage.free.type === 'break_effect' && unlocked.breakEffects.has(stage.free.id)) {
-        allBreakEffects.push({ id: stage.free.id, name: stage.free.name });
+      if (stage.free && stage.free.type === 'break_effect' && unlocked.breakEffects.has(stage.free.id) && !addedBreakEffects.has(stage.free.id)) {
+        addedBreakEffects.add(stage.free.id);
+        allBreakEffects.push({ id: stage.free.id, name: stage.free.name, maxEquip: stage.free.maxEquip || 1 });
       }
-      if (stage.paid && stage.paid.type === 'skin' && unlocked.skins.has(stage.paid.id)) {
-        allSkins.push({ id: stage.paid.id, name: stage.paid.name });
+      if (stage.paid && stage.paid.type === 'skin' && unlocked.skins.has(stage.paid.id) && !addedSkins.has(stage.paid.id)) {
+        addedSkins.add(stage.paid.id);
+        allSkins.push({ id: stage.paid.id, name: stage.paid.name, maxEquip: stage.paid.maxEquip || 1 });
       }
-      if (stage.paid && stage.paid.type === 'effect' && unlocked.effects.has(stage.paid.id)) {
-        allEffects.push({ id: stage.paid.id, name: stage.paid.name });
+      if (stage.paid && stage.paid.type === 'effect' && unlocked.effects.has(stage.paid.id) && !addedEffects.has(stage.paid.id)) {
+        addedEffects.add(stage.paid.id);
+        allEffects.push({ id: stage.paid.id, name: stage.paid.name, maxEquip: stage.paid.maxEquip || 1 });
       }
-      if (stage.paid && stage.paid.type === 'break_effect' && unlocked.breakEffects.has(stage.paid.id)) {
-        allBreakEffects.push({ id: stage.paid.id, name: stage.paid.name });
+      if (stage.paid && stage.paid.type === 'break_effect' && unlocked.breakEffects.has(stage.paid.id) && !addedBreakEffects.has(stage.paid.id)) {
+        addedBreakEffects.add(stage.paid.id);
+        allBreakEffects.push({ id: stage.paid.id, name: stage.paid.name, maxEquip: stage.paid.maxEquip || 1 });
+      }
+    }
+
+    // Régi Szezon 1 skinek & effektek hozzáadása (megőrzés újrakezdés után!)
+    for (const sId of unlocked.skins) {
+      if (!addedSkins.has(sId)) {
+        addedSkins.add(sId);
+        allSkins.push({ id: sId, name: (LEGACY_COSMETIC_META.skins && LEGACY_COSMETIC_META.skins[sId]) || sId, maxEquip: 1 });
+      }
+    }
+    for (const eId of unlocked.effects) {
+      if (!addedEffects.has(eId)) {
+        addedEffects.add(eId);
+        allEffects.push({ id: eId, name: (LEGACY_COSMETIC_META.effects && LEGACY_COSMETIC_META.effects[eId]) || eId, maxEquip: 1 });
+      }
+    }
+    for (const bId of unlocked.breakEffects) {
+      if (!addedBreakEffects.has(bId)) {
+        addedBreakEffects.add(bId);
+        allBreakEffects.push({ id: bId, name: (LEGACY_COSMETIC_META.breakEffects && LEGACY_COSMETIC_META.breakEffects[bId]) || bId, maxEquip: 1 });
       }
     }
 
@@ -9739,7 +10852,7 @@ class IdleBreakoutGame {
       `;
     } else {
       armoryHtml = `<div style="font-size:12px; color:#555; margin-bottom:4px; line-height:1.25;">
-        ℹ️ Bármelyik labdatípusból <strong>1 db labdára</strong> tehetsz skint, vizuális effektet és törés (breaking) effektet. <strong>Minden kozmetika egyszerre csak 1 labdán lehet!</strong>
+        ℹ️ Alap kozmetikák <strong>1 labdára</strong> tehetők, de a <strong>🔗 2× / 3×</strong> jelű Szezon 2 skinek és effektek egyszerre akár <strong>2–3 labdatípuson és több labdán</strong> is aktívak lehetnek!
       </div>`;
 
       for (const typeKey of ownedBallTypes) {
@@ -9748,56 +10861,44 @@ class IdleBreakoutGame {
         const typeDisplay = cnt > 1 ? lbl.many : lbl.one;
         const curEquip = (this.ballTypeEquips && this.ballTypeEquips[typeKey]) || { skinId: 'default', effectId: 'none', breakEffectId: 'none' };
 
+        const formatMultiNote = (cosId, propName, maxEq) => {
+          if (!this.ballTypeEquips) return '';
+          const usedBy = Object.keys(this.ballTypeEquips)
+            .filter(ok => ok !== typeKey && this.ballTypeEquips[ok] && this.ballTypeEquips[ok][propName] === cosId);
+          if (maxEq > 1) {
+            return usedBy.length > 0 ? ` [${usedBy.length}/${maxEq} másikon]` : ` [🔗 ${maxEq}×]`;
+          }
+          if (usedBy.length > 0) {
+            const otherLbl = armoryLabels[usedBy[0]] ? armoryLabels[usedBy[0]].one : usedBy[0];
+            return ` (${otherLbl}-n van)`;
+          }
+          return '';
+        };
+
         const skinOptions = allSkins.map(s => {
           const sel = (s.id === curEquip.skinId) ? 'selected' : '';
-          let note = '';
-          if (s.id !== 'default' && this.ballTypeEquips) {
-            for (const otherKey of Object.keys(this.ballTypeEquips)) {
-              if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].skinId === s.id) {
-                const otherLbl = armoryLabels[otherKey] ? armoryLabels[otherKey].one : otherKey;
-                note = ` (${otherLbl}-n van)`;
-                break;
-              }
-            }
-          }
+          const note = s.id !== 'default' ? formatMultiNote(s.id, 'skinId', s.maxEquip || 1) : '';
           return `<option value="${s.id}" ${sel}>${s.name}${note}</option>`;
         }).join('');
 
         const effectOptions = allEffects.map(fx => {
           const sel = (fx.id === curEquip.effectId) ? 'selected' : '';
-          let note = '';
-          if (fx.id !== 'none' && this.ballTypeEquips) {
-            for (const otherKey of Object.keys(this.ballTypeEquips)) {
-              if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].effectId === fx.id) {
-                const otherLbl = armoryLabels[otherKey] ? armoryLabels[otherKey].one : otherKey;
-                note = ` (${otherLbl}-n van)`;
-                break;
-              }
-            }
-          }
+          const note = fx.id !== 'none' ? formatMultiNote(fx.id, 'effectId', fx.maxEquip || 1) : '';
           return `<option value="${fx.id}" ${sel}>${fx.name}${note}</option>`;
         }).join('');
 
         const breakEffectOptions = allBreakEffects.map(bfx => {
           const sel = (bfx.id === (curEquip.breakEffectId || 'none')) ? 'selected' : '';
-          let note = '';
-          if (bfx.id !== 'none' && this.ballTypeEquips) {
-            for (const otherKey of Object.keys(this.ballTypeEquips)) {
-              if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].breakEffectId === bfx.id) {
-                const otherLbl = armoryLabels[otherKey] ? armoryLabels[otherKey].one : otherKey;
-                note = ` (${otherLbl}-n van)`;
-                break;
-              }
-            }
-          }
+          const note = bfx.id !== 'none' ? formatMultiNote(bfx.id, 'breakEffectId', bfx.maxEquip || 1) : '';
           return `<option value="${bfx.id}" ${sel}>${bfx.name}${note}</option>`;
         }).join('');
 
+        const visSlots = this.getMaxVisualCosmeticSlotsForEquip(curEquip);
         armoryHtml += `
           <div class="armory-ball-card">
             <div class="armory-ball-header">
               <span class="armory-ball-title"><span class="ball-dot ball-icon-${typeKey}"></span> ${typeDisplay} (${cnt}x)</span>
-              <span class="armory-ball-sub">1 db-on</span>
+              <span class="armory-ball-sub">${visSlots > 1 ? `akár ${visSlots} db-on` : '1 db-on'}</span>
             </div>
             <div class="armory-select-row">
               <label>Skin:</label>
@@ -9856,39 +10957,34 @@ class IdleBreakoutGame {
     };
     const friendly = labelMap[typeKey] || typeKey;
 
+    const enforceMaxEquip = (kind, prop, emptyVal, id) => {
+      const maxEq = this.getCosmeticMaxEquip(kind, id);
+      if (id !== emptyVal) {
+        const others = Object.keys(this.ballTypeEquips)
+          .filter(ok => ok !== typeKey && this.ballTypeEquips[ok] && this.ballTypeEquips[ok][prop] === id);
+        while (others.length >= maxEq) {
+          const removeKey = others.shift();
+          this.ballTypeEquips[removeKey][prop] = emptyVal;
+        }
+      }
+      this.ballTypeEquips[typeKey][prop] = id;
+      const activeCnt = id === emptyVal ? 0 : Object.keys(this.ballTypeEquips)
+        .filter(ok => this.ballTypeEquips[ok] && this.ballTypeEquips[ok][prop] === id).length;
+      return { maxEq, activeCnt };
+    };
+
     if (type === 'skin') {
-      // 1 skin egyszerre csak 1 labdán lehet az összes típus között!
-      if (cosmeticId !== 'default') {
-        for (const otherKey of Object.keys(this.ballTypeEquips)) {
-          if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].skinId === cosmeticId) {
-            this.ballTypeEquips[otherKey].skinId = 'default';
-          }
-        }
-      }
-      this.ballTypeEquips[typeKey].skinId = cosmeticId;
-      this.showToast(`🎨 ${friendly} skin frissítve (1 db-on aktív)!`, 2400);
+      const info = enforceMaxEquip('skin', 'skinId', 'default', cosmeticId);
+      const capTxt = info.maxEq > 1 ? `${info.activeCnt}/${info.maxEq} típuson aktív` : '1 db-on aktív';
+      this.showToast(`🎨 ${friendly} skin frissítve (${capTxt})!`, 2400);
     } else if (type === 'effect') {
-      // 1 effekt egyszerre csak 1 labdán lehet az összes típus között!
-      if (cosmeticId !== 'none') {
-        for (const otherKey of Object.keys(this.ballTypeEquips)) {
-          if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].effectId === cosmeticId) {
-            this.ballTypeEquips[otherKey].effectId = 'none';
-          }
-        }
-      }
-      this.ballTypeEquips[typeKey].effectId = cosmeticId;
-      this.showToast(`✨ ${friendly} effekt beállítva (1 db-on aktív)!`, 2400);
+      const info = enforceMaxEquip('effect', 'effectId', 'none', cosmeticId);
+      const capTxt = info.maxEq > 1 ? `${info.activeCnt}/${info.maxEq} típuson aktív` : '1 db-on aktív';
+      this.showToast(`✨ ${friendly} effekt beállítva (${capTxt})!`, 2400);
     } else if (type === 'break_effect') {
-      // 1 törés effekt egyszerre csak 1 labdán lehet az összes típus között!
-      if (cosmeticId !== 'none') {
-        for (const otherKey of Object.keys(this.ballTypeEquips)) {
-          if (otherKey !== typeKey && this.ballTypeEquips[otherKey] && this.ballTypeEquips[otherKey].breakEffectId === cosmeticId) {
-            this.ballTypeEquips[otherKey].breakEffectId = 'none';
-          }
-        }
-      }
-      this.ballTypeEquips[typeKey].breakEffectId = cosmeticId;
-      this.showToast(`💥 ${friendly} törés effekt beállítva (1 db-on aktív)!`, 2400);
+      const info = enforceMaxEquip('break_effect', 'breakEffectId', 'none', cosmeticId);
+      const capTxt = info.maxEq > 1 ? `${info.activeCnt}/${info.maxEq} típuson aktív` : '1 db-on aktív';
+      this.showToast(`💥 ${friendly} törés effekt beállítva (${capTxt})!`, 2400);
     }
     if (window.soundEngine) window.soundEngine.playCosmeticEquip();
     this.renderBattlePass();
