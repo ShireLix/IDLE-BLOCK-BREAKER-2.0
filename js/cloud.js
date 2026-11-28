@@ -601,8 +601,30 @@ class CloudAuthManager {
         if (!cloudSave) return;
         if (cloudDoc.deviceSessionId && cloudDoc.deviceSessionId === this.deviceSessionId) return;
 
+        const localLive = {
+          rebirthCount: this.game.rebirthCount || 0,
+          level: this.game.level || 1,
+          totalBricksDestroyed: this.game.totalBricksDestroyed || 0,
+          lastAdminEditAt: this.game.lastAdminEditAt || 0,
+          appliedSeasonResetId: this.game.appliedSeasonResetId || null,
+          appliedSeasonResetToken: this.game.appliedSeasonResetToken || null,
+          lastSavedAt: Number(this.game.readRawLocalSave()?.lastSavedAt) || 0
+        };
+        const cloudIsPostReset = (typeof this.game.isSavePostSeasonReset === 'function')
+          ? this.game.isSavePostSeasonReset(cloudSave)
+          : (cloudSave.appliedSeasonResetId === 'fair_restart_s2_v9_4');
+        const localIsPostReset = (typeof this.game.isSavePostSeasonReset === 'function')
+          ? this.game.isSavePostSeasonReset(localLive)
+          : (localLive.appliedSeasonResetId === 'fair_restart_s2_v9_4');
+        if (!cloudIsPostReset && localIsPostReset) return;
+
+        const progressCmp = this.compareSaveProgress(cloudSave, localLive);
+        const cloudHasNewerAdmin = (Number(cloudSave.lastAdminEditAt) || 0) > (Number(this.game.lastAdminEditAt) || 0);
+        const cloudIsNewerSeason = cloudIsPostReset && !localIsPostReset;
+        if (progressCmp < 0 && !cloudHasNewerAdmin && !cloudIsNewerSeason) return;
+
         const incomingTs = Math.max(Number(cloudDoc.updatedAt) || 0, Number(cloudSave.lastSavedAt) || 0);
-        if (incomingTs <= (this.lastCloudSaveMs || 0) + 800) return;
+        if (progressCmp === 0 && !cloudHasNewerAdmin && !cloudIsNewerSeason && incomingTs <= (this.lastCloudSaveMs || 0) + 800) return;
 
         const effectiveCloudSave = { ...cloudSave };
         if ((!effectiveCloudSave.playerName || effectiveCloudSave.playerName === 'Játékos') && (cloudDoc.playerName || this.currentUser.displayName)) {
@@ -655,13 +677,11 @@ class CloudAuthManager {
           const rawSnap = localRaw || { rebirthCount: 0, level: 1, totalBricksDestroyed: 0, lastSavedAt: 0, lastAdminEditAt: 0, appliedSeasonResetId: null, appliedSeasonResetToken: null };
           const bestLocal = (!hasForeignOwner && this.compareSaveProgress(liveSnap, rawSnap) >= 0) ? liveSnap : rawSnap;
 
-          const activeResetToken = (this.game.lbAdminRules && this.game.lbAdminRules.seasonResetToken) || '';
-          const localHasSeason = !hasForeignOwner && (
-            bestLocal.appliedSeasonResetId === 'fair_restart_s2_v9_4' ||
-            this.game.appliedSeasonResetId === 'fair_restart_s2_v9_4'
-          ) && (!activeResetToken || bestLocal.appliedSeasonResetToken === activeResetToken || this.game.appliedSeasonResetToken === activeResetToken);
-          const cloudHasSeason = (cloudSave.appliedSeasonResetId === 'fair_restart_s2_v9_4') &&
-            (!activeResetToken || cloudSave.appliedSeasonResetToken === activeResetToken);
+          const checkPostReset = (s) => (typeof this.game.isSavePostSeasonReset === 'function')
+            ? this.game.isSavePostSeasonReset(s)
+            : (s && s.appliedSeasonResetId === 'fair_restart_s2_v9_4');
+          const localHasSeason = !hasForeignOwner && (checkPostReset(bestLocal) || checkPostReset(liveSnap));
+          const cloudHasSeason = checkPostReset(cloudSave);
 
           if (localHasSeason && !cloudHasSeason) {
             if (typeof this.game.collectLegacyCosmeticsFromSave === 'function') {

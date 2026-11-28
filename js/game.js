@@ -5,7 +5,7 @@
  * Background Tab & Offline Progression.
  */
 
-const APP_VERSION = '9.4';
+const APP_VERSION = '9.4.5';
 const SEASON_RESET_ID = 'fair_restart_s2_v9_4';
 const SEASON_RESET_MAIL = {
   id: 'mail_season_reset_s2_v9_4',
@@ -6867,8 +6867,16 @@ class IdleBreakoutGame {
       }
 
       const activeResetToken = (this.lbAdminRules && this.lbAdminRules.seasonResetToken) || SEASON_RESET_ID;
-      if (this.appliedSeasonResetId !== SEASON_RESET_ID || (this.lbAdminRules && this.lbAdminRules.seasonResetToken && this.appliedSeasonResetToken !== this.lbAdminRules.seasonResetToken)) {
+      const needsSeasonReset = (this.appliedSeasonResetId !== SEASON_RESET_ID) || (
+        !!(this.lbAdminRules && this.lbAdminRules.seasonResetToken) &&
+        this.appliedSeasonResetToken !== this.lbAdminRules.seasonResetToken &&
+        !this.isSavePostSeasonReset(data)
+      );
+      if (needsSeasonReset) {
         this.applySeasonResetMigration(data, true, activeResetToken);
+      } else if (this.lbAdminRules && this.lbAdminRules.seasonResetToken && this.appliedSeasonResetToken !== this.lbAdminRules.seasonResetToken) {
+        this.appliedSeasonResetToken = this.lbAdminRules.seasonResetToken;
+        try { localStorage.setItem('idle_breakout_season_reset_token', this.appliedSeasonResetToken); } catch (e) {}
       }
     } catch (e) {
       console.error('Load failed:', e);
@@ -8422,15 +8430,28 @@ class IdleBreakoutGame {
     return changed;
   }
 
+  isSavePostSeasonReset(saveData) {
+    if (!saveData || typeof saveData !== 'object') return false;
+    if (saveData.appliedSeasonResetId !== SEASON_RESET_ID) return false;
+    const resetAt = Number(this.lbAdminRules && this.lbAdminRules.seasonResetAt) || 0;
+    const resetToken = String((this.lbAdminRules && this.lbAdminRules.seasonResetToken) || '').trim();
+    if (!resetToken) return true;
+    if (saveData.appliedSeasonResetToken === resetToken) return true;
+    const savedAt = Math.max(Number(saveData.lastSavedAt) || 0, Number(saveData.lastAdminEditAt) || 0);
+    if (resetAt > 0 && savedAt >= resetAt + 15000) return true;
+    return false;
+  }
+
   isPreSeasonResetRecord(rec) {
     const resetAt = Number(this.lbAdminRules && this.lbAdminRules.seasonResetAt) || 0;
     const resetToken = String((this.lbAdminRules && this.lbAdminRules.seasonResetToken) || '').trim();
     if (!resetAt || !rec || typeof rec !== 'object') return false;
-    if (resetToken) {
-      return rec.seasonResetToken !== resetToken;
-    }
+    if (resetToken && rec.seasonResetToken === resetToken) return false;
+    const recTs = Number(rec.ts) || 0;
+    if (recTs >= resetAt + 120000) return false;
     const recAdminTs = Number(rec.adminUpdatedAt) || 0;
-    return recAdminTs < resetAt;
+    if (!resetToken && recAdminTs >= resetAt) return false;
+    return true;
   }
 
   applyIncomingAdminRules(raw, source = 'remote') {
@@ -8465,7 +8486,12 @@ class IdleBreakoutGame {
         (this.bb || 0) === 1 &&
         (this.bossTokens || 0) === 5
       );
-      if (alreadyFreshS2) {
+      const localRaw = this.readRawLocalSave();
+      const localSavedAfterReset = (
+        this.appliedSeasonResetId === SEASON_RESET_ID &&
+        Math.max(Number(localRaw?.lastSavedAt) || 0, Number(this.lastAdminEditAt) || 0) >= activeResetAt + 15000
+      );
+      if (alreadyFreshS2 || localSavedAfterReset) {
         this.appliedSeasonResetToken = activeResetToken;
         try { localStorage.setItem('idle_breakout_season_reset_token', activeResetToken); } catch (e) {}
         this.save();
