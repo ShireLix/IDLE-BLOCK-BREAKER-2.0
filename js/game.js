@@ -5,7 +5,7 @@
  * Background Tab & Offline Progression.
  */
 
-const APP_VERSION = '9.4.5';
+const APP_VERSION = '9.4.6';
 const SEASON_RESET_ID = 'fair_restart_s2_v9_4';
 const SEASON_RESET_MAIL = {
   id: 'mail_season_reset_s2_v9_4',

@@ -26,6 +26,8 @@ class CloudAuthManager {
     this.ownSaveUnsub = null;
     this._liveCloudSyncTimer = null;
     this._lastRemoteSyncToastAt = 0;
+    this._authOpInFlight = false;
+    this._busyStartedAt = 0;
     this.deviceSessionId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
   }
 
@@ -98,6 +100,9 @@ class CloudAuthManager {
     }
     this.clearError();
     this.hideDeleteConfirm();
+    if (!this._authOpInFlight || (this._busyStartedAt && Date.now() - this._busyStartedAt > 8000)) {
+      this.setBusy(false);
+    }
     this.updateAuthUI();
     if (!this.currentUser) {
       this.switchAuthTab(tab === 'register' ? 'register' : 'login');
@@ -215,6 +220,8 @@ class CloudAuthManager {
   }
 
   setBusy(busy) {
+    this._authOpInFlight = !!busy;
+    this._busyStartedAt = busy ? Date.now() : 0;
     for (const id of [
       'btn-auth-submit-login',
       'btn-auth-submit-register',
@@ -222,17 +229,45 @@ class CloudAuthManager {
       'btn-cloud-load-now',
       'btn-auth-logout',
       'btn-auth-delete-open',
-      'btn-auth-delete-confirm',
-      'btn-auth-delete-cancel'
+      'btn-auth-delete-confirm'
     ]) {
       const el = document.getElementById(id);
-      if (el) el.disabled = busy;
+      if (el) el.disabled = !!busy;
     }
+  }
+
+  withTimeout(promise, ms = 8000, msg = 'A felhős kapcsolat túllépte az időkorlátot. Próbáld újra!') {
+    let timer = null;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const err = new Error(msg);
+          err.code = 'timeout';
+          reject(err);
+        }, ms);
+      })
+    ]).finally(() => { if (timer) clearTimeout(timer); });
+  }
+
+  getResolvedAccountName(user = this.currentUser, extraCandidates = []) {
+    const candidates = [
+      this.game && this.game.playerName,
+      ...(Array.isArray(extraCandidates) ? extraCandidates : []),
+      user && user.displayName
+    ];
+    for (const c of candidates) {
+      const clean = String(c || '').trim().slice(0, 12);
+      if (clean && clean.toLowerCase() !== 'játékos') return clean;
+    }
+    return 'Játékos';
   }
 
   translateFirebaseError(err) {
     const code = (err && err.code) || '';
     switch (code) {
+      case 'timeout':
+        return (err && err.message) || 'A felhős kapcsolat túllépte az időkorlátot!';
       case 'auth/invalid-email':
         return 'Érvénytelen e-mail cím formátum!';
       case 'auth/user-disabled':
@@ -321,6 +356,9 @@ class CloudAuthManager {
         this.game.saveOwnerUid = user.uid;
         this.initialCloudSyncDone = true;
         await this.saveToCloud(true, { allowBeforeInitialSync: true });
+        this.listenOwnCloudSave(user.uid);
+        this.game.broadcastMyStatus();
+        this.syncLeaderboardToCloud(true);
         this.updateAuthUI();
         this.game.showToast(`🎉 <strong>Sikeres regisztráció!</strong> Üdvözlünk, ${playerName}! A haladásod mostantól a felhőbe mentődik.`, 4500);
         const modal = document.getElementById('auth-modal');
@@ -359,15 +397,34 @@ class CloudAuthManager {
     }
 
     this.setBusy(true);
+    this.suppressNextAuthLoad = true;
     try {
-      const cred = await this.auth.signInWithEmailAndPassword(email, password);
+      const cred = await this.withTimeout(
+        this.auth.signInWithEmailAndPassword(email, password),
+        8000,
+        'A bejelentkezés túllépte az időkorlátot. Próbáld újra!'
+      );
       if (cred && cred.user) {
         this.currentUser = cred.user;
-        await this.syncOnLogin(cred.user, true);
+        this.initialCloudSyncDone = false;
+        const resolved = this.getResolvedAccountName(cred.user);
+        if (resolved !== 'Játékos' && (!this.game.playerName || this.game.playerName.trim().toLowerCase() === 'játékos')) {
+          this.game.setPlayerNameDirect(resolved);
+        }
+        try {
+          await this.syncOnLogin(cred.user, true);
+        } finally {
+          this.initialCloudSyncDone = true;
+        }
+        this.listenOwnCloudSave(cred.user.uid);
+        this.game.broadcastMyStatus();
+        this.syncLeaderboardToCloud(true);
+        this.updateAuthUI();
         const modal = document.getElementById('auth-modal');
         if (modal) modal.classList.remove('open');
       }
     } catch (err) {
+      this.suppressNextAuthLoad = false;
       this.showError(this.translateFirebaseError(err));
     } finally {
       this.setBusy(false);
@@ -379,14 +436,17 @@ class CloudAuthManager {
     if (!this.isReady) return;
     this.setBusy(true);
     try {
-      // Kijelentkezés előtt még utoljára felhőbe mentjük a haladást
-      if (this.currentUser) {
-        await this.saveToCloud(true);
+      // Kijelentkezés előtt csak akkor mentsünk, ha már sikeresen szinkronizáltunk belépéskor
+      if (this.currentUser && this.initialCloudSyncDone) {
+        await this.withTimeout(this.saveToCloud(true, { silent: true }), 2500).catch(() => {});
       }
       this.stopOwnCloudSaveListener();
-      await this.auth.signOut();
+      await this.withTimeout(this.auth.signOut(), 5000).catch(() => {});
       this.currentUser = null;
       this.initialCloudSyncDone = false;
+      this.lastCloudSaveMs = 0;
+      this.pendingCloudSave = false;
+      this.hideDeleteConfirm();
       this.game.resetToFreshGuestState(true);
       this.updateAuthUI();
       this.game.showToast('🚪 Sikeres kijelentkezés. A felhőmentésed biztonságban megmaradt!', 4000);
@@ -461,10 +521,13 @@ class CloudAuthManager {
         const userRef = this.db.collection('users').doc(uid);
         const lbRef = this.db.collection('leaderboard').doc(uid);
         try {
-          const [uSnap, lSnap] = await Promise.all([userRef.get(), lbRef.get()]);
+          const [uSnap, lSnap] = await this.withTimeout(
+            Promise.all([userRef.get(), lbRef.get()]),
+            6000
+          );
           if (uSnap.exists) userBackup = uSnap.data();
           if (lSnap.exists) lbBackup = lSnap.data();
-          await Promise.all([userRef.delete(), lbRef.delete()]);
+          await this.withTimeout(Promise.all([userRef.delete(), lbRef.delete()]), 6000);
           deletedFromFirestore = true;
         } catch (fsErr) {
           console.warn('Firestore törlési figyelmeztetés:', fsErr);
@@ -543,6 +606,15 @@ class CloudAuthManager {
     this.updateAuthUI();
 
     if (user) {
+      const resolved = this.getResolvedAccountName(user);
+      if (resolved !== 'Játékos' && (!this.game.playerName || this.game.playerName.trim().toLowerCase() === 'játékos')) {
+        this.game.setPlayerNameDirect(resolved);
+      }
+      if (this.suppressNextAuthLoad) {
+        this.suppressNextAuthLoad = false;
+        this.updateAuthUI();
+        return;
+      }
       this.game.saveOwnerUid = user.uid;
       this.initialCloudSyncDone = false;
       if (typeof this.game.closeWelcomeMenu === 'function') {
@@ -555,14 +627,6 @@ class CloudAuthManager {
       if (typeof this.game.cleanupDuplicateMqttForUid === 'function') {
         this.game.cleanupDuplicateMqttForUid(user.uid);
       }
-      if (this.suppressNextAuthLoad) {
-        this.suppressNextAuthLoad = false;
-        this.initialCloudSyncDone = true;
-        this.listenOwnCloudSave(user.uid);
-        this.game.broadcastMyStatus();
-        this.syncLeaderboardToCloud(true);
-        return;
-      }
       try {
         await this.syncOnLogin(user, false);
       } finally {
@@ -571,6 +635,7 @@ class CloudAuthManager {
       this.listenOwnCloudSave(user.uid);
       this.game.broadcastMyStatus();
       this.syncLeaderboardToCloud(true);
+      this.updateAuthUI();
     } else {
       this.stopOwnCloudSaveListener();
       this.initialCloudSyncDone = false;
@@ -655,11 +720,19 @@ class CloudAuthManager {
     if (!this.db || !user) return;
     try {
       const docRef = this.db.collection('users').doc(user.uid);
-      const snap = await docRef.get();
+      const snap = await this.withTimeout(
+        docRef.get(),
+        8000,
+        'A felhőmentés lekérése túllépte az időkorlátot.'
+      );
 
       if (snap.exists) {
         const cloudDoc = snap.data();
         const cloudSave = cloudDoc && cloudDoc.saveData ? cloudDoc.saveData : null;
+        const healedName = this.getResolvedAccountName(user, [cloudSave && cloudSave.playerName, cloudDoc && cloudDoc.playerName]);
+        if (healedName !== 'Játékos' && (!this.game.playerName || this.game.playerName.trim().toLowerCase() === 'játékos')) {
+          this.game.setPlayerNameDirect(healedName);
+        }
         if (cloudSave) {
           const localRaw = this.game.readRawLocalSave();
           const hasForeignOwner = !!(localRaw && localRaw.saveOwnerUid && localRaw.saveOwnerUid !== user.uid);
@@ -683,7 +756,7 @@ class CloudAuthManager {
           const localHasSeason = !hasForeignOwner && (checkPostReset(bestLocal) || checkPostReset(liveSnap));
           const cloudHasSeason = checkPostReset(cloudSave);
 
-          if (localHasSeason && !cloudHasSeason) {
+          if (localHasSeason && !cloudHasSeason && sameOwner && !fromExplicitLogin) {
             if (typeof this.game.collectLegacyCosmeticsFromSave === 'function') {
               this.game.collectLegacyCosmeticsFromSave(cloudSave);
             }
@@ -691,6 +764,7 @@ class CloudAuthManager {
             this.game.save();
             await this.saveToCloud(true, { silent: true, allowBeforeInitialSync: true });
             this.initialCloudSyncDone = true;
+            this.updateAuthUI();
             return;
           }
 
@@ -749,10 +823,15 @@ class CloudAuthManager {
           }
         }
       } else if (fromExplicitLogin) {
+        const resolved = this.getResolvedAccountName(user);
+        if (resolved !== 'Játékos' && (!this.game.playerName || this.game.playerName.trim().toLowerCase() === 'játékos')) {
+          this.game.setPlayerNameDirect(resolved);
+        }
         // Még nincs felhő dokumentum ehhez a fiókhoz -> hozzuk létre a jelenlegiből!
         await this.saveToCloud(true, { allowBeforeInitialSync: true });
       }
       this.initialCloudSyncDone = true;
+      this.updateAuthUI();
     } catch (err) {
       console.error('Felhő betöltési hiba:', err);
       this.showError(this.translateFirebaseError(err));
@@ -764,15 +843,20 @@ class CloudAuthManager {
     this.clearError();
     this.setBusy(true);
     try {
-      const snap = await this.db.collection('users').doc(this.currentUser.uid).get();
+      const snap = await this.withTimeout(
+        this.db.collection('users').doc(this.currentUser.uid).get(),
+        8000,
+        'A felhőmentés letöltése túllépte az időkorlátot.'
+      );
       if (!snap.exists || !snap.data().saveData) {
         this.showError('Még nincs mentett adat a felhőben ehhez a fiókhoz.');
         return;
       }
       const cloudDoc = snap.data();
       const cloudSave = { ...cloudDoc.saveData };
-      if ((!cloudSave.playerName || cloudSave.playerName === 'Játékos') && (cloudDoc.playerName || this.currentUser.displayName)) {
-        cloudSave.playerName = cloudDoc.playerName || this.currentUser.displayName;
+      const resolved = this.getResolvedAccountName(this.currentUser, [cloudSave.playerName, cloudDoc.playerName]);
+      if (!cloudSave.playerName || cloudSave.playerName.trim().toLowerCase() === 'játékos') {
+        cloudSave.playerName = resolved;
       }
       this.game.applySaveData(cloudSave, { isLiveReload: true, ownerUid: this.currentUser.uid });
       this.lastCloudSaveMs = cloudSave.lastSavedAt || Date.now();
@@ -792,7 +876,9 @@ class CloudAuthManager {
     if (!docId || docId === '__admin_rules__') return;
 
     const now = Date.now();
-    const pName = (this.game.playerName || (this.currentUser && this.currentUser.displayName) || 'Játékos').slice(0, 12);
+    const pName = this.currentUser
+      ? this.getResolvedAccountName(this.currentUser)
+      : (this.game.playerName || 'Játékos').slice(0, 12);
     const reb = Math.max(0, Number(this.game.rebirthCount) || 0);
     const lvl = Math.max(1, Number(this.game.level) || 1);
     const brk = Math.max(0, Number(this.game.totalBricksDestroyed) || 0);
@@ -851,23 +937,30 @@ class CloudAuthManager {
 
     this.pendingCloudSave = false;
     try {
-      const saveData = this.game.buildSaveData(this.currentUser.uid);
       const uid = this.currentUser.uid;
-      const pName = (this.game.playerName || this.currentUser.displayName || 'Játékos').slice(0, 12);
+      const pName = this.getResolvedAccountName(this.currentUser);
+      if (pName !== 'Játékos' && (!this.game.playerName || this.game.playerName.trim().toLowerCase() === 'játékos')) {
+        this.game.setPlayerNameDirect(pName);
+      }
+      const saveData = this.game.buildSaveData(uid);
 
-      await Promise.all([
-        this.db.collection('users').doc(uid).set({
-          playerName: pName,
-          email: this.currentUser.email || '',
-          rebirths: this.game.rebirthCount || 0,
-          level: this.game.level || 1,
-          bricks: this.game.totalBricksDestroyed || 0,
-          updatedAt: now,
-          deviceSessionId: this.deviceSessionId,
-          saveData
-        }, { merge: true }),
-        this.syncLeaderboardToCloud(true)
-      ]);
+      await this.withTimeout(
+        Promise.all([
+          this.db.collection('users').doc(uid).set({
+            playerName: pName,
+            email: this.currentUser.email || '',
+            rebirths: this.game.rebirthCount || 0,
+            level: this.game.level || 1,
+            bricks: this.game.totalBricksDestroyed || 0,
+            updatedAt: now,
+            deviceSessionId: this.deviceSessionId,
+            saveData
+          }, { merge: true }),
+          this.syncLeaderboardToCloud(true)
+        ]),
+        8000,
+        'A felhőbe mentés túllépte az időkorlátot.'
+      );
 
       this.lastCloudSaveMs = now;
       this.updateAuthUI();
@@ -1073,9 +1166,10 @@ class CloudAuthManager {
 
   updateAuthUI() {
     const loggedIn = !!this.currentUser;
-    const displayName = loggedIn
-      ? (this.game.playerName || this.currentUser.displayName || 'Fiók').slice(0, 10)
-      : '';
+    const resolvedName = loggedIn
+      ? this.getResolvedAccountName(this.currentUser)
+      : (this.game.playerName || 'Játékos');
+    const displayName = loggedIn ? resolvedName.slice(0, 10) : '';
 
     // Top bar gomb
     const openBtn = document.getElementById('btn-open-auth');
@@ -1091,9 +1185,7 @@ class CloudAuthManager {
     }
 
     // Ranglista oldalsáv / modal kis státusz sáv & név mező zárolása bejelentkezve
-    const fullName = loggedIn
-      ? (this.game.playerName || this.currentUser.displayName || 'Játékos')
-      : (this.game.playerName || 'Játékos');
+    const fullName = resolvedName;
 
     for (const suffix of ['-pc', '-mobile']) {
       const editRow = document.getElementById(`player-name-edit-row${suffix}`);
@@ -1126,7 +1218,7 @@ class CloudAuthManager {
       const statsEl = document.getElementById('auth-user-stats');
       const syncEl = document.getElementById('auth-cloud-sync-time');
 
-      if (nameEl) nameEl.textContent = this.game.playerName || this.currentUser.displayName || 'Játékos';
+      if (nameEl) nameEl.textContent = resolvedName;
       if (emailEl) emailEl.textContent = this.currentUser.email || '-';
       if (statsEl) statsEl.textContent = `Rebirth: ${this.game.rebirthCount} | Level: ${this.game.level} | Törött blokk: ${this.game.formatNumber(this.game.totalBricksDestroyed)}`;
       if (syncEl) {

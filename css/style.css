@@ -4480,7 +4480,7 @@ header.top-bar {
 
 .auth-modal-window .auth-modal-scroll {
   flex: 1 1 auto;
-  overflow: visible;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4568,6 +4568,13 @@ header.top-bar {
   height: 32px;
   font-size: 14.5px;
   padding: 2px 6px;
+}
+
+.auth-modal-window .auth-action-btn:disabled,
+.auth-modal-window .auth-submit-btn:disabled,
+.auth-modal-window .auth-delete-confirm-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .auth-modal-window .auth-delete-confirm-box {
